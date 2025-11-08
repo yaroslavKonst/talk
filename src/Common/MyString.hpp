@@ -27,6 +27,8 @@ public:
 	String Trim() const;
 	String Substring(int start, int length) const;
 
+	void Wipe();
+
 private:
 	struct Data
 	{

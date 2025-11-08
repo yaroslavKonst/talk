@@ -223,7 +223,7 @@ bool ClientSession::InitSession()
 
 	Sign(
 		message.Slice(0, KEY_SIZE + sizeof(int64_t)),
-		SignatureKey,
+		SignaturePrivateKey,
 		message.Pointer() + KEY_SIZE + sizeof(int64_t));
 
 	Output = new CowBuffer<uint8_t>();
@@ -259,6 +259,11 @@ bool ClientSession::Process()
 	}
 
 	return false;
+}
+
+bool ClientSession::TimePassed()
+{
+	return true;
 }
 
 bool ClientSession::ProcessInitialWaitForServer()

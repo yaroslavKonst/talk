@@ -287,6 +287,14 @@ void GenerateSessionKeys(
 	crypto_wipe(sharedKeys, KEY_SIZE * 2);
 }
 
+void GenerateSignature(
+	uint8_t seed[KEY_SIZE],
+	uint8_t signaturePrivateKey[SIGNATURE_PRIVATE_KEY_SIZE],
+	uint8_t signaturePublicKey[SIGNATURE_PUBLIC_KEY_SIZE])
+{
+	crypto_eddsa_key_pair(signaturePrivateKey, signaturePublicKey, seed);
+}
+
 void GetSalt(String file, uint8_t salt[SALT_SIZE])
 {
 	int fd = open(file.CStr(), O_RDONLY);

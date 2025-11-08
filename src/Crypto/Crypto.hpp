@@ -64,6 +64,11 @@ void GenerateSessionKeys(
 	uint8_t sessionKey1[KEY_SIZE],
 	uint8_t sessionKey2[KEY_SIZE]);
 
+void GenerateSignature(
+	uint8_t seed[KEY_SIZE],
+	uint8_t signaturePrivateKey[SIGNATURE_PRIVATE_KEY_SIZE],
+	uint8_t signaturePublicKey[SIGNATURE_PUBLIC_KEY_SIZE]);
+
 void GetSalt(String file, uint8_t salt[SALT_SIZE]);
 
 #endif

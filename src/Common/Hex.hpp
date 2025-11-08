@@ -6,7 +6,7 @@
 
 inline void HexToData(String hex, uint8_t *data)
 {
-	if (hex.Size() % 2 != 0) {
+	if (hex.Length() % 2 != 0) {
 		THROW("Hex string has odd length.");
 	}
 
@@ -15,8 +15,8 @@ inline void HexToData(String hex, uint8_t *data)
 
 	bool hasHalf = false;
 
-	for (int i = 0; i < hex.Size(); i++) {
-		char c = hex[i];
+	for (int i = 0; i < hex.Length(); i++) {
+		char c = hex.CStr()[i];
 
 		bool validChar =
 			(c >= '0' && c <= '9') ||
@@ -41,6 +41,28 @@ inline void HexToData(String hex, uint8_t *data)
 			hasHalf = true;
 		}
 	}
+}
+
+inline String DataToHex(const uint8_t *data, uint64_t size)
+{
+	String res;
+
+	for (uint64_t i = 0; i < size; i++) {
+		uint8_t hex[2];
+
+		hex[0] = data[i] >> 4;
+		hex[1] = data[i] & 0b1111;
+
+		for (int c = 0; c < 2; c++) {
+			if (hex[c] < 10) {
+				res += '0' + hex[c];
+			} else {
+				res += 'a' + hex[c] - 10;
+			}
+		}
+	}
+
+	return res;
 }
 
 #endif

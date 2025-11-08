@@ -264,10 +264,24 @@ String String::Substring(int start, int length) const
 	data->Reserved = length + 1;
 	data->Data = new char[data->Reserved];
 
-	memcpy(data->Data, _data->Data + start, length);
+	if (length) {
+		memcpy(data->Data, _data->Data + start, length);
+	}
+
 	data->Data[length] = 0;
 
 	return String(data);
+}
+
+void String::Wipe()
+{
+	MakeExclusive();
+
+	for (int i = 0; i < _data->Length; i++) {
+		_data->Data[i] = 0;
+	}
+
+	Clear();
 }
 
 String::String(Data *data)

@@ -65,11 +65,12 @@ struct ClientSession : public Session
 	ClientSessionState State;
 	int64_t TimeState;
 
-	const uint8_t *SignatureKey;
-	const uint8_t *PeerPublicKey;
+	uint8_t SignaturePrivateKey[SIGNATURE_PRIVATE_KEY_SIZE];
+	uint8_t SignaturePublicKey[SIGNATURE_PUBLIC_KEY_SIZE];
+	uint8_t PeerPublicKey[KEY_SIZE];
 
-	const uint8_t *PublicKey;
-	const uint8_t *PrivateKey;
+	uint8_t PublicKey[KEY_SIZE];
+	uint8_t PrivateKey[KEY_SIZE];
 
 	EncryptedStream InES;
 	EncryptedStream OutES;

@@ -1,6 +1,9 @@
 #ifndef _CLIENT_HPP
 #define _CLIENT_HPP
 
+#include "UI.hpp"
+#include "../Protocol/Protocol.hpp"
+
 class Client
 {
 public:
@@ -10,6 +13,9 @@ public:
 	int Run();
 
 private:
+	ClientSession _session;
+
+	UI _ui;
 };
 
 #endif

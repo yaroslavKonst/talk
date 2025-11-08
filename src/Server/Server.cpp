@@ -46,7 +46,10 @@ int Server::Run()
 
 		int64_t newTime = GetUnixTime();
 		bool updateTime = newTime - currentTime >= 10;
-		currentTime = newTime;
+
+		if (updateTime) {
+			currentTime = newTime;
+		}
 
 		ServerSession **session = &_sessions;
 		ServerSession *sessionsToRemove = nullptr;
@@ -112,32 +115,30 @@ void Server::GetPassword()
 		}
 	}
 
-	int bufferSize = 1024;
-	char *buffer = new char[bufferSize];
-	int passwordLength = 0;
+	String buffer;
 
-	while (passwordLength < bufferSize - 1) {
-		int res = read(passFd, buffer + passwordLength, 1);
+	while (buffer.Length() < 100000) {
+		char c;
 
-		if (res <= 0 || buffer[passwordLength] == '\n') {
+		int res = read(passFd, &c, 1);
+
+		if (res <= 0 || c == '\n') {
 			break;
 		}
 
-		++passwordLength;
+		buffer += c;
 	}
 
 	if (passFd) {
 		close(passFd);
 	}
 
-	if (passwordLength == 0) {
+	if (buffer.Length() == 0) {
 		THROW("Empty passwords are not allowed.");
 	}
 
-	buffer[passwordLength] = 0;
-	GenerateKeys(buffer);
-	crypto_wipe(buffer, bufferSize);
-	delete[] buffer;
+	GenerateKeys(buffer.CStr());
+	buffer.Wipe();
 }
 
 void Server::GenerateKeys(const char *password)
