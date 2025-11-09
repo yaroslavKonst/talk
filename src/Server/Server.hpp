@@ -17,7 +17,11 @@ public:
 private:
 	UserDB _userDb;
 
-	ServerSession *_sessions;
+	Session *_sessionFirst;
+	Session *_sessionLast;
+
+	bool _work;
+
 	int _activeUsers;
 
 	IniFile _configFile;
@@ -26,6 +30,7 @@ private:
 	uint8_t _publicKey[KEY_SIZE];
 
 	int _listeningSocket;
+	int _controlSocket;
 
 	void GetPassword();
 	void GenerateKeys(const char *password);
@@ -34,10 +39,14 @@ private:
 	void OpenListeningSockets();
 	void CloseSockets();
 
-	void CloseSessions(ServerSession *sessions);
+	void CloseSessions(Session *sessions);
+
 	void AcceptConnection();
+	void AcceptControl();
 
 	struct pollfd *BuildPollFds();
+	void ProcessPollFds(struct pollfd *fds, bool updateTime);
+
 };
 
 #endif

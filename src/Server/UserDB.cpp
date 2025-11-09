@@ -101,6 +101,7 @@ void UserDB::UpdateUserAccessTime(
 				1,
 				data->IndexInFile * _EntrySize +
 				_UserAccessTimeOffset);
+			return;
 		}
 
 		data = data->Next;

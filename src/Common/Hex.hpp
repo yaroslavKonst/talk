@@ -10,7 +10,7 @@ inline void HexToData(String hex, uint8_t *data)
 		THROW("Hex string has odd length.");
 	}
 
-	int byteIndex;
+	int byteIndex = 0;
 	uint8_t currentByte = 0;
 
 	bool hasHalf = false;

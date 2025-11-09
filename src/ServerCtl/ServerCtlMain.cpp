@@ -7,6 +7,7 @@
 #include "../Crypto/Crypto.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/MyString.hpp"
+#include "../Common/CowBuffer.hpp"
 #include "../Common/Hex.hpp"
 
 #include "SocketName.hpp"
@@ -18,7 +19,8 @@ static int OpenSocket()
 	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
 	if (fd == -1) {
-		THROW("Failed to create socket.");
+		printf("Failed to create socket.\n");
+		return -1;
 	}
 
 	struct sockaddr_un addr;
@@ -29,7 +31,8 @@ static int OpenSocket()
 
 	if (res == -1) {
 		close(fd);
-		THROW("Failed to connect to talkd.");
+		printf("Failed to connect to talkd.\n");
+		return -1;
 	}
 
 	return fd;
@@ -72,7 +75,20 @@ static String GetKey(const char *prompt, int length)
 	return keyHex;
 }
 
-static int ProcessAdduser(int argc, char **argv)
+static CowBuffer<uint8_t> ProcessStop()
+{
+	CowBuffer<uint8_t> result(sizeof(uint64_t) + sizeof(int32_t));
+
+	uint64_t size = result.Size() - sizeof(uint64_t);
+	int32_t command = COMMAND_SHUTDOWN;
+
+	memcpy(result.Pointer(), &size, sizeof(size));
+	memcpy(result.Pointer() + sizeof(size), &command, sizeof(command));
+
+	return result;
+}
+
+static CowBuffer<uint8_t> ProcessAdduser(int argc, char **argv)
 {
 	String name;
 	String keyHex;
@@ -94,13 +110,13 @@ static int ProcessAdduser(int argc, char **argv)
 	keyHex = GetKey("User key: ", KEY_SIZE);
 
 	if (keyHex.Length() == 0) {
-		return 1;
+		return CowBuffer<uint8_t>();
 	}
 
 	signatureHex = GetKey("User signature: ", SIGNATURE_PUBLIC_KEY_SIZE);
 
 	if (signatureHex.Length() == 0) {
-		return 1;
+		return CowBuffer<uint8_t>();
 	}
 
 	printf("User name: %s\nKey: %s\nSignature: %s\n",
@@ -115,99 +131,101 @@ static int ProcessAdduser(int argc, char **argv)
 
 	if (res != 1 || c != 'y') {
 		printf("Interrupt.\n");
-		return 1;
+		return CowBuffer<uint8_t>();
 	}
 
-	int sockFd = OpenSocket();
+	CowBuffer<uint8_t> resultBuffer(
+		sizeof(uint64_t) +
+		sizeof(int32_t) * 2 +
+		KEY_SIZE +
+		SIGNATURE_PUBLIC_KEY_SIZE +
+		name.Length());
 
-	int32_t command = ADD_USER;
+	int32_t *command = (int32_t*)(resultBuffer.Pointer() +
+		sizeof(uint64_t));
+	uint8_t *key = resultBuffer.Pointer() +
+		sizeof(uint64_t) + sizeof(int32_t);
+	uint8_t *signature = resultBuffer.Pointer() +
+		sizeof(uint64_t) + sizeof(int32_t) + KEY_SIZE;
+	int32_t *nameLength = (int32_t*)(resultBuffer.Pointer() +
+		sizeof(uint64_t) + sizeof(int32_t) + KEY_SIZE +
+		SIGNATURE_PUBLIC_KEY_SIZE);
+	uint8_t *nameBuffer = resultBuffer.Pointer() +
+		sizeof(uint64_t) + sizeof(int32_t) * 2 + KEY_SIZE +
+		SIGNATURE_PUBLIC_KEY_SIZE;
 
-	res = write(sockFd, &command, sizeof(command));
+	*command = COMMAND_ADD_USER;
+	*nameLength = name.Length();
+	memcpy(nameBuffer, name.CStr(), *nameLength);
+	HexToData(keyHex, key);
+	HexToData(signatureHex, signature);
 
-	if (res != sizeof(command)) {
-		printf("Failed to send command.\n");
-		shutdown(sockFd, SHUT_RDWR);
-		close(sockFd);
-		return 1;
-	}
+	uint64_t bufLen = resultBuffer.Size() - sizeof(uint64_t);
+	memcpy(resultBuffer.Pointer(), &bufLen, sizeof(bufLen));
 
-	command = name.Length();
-
-	res = write(sockFd, &command, sizeof(command));
-
-	if (res != sizeof(command)) {
-		printf("Failed to send command.\n");
-		shutdown(sockFd, SHUT_RDWR);
-		close(sockFd);
-		return 1;
-	}
-
-	res = write(sockFd, name.CStr(), name.Length());
-
-	if (res != name.Length()) {
-		printf("Failed to send command.\n");
-		shutdown(sockFd, SHUT_RDWR);
-		close(sockFd);
-		return 1;
-	}
-
-	uint8_t data[KEY_SIZE];
-
-	HexToData(keyHex, data);
-
-	res = write(sockFd, data, KEY_SIZE);
-
-	if (res != KEY_SIZE) {
-		printf("Failed to send command.\n");
-		shutdown(sockFd, SHUT_RDWR);
-		close(sockFd);
-		return 1;
-	}
-
-	HexToData(signatureHex, data);
-
-	res = write(sockFd, data, SIGNATURE_PUBLIC_KEY_SIZE);
-
-	if (res != SIGNATURE_PUBLIC_KEY_SIZE) {
-		printf("Failed to send command.\n");
-		shutdown(sockFd, SHUT_RDWR);
-		close(sockFd);
-		return 1;
-	}
-
-	res = read(sockFd, &command, sizeof(command));
-
-	if (res != sizeof(command)) {
-		printf("Failed to get response.\n");
-		shutdown(sockFd, SHUT_RDWR);
-		close(sockFd);
-		return 1;
-	}
-
-	shutdown(sockFd, SHUT_RDWR);
-	close(sockFd);
-
-	if (command == OK) {
-		printf("User added.\n");
-		return 0;
-	}
-
-	printf("Failed to add user.");
-	return 1;
+	return resultBuffer;
 }
 
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
 		printf("No command given.\n");
-		printf("Commands: adduser.\n");
+		printf("Commands:\n\tshutdown\n\tadduser\n");
 		return 1;
 	}
 
+	CowBuffer<uint8_t> command;
+
 	if (!strcmp(argv[1], "adduser")) {
-		return ProcessAdduser(argc, argv);
+		command = ProcessAdduser(argc, argv);
+	} else if (!strcmp(argv[1], "shutdown")) {
+		command = ProcessStop();
 	}
 
-	printf("Unknown command.\n");
+	if (command.Size() == 0) {
+		printf("Invalid command.\n");
+		return 1;
+	}
+
+	int fd = OpenSocket();
+
+	if (fd == -1) {
+		return 1;
+	}
+
+	int wrBytes = write(fd, command.Pointer(), command.Size());
+
+	if (wrBytes != (int)command.Size()) {
+		printf("Failed to send command.\n");
+		return 2;
+	}
+
+	uint8_t response[sizeof(uint64_t) + sizeof(int32_t)];
+
+	int rdBytes = read(fd, response, sizeof(uint64_t) + sizeof(int32_t));
+
+	if (rdBytes != sizeof(uint64_t) + sizeof(int32_t)) {
+		printf("No response from server.\n");
+		return 0;
+	}
+
+	int32_t code;
+	memcpy(&code, response + sizeof(uint64_t), sizeof(code));
+
+	if (code == OK) {
+		return 0;
+	}
+
+	if (code == ERROR_UNKNOWN_COMMAND) {
+		printf("Command is not supported by server.\n");
+		return 1;
+	}
+
+	if (code == ERROR_TOO_SHORT) {
+		printf("Command is too short.\n");
+		return 1;
+	}
+
+	printf("Unknown result.\n");
 	return 1;
 }

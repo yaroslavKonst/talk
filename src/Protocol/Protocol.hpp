@@ -7,6 +7,17 @@
 
 struct Session
 {
+	struct Sequence
+	{
+		Sequence *Next;
+		CowBuffer<uint8_t> Data;
+	};
+
+	Session();
+	virtual ~Session();
+
+	Session *Next;
+
 	int64_t Time;
 	int Socket;
 
@@ -16,20 +27,42 @@ struct Session
 	uint64_t RequiredOutput;
 	CowBuffer<uint8_t> *Output;
 
-	void Read();
-	void Write();
+	Sequence *InputSequence;
+	Sequence *InputSequenceLast;
+
+	Sequence *OutputSequence;
+	Sequence *OutputSequenceLast;
+
+	bool Read();
+	bool Write();
+
+	bool CanWrite()
+	{
+		return Output || OutputSequence;
+	}
+
+	bool CanReceive()
+	{
+		return InputSequence;
+	}
+
+	CowBuffer<uint8_t> Receive();
+	void Send(CowBuffer<uint8_t> data);
+
+	virtual bool Process() = 0;
+	virtual bool TimePassed() = 0;
 };
 
 struct ServerSession : public Session
 {
+	~ServerSession();
+
 	enum ServerSessionState
 	{
 		ServerStateWaitFirstSyn = 0,
 		ServerStateWaitSecondSyn = 1,
 		ServerStateActiveSession = 2
 	};
-
-	ServerSession *Next;
 
 	UserDB *Users;
 	//MessagePipe *Pipe;
@@ -45,16 +78,18 @@ struct ServerSession : public Session
 	EncryptedStream InES;
 	EncryptedStream OutES;
 
-	bool Process();
+	bool Process() override;
 	bool ProcessFirstSyn();
 	bool ProcessSecondSyn();
 	bool ProcessActiveSession();
 
-	bool TimePassed();
+	bool TimePassed() override;
 };
 
 struct ClientSession : public Session
 {
+	~ClientSession();
+
 	enum ClientSessionState
 	{
 		ClientStateUnconnected = 0,
@@ -77,10 +112,27 @@ struct ClientSession : public Session
 
 	bool InitSession();
 
-	bool Process();
+	bool Process() override;
 	bool ProcessInitialWaitForServer();
+	bool ProcessActiveSession();
 
-	bool TimePassed();
+	bool TimePassed() override;
+};
+
+struct ControlSession : public Session
+{
+	UserDB *Users;
+	bool *Work;
+
+	bool Process() override;
+	bool TimePassed() override;
+
+	void SendResponse(int32_t value);
+
+	void ProcessShutdownCommand();
+	void ProcessAddUserCommand(CowBuffer<uint8_t> message);
+	void ProcessRemoveUserCommand(CowBuffer<uint8_t> message);
+	void ProcessUnknownCommand();
 };
 
 #endif

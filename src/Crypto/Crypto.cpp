@@ -131,8 +131,7 @@ CowBuffer<uint8_t> Encrypt(
 	EncryptedStream &stream)
 {
 	CowBuffer<uint8_t> result(
-		1 + MAC_SIZE + NONCE_SIZE +
-		sizeof(uint64_t) + plaintext.Size());
+		1 + MAC_SIZE + NONCE_SIZE + plaintext.Size());
 
 	uint8_t *scramblerInit = result.Pointer();
 	uint8_t *mac = result.Pointer() + 1;
@@ -267,7 +266,8 @@ void GenerateSessionKeys(
 	const uint8_t peerPublicKey[KEY_SIZE],
 	int64_t addition,
 	uint8_t sessionKey1[KEY_SIZE],
-	uint8_t sessionKey2[KEY_SIZE])
+	uint8_t sessionKey2[KEY_SIZE],
+	bool invert)
 {
 	uint8_t sharedSecret[KEY_SIZE];
 	crypto_x25519(sharedSecret, privateKey, peerPublicKey);
@@ -276,8 +276,17 @@ void GenerateSessionKeys(
 	crypto_blake2b_ctx ctx;
 	crypto_blake2b_init(&ctx, KEY_SIZE * 2);
 	crypto_blake2b_update(&ctx, sharedSecret, KEY_SIZE);
-	crypto_blake2b_update(&ctx, publicKey, KEY_SIZE);
+
+	if (!invert) {
+		crypto_blake2b_update(&ctx, publicKey, KEY_SIZE);
+	}
+
 	crypto_blake2b_update(&ctx, peerPublicKey, KEY_SIZE);
+
+	if (invert) {
+		crypto_blake2b_update(&ctx, publicKey, KEY_SIZE);
+	}
+
 	crypto_blake2b_update(&ctx, (uint8_t*)&addition, sizeof(addition));
 	crypto_blake2b_final(&ctx, sharedKeys);
 

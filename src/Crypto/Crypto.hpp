@@ -62,7 +62,8 @@ void GenerateSessionKeys(
 	const uint8_t peerPublicKey[KEY_SIZE],
 	int64_t addition,
 	uint8_t sessionKey1[KEY_SIZE],
-	uint8_t sessionKey2[KEY_SIZE]);
+	uint8_t sessionKey2[KEY_SIZE],
+	bool invert = false);
 
 void GenerateSignature(
 	uint8_t seed[KEY_SIZE],

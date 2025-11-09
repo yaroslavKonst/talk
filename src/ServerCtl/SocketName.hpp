@@ -4,8 +4,13 @@
 #define TALKD_SOCKET_NAME "talkd.socket"
 
 #define OK 200
-#define ERROR 100
 
-#define ADD_USER 1
+#define ERROR 100
+#define ERROR_UNKNOWN_COMMAND 101
+#define ERROR_TOO_SHORT 102
+
+#define COMMAND_SHUTDOWN 1
+#define COMMAND_ADD_USER 2
+#define COMMAND_REMOVE_USER 3
 
 #endif

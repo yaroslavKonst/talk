@@ -61,14 +61,21 @@ void IniFile::Set(String section, String key, String value)
 	}
 
 	if (!currentSection) {
-		currentSection = _data;
+		Section *newSection = new Section;
 
-		while (currentSection->Next) {
+		if (!_data) {
+			_data = newSection;
+			currentSection = _data;
+		} else {
+			currentSection = _data;
+
+			while (currentSection->Next) {
+				currentSection = currentSection->Next;
+			}
+
+			currentSection->Next = newSection;
 			currentSection = currentSection->Next;
 		}
-
-		currentSection->Next = new Section;
-		currentSection = currentSection->Next;
 
 		currentSection->Next = nullptr;
 		currentSection->Name = section;
@@ -100,6 +107,7 @@ void IniFile::Set(String section, String key, String value)
 			currentKey = currentKey->Next;
 		}
 
+		currentKey->Next = nullptr;
 		currentKey->Name = key;
 	}
 

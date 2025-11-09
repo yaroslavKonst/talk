@@ -5,6 +5,68 @@
 
 #include "../Protocol/Protocol.hpp"
 
+class Screen
+{
+public:
+	Screen(ClientSession *session);
+	virtual ~Screen();
+
+	virtual Screen *ProcessEvent(int event) = 0;
+	virtual void Redraw() = 0;
+	void ProcessResize();
+
+protected:
+	int _rows;
+	int _columns;
+
+	ClientSession *_session;
+
+	void ClearScreen();
+};
+
+class PasswordScreen : public Screen
+{
+public:
+	PasswordScreen(ClientSession *session);
+
+	void Redraw() override;
+	Screen *ProcessEvent(int event) override;
+
+private:
+	String _password;
+
+	void GenerateKeys();
+};
+
+class LoginScreen : public Screen
+{
+public:
+	LoginScreen(ClientSession *session);
+
+	void Redraw() override;
+	Screen *ProcessEvent(int event) override;
+
+private:
+	bool _writingIp;
+	bool _writingPort;
+	bool _writingKey;
+
+	String _ip;
+	String _port;
+	String _serverKeyHex;
+};
+
+class WorkScreen : public Screen
+{
+public:
+	WorkScreen(ClientSession *session);
+
+	void Redraw() override;
+	Screen *ProcessEvent(int event) override;
+
+private:
+};
+
 class UI
 {
 public:
@@ -14,36 +76,11 @@ public:
 	bool ProcessEvent();
 
 private:
-	enum UIState
-	{
-		UIStatePassword = 0,
-		UIStateConnect = 1,
-		UIStateWork = 2
-	};
-
-	UIState _state;
-
-	int _rows;
-	int _columns;
-
-	void Redraw();
-	void RedrawPassword();
-	void RedrawConnect();
-	void RedrawWork();
+	Screen *_screen;
 
 	void ProcessResize();
 
-	void ProcessPassword(int event);
-	void ProcessConnect(int event);
-	void ProcessWork(int event);
-
 	ClientSession *_session;
-
-	String _password;
-
-	bool _enterIp;
-	String _ip;
-	String _port;
 };
 
 #endif

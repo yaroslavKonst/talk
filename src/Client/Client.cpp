@@ -5,6 +5,7 @@
 Client::Client() : _ui(&_session)
 {
 	_session.Socket = -1;
+	_session.State = ClientSession::ClientStateUnconnected;
 }
 
 Client::~Client()
@@ -29,14 +30,14 @@ int Client::Run()
 		{
 			fds[1].fd = _session.Socket;
 
-			if (_session.Output) {
+			if (_session.CanWrite()) {
 				fds[1].events = POLLIN | POLLOUT;
 			} else {
 				fds[1].events = POLLIN;
 			}
 		}
 
-		int res = poll(fds, connected ? 2 : 1, -1000);
+		int res = poll(fds, connected ? 2 : 1, 1000);
 
 		if (res == -1) {
 			work = false;
@@ -54,22 +55,22 @@ int Client::Run()
 		}
 
 		if (connected) {
-			if (fds[1].revents & POLLOUT) {
-				_session.Write();
-			}
-
-			if (fds[1].revents & POLLIN) {
-				_session.Read();
-			}
-
 			bool endSession = false;
 
-			if (_session.Input && !_session.ExpectedInput) {
-				endSession = _session.Process();
+			if (fds[1].revents & POLLOUT) {
+				endSession = !_session.Write();
+			}
+
+			if (!endSession && (fds[1].revents & POLLIN)) {
+				endSession = !_session.Read();
+			}
+
+			if (!endSession && _session.CanReceive()) {
+				endSession = !_session.Process();
 			}
 
 			if (!endSession && updateTime) {
-				endSession = _session.TimePassed();
+				endSession = !_session.TimePassed();
 			}
 
 			if (endSession) {

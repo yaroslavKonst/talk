@@ -13,7 +13,7 @@ public:
 		_data = new Data;
 		_data->RefCount = 1;
 		_data->Size = 0;
-		_data = nullptr;
+		_data->Data = nullptr;
 	}
 
 	CowBuffer(uint64_t size)
@@ -25,7 +25,7 @@ public:
 		if (size) {
 			_data->Data = new T[size];
 		} else {
-			_data = nullptr;
+			_data->Data = nullptr;
 		}
 	}
 

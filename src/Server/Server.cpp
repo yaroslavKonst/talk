@@ -8,11 +8,20 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/un.h>
+
+#include "../ServerCtl/SocketName.hpp"
+#include "../Common/Hex.hpp"
+#include "../Common/Debug.hpp"
 
 Server::Server() : _configFile("talkd.conf")
 {
-	_sessions = nullptr;
+	_sessionFirst = nullptr;
+	_sessionLast = nullptr;
+
 	_listeningSocket = -1;
+	_controlSocket = -1;
+
 	_activeUsers = 0;
 
 	GetPassword();
@@ -20,14 +29,16 @@ Server::Server() : _configFile("talkd.conf")
 
 Server::~Server()
 {
-	CloseSessions(_sessions);
+	_sessionLast = nullptr;
+
+	CloseSessions(_sessionFirst);
 	CloseSockets();
 	WipeKeys();
 }
 
 int Server::Run()
 {
-	bool work = true;
+	_work = true;
 
 	OpenListeningSockets();
 
@@ -35,10 +46,10 @@ int Server::Run()
 
 	int64_t currentTime = GetUnixTime();
 
-	while (work) {
+	while (_work) {
 		struct pollfd *fds = BuildPollFds();
 
-		int res = poll(fds, _activeUsers + 1, 10000);
+		int res = poll(fds, _activeUsers + 2, 10000);
 
 		if (res == -1) {
 			THROW("Error on poll.");
@@ -51,48 +62,7 @@ int Server::Run()
 			currentTime = newTime;
 		}
 
-		ServerSession **session = &_sessions;
-		ServerSession *sessionsToRemove = nullptr;
-
-		for (int i = 1; i <= _activeUsers; i++)
-		{
-			if (fds[i].revents & POLLOUT) {
-				(*session)->Write();
-			}
-
-			if (fds[i].revents & POLLIN) {
-				(*session)->Read();
-			}
-
-			bool endSession = false;
-
-			if ((*session)->Input && !(*session)->ExpectedInput) {
-				endSession = !(*session)->Process();
-			}
-
-			if (!endSession && updateTime) {
-				endSession = !(*session)->TimePassed();
-			}
-
-			if (endSession) {
-				ServerSession *sessionToRm = *session;
-
-				*session = (*session)->Next;
-
-				sessionToRm->Next = sessionsToRemove;
-				sessionsToRemove = sessionToRm;
-			} else {
-				session = &((*session)->Next);
-			}
-		}
-
-		CloseSessions(sessionsToRemove);
-
-		if (fds[0].revents & POLLIN) {
-			AcceptConnection();
-		}
-
-		delete[] fds;
+		ProcessPollFds(fds, updateTime);
 	}
 
 	return 0;
@@ -148,6 +118,9 @@ void Server::GenerateKeys(const char *password)
 	DeriveKey(password, salt, _privateKey);
 	crypto_wipe(salt, SALT_SIZE);
 	GeneratePublicKey(_privateKey, _publicKey);
+
+	String pkHex = DataToHex(_publicKey, KEY_SIZE);
+	printf("PK:\n%s\n", pkHex.CStr());
 }
 
 void Server::WipeKeys()
@@ -158,6 +131,7 @@ void Server::WipeKeys()
 
 void Server::OpenListeningSockets()
 {
+	// Listening socket.
 	_listeningSocket = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (_listeningSocket == -1) {
@@ -192,6 +166,32 @@ void Server::OpenListeningSockets()
 	if (res == -1) {
 		THROW("Failed to move socket to listening state.");
 	}
+
+	// Control socket.
+	_controlSocket = socket(AF_UNIX, SOCK_STREAM, 0);
+
+	if (_controlSocket == -1) {
+		THROW("Failed to create control socket.");
+	}
+
+	struct sockaddr_un addr_un;
+	addr_un.sun_family = AF_UNIX;
+	strncpy(
+		addr_un.sun_path,
+		TALKD_SOCKET_NAME,
+		sizeof(addr_un.sun_path) - 1);
+
+	res = bind(_controlSocket, (struct sockaddr*)&addr_un, sizeof(addr_un));
+
+	if (res == -1) {
+		THROW("Failed to bind control socket.");
+	}
+
+	res = listen(_controlSocket, 5);
+
+	if (res == -1) {
+		THROW("Failed to move control socket to listening state.");
+	}
 }
 
 void Server::CloseSockets()
@@ -199,28 +199,19 @@ void Server::CloseSockets()
 	if (_listeningSocket != -1) {
 		close(_listeningSocket);
 	}
+
+	if (_controlSocket != -1) {
+		close(_controlSocket);
+		unlink(TALKD_SOCKET_NAME);
+	}
 }
 
-void Server::CloseSessions(ServerSession *sessions)
+void Server::CloseSessions(Session *sessions)
 {
 	while (sessions) {
 		--_activeUsers;
 
-		shutdown(sessions->Socket, SHUT_RDWR);
-		close(sessions->Socket);
-
-		if (sessions->Output) {
-			delete sessions->Output;
-		}
-
-		if (sessions->Input) {
-			delete sessions->Input;
-		}
-
-		crypto_wipe(sessions->OutES.Key, KEY_SIZE);
-		crypto_wipe(sessions->InES.Key, KEY_SIZE);
-
-		ServerSession *tmp = sessions;
+		Session *tmp = sessions;
 		sessions = sessions->Next;
 		delete tmp;
 	}
@@ -228,20 +219,13 @@ void Server::CloseSessions(ServerSession *sessions)
 
 void Server::AcceptConnection()
 {
-	int newSocket = accept(_listeningSocket, nullptr, nullptr);
+	int fd = accept(_listeningSocket, nullptr, nullptr);
 
 	++_activeUsers;
 
 	ServerSession *session = new ServerSession;
+	session->Socket = fd;
 
-	session->Socket = newSocket;
-	session->Time = GetUnixTime();
-	session->Input = nullptr;
-	session->ExpectedInput = 0;
-	session->Output = nullptr;
-	session->RequiredOutput = 0;
-
-	session->Next = nullptr;
 	session->Users = &_userDb;
 	// session->Pipe = ...
 	session->State = ServerSession::ServerStateWaitFirstSyn;
@@ -250,35 +234,55 @@ void Server::AcceptConnection()
 	session->PublicKey = _publicKey;
 	session->PrivateKey = _privateKey;
 
-	if (!_sessions) {
-		_sessions = session;
+	if (!_sessionFirst) {
+		_sessionFirst = session;
+		_sessionLast = session;
 	} else {
-		ServerSession *list = _sessions;
+		_sessionLast->Next = session;
+		_sessionLast = session;
+	}
+}
 
-		while (list->Next) {
-			list = list->Next;
-		}
+void Server::AcceptControl()
+{
+	int fd = accept(_controlSocket, nullptr, nullptr);
 
-		list->Next = session;
+	++_activeUsers;
+
+	ControlSession *session = new ControlSession;
+	session->Socket = fd;
+
+	session->Users = &_userDb;
+	session->Work = &_work;
+
+	if (!_sessionFirst) {
+		_sessionFirst = session;
+		_sessionLast = session;
+	} else {
+		_sessionLast->Next = session;
+		_sessionLast = session;
 	}
 }
 
 struct pollfd *Server::BuildPollFds()
 {
-	struct pollfd *fds = new struct pollfd[_activeUsers + 1];
+	struct pollfd *fds = new struct pollfd[_activeUsers + 2];
 
 	// Listening socket.
 	fds[0].fd = _listeningSocket;
 	fds[0].events = POLLIN;
 
-	ServerSession *session = _sessions;
+	fds[1].fd = _controlSocket;
+	fds[1].events = POLLIN;
 
-	int index = 1;
+	Session *session = _sessionFirst;
+
+	int index = 2;
 
 	while (session) {
 		fds[index].fd = session->Socket;
 
-		if (session->Output) {
+		if (session->CanWrite()) {
 			fds[index].events = POLLIN | POLLOUT;
 		} else {
 			fds[index].events = POLLIN;
@@ -289,4 +293,61 @@ struct pollfd *Server::BuildPollFds()
 	}
 
 	return fds;
+}
+
+void Server::ProcessPollFds(struct pollfd *fds, bool updateTime)
+{
+	Session **session = &_sessionFirst;
+	Session *previous = nullptr;
+
+	int index = 2;
+
+	while (*session)
+	{
+		bool endSession = false;
+
+		if (fds[index].revents & POLLOUT) {
+			endSession = !(*session)->Write();
+		}
+
+		if (!endSession && (fds[index].revents & POLLIN)) {
+			endSession = !(*session)->Read();
+		}
+
+		if (!endSession && (*session)->CanReceive()) {
+			endSession = !(*session)->Process();
+		}
+
+		if (!endSession && updateTime) {
+			endSession = !(*session)->TimePassed();
+		}
+
+		if (endSession) {
+			Session *sessionToRm = *session;
+
+			*session = (*session)->Next;
+
+			sessionToRm->Next = nullptr;
+			CloseSessions(sessionToRm);
+
+			if (sessionToRm == _sessionLast) {
+				_sessionLast = previous;
+			}
+		} else {
+			previous = *session;
+			session = &((*session)->Next);
+		}
+
+		++index;
+	}
+
+	if (fds[0].revents & POLLIN) {
+		AcceptConnection();
+	}
+
+	if (fds[1].revents & POLLIN) {
+		AcceptControl();
+	}
+
+	delete[] fds;
 }
