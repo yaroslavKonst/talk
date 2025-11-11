@@ -7,6 +7,7 @@
 #include "../ServerCtl/SocketName.hpp"
 #include "../ThirdParty/monocypher.h"
 #include "../Common/Hex.hpp"
+#include "../Common/MessageContainer.hpp"
 #include "../Common/Debug.hpp"
 
 // Base.
@@ -204,6 +205,12 @@ void Session::Send(CowBuffer<uint8_t> data)
 	}
 }
 
+bool Session::Process()
+{ }
+
+bool Session::TimePassed()
+{ }
+
 // Server.
 ServerSession::~ServerSession()
 {
@@ -324,6 +331,14 @@ bool ServerSession::ProcessSecondSyn()
 	return true;
 }
 
+#define SESSION_COMMAND_KEEP_ALIVE 1
+#define SESSION_COMMAND_TEXT_MESSAGE 2
+
+#define SESSION_RESPONSE_OK 200
+#define SESSION_RESPONSE_ERROR 100
+#define SESSION_RESPONSE_ERROR_INVALID_USER 100
+#define SESSION_RESPONSE_ERROR_MESSAGE_TOO_SHORT 100
+
 bool ServerSession::ProcessActiveSession()
 {
 	CowBuffer<uint8_t> encryptedMessage = Receive();
@@ -336,12 +351,60 @@ bool ServerSession::ProcessActiveSession()
 	int32_t command;
 	memcpy(&command, plainText.Pointer(), sizeof(command));
 
-	if (command == 1) {
+	if (command == SESSION_COMMAND_KEEP_ALIVE) {
 		if (plainText.Size() != sizeof(command) + sizeof(int64_t)) {
 			return false;
 		}
 
 		Send(Encrypt(plainText, OutES));
+		return true;
+	} else if (command == SESSION_COMMAND_TEXT_MESSAGE) {
+		int32_t status = SESSION_RESPONSE_OK;
+
+		CowBuffer<uint8_t> response(sizeof(int32_t) * 2);
+		memcpy(
+			response.Pointer(),
+			plainText.Pointer(),
+			sizeof(int32_t));
+
+		if (plainText.Size() <= sizeof(command) + KEY_SIZE * 2 +
+			sizeof(int64_t))
+		{
+			status = SESSION_RESPONSE_ERROR_MESSAGE_TOO_SHORT;
+		} else {
+			CowBuffer<uint8_t> message = plainText.Slice(
+				sizeof(command),
+				plainText.Size() - sizeof(command));
+
+			if (!Users->HasUser(message.Pointer())) {
+				status = SESSION_RESPONSE_ERROR_INVALID_USER;
+			}
+
+			if (!Users->HasUser(message.Pointer() + KEY_SIZE)) {
+				status = SESSION_RESPONSE_ERROR_INVALID_USER;
+			}
+
+			if (status == SESSION_RESPONSE_OK) {
+				MessageContainer container1(
+					message.Pointer(),
+					message.Pointer() + KEY_SIZE);
+				container1.AddMessage(message);
+
+				MessageContainer container2(
+					message.Pointer() + KEY_SIZE,
+					message.Pointer());
+				container2.AddMessage(message);
+
+				Pipe->SendMessage(message);
+			}
+		}
+
+		memcpy(
+			response.Pointer() + sizeof(command),
+			&status,
+			sizeof(status));
+
+		Send(Encrypt(response, OutES));
 		return true;
 	}
 
@@ -428,7 +491,7 @@ bool ClientSession::TimePassed()
 		return true;
 	}
 
-	int32_t command = 1;
+	int32_t command = SESSION_COMMAND_KEEP_ALIVE;
 	TimeState = GetUnixTime();
 
 	CowBuffer<uint8_t> req(sizeof(command) + sizeof(TimeState));
@@ -486,7 +549,7 @@ bool ClientSession::ProcessActiveSession()
 	int32_t command;
 	memcpy(&command, plainText.Pointer(), sizeof(command));
 
-	if (command == 1) {
+	if (command == SESSION_COMMAND_KEEP_ALIVE) {
 		if (!TimeState) {
 			return false;
 		}
@@ -507,6 +570,8 @@ bool ClientSession::ProcessActiveSession()
 
 		TimeState = 0;
 
+		return true;
+	} else if (command == SESSION_COMMAND_TEXT_MESSAGE) {
 		return true;
 	}
 
@@ -618,7 +683,7 @@ void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> message)
 		}
 	}
 
-	Users->AddUser(key, signature, GetUnixTime());
+	Users->AddUser(key, signature, GetUnixTime(), name);
 
 	SendResponse(OK);
 }

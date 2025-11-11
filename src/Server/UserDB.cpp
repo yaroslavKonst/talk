@@ -1,11 +1,11 @@
 #include "UserDB.hpp"
 
 #include "../ThirdParty/monocypher.h"
+#include "../Common/Debug.hpp"
 
 UserDB::UserDB() : _userFile("talkd.users", false)
 {
 	_first = nullptr;
-	_last = nullptr;
 
 	LoadUserData();
 }
@@ -84,6 +84,23 @@ int64_t UserDB::GetUserAccessTime(const uint8_t key[KEY_SIZE])
 	THROW("Requested user does not exist.");
 }
 
+String UserDB::GetUserName(const uint8_t key[KEY_SIZE])
+{
+	UserData *data = _first;
+
+	while (data) {
+		int res = crypto_verify32(key, data->PublicKey);
+
+		if (!res) {
+			return data->Name;
+		}
+
+		data = data->Next;
+	}
+
+	THROW("Requested user does not exist.");
+}
+
 void UserDB::UpdateUserAccessTime(
 	const uint8_t key[KEY_SIZE],
 	int64_t accessTime)
@@ -113,8 +130,11 @@ void UserDB::UpdateUserAccessTime(
 void UserDB::AddUser(
 	const uint8_t key[KEY_SIZE],
 	const uint8_t signature[SIGNATURE_PUBLIC_KEY_SIZE],
-	int64_t accessTime)
+	int64_t accessTime,
+	String name)
 {
+	DEBUG("Adduser")
+
 	uint64_t freeIndex = 0;
 
 	UserData *data = _first;
@@ -127,6 +147,19 @@ void UserDB::AddUser(
 		++freeIndex;
 		data = data->Next;
 	}
+
+	// DEBUG
+	printf("ID %ld\n", freeIndex);
+
+	char *zeroBuffer = new char[_EntrySize];
+	memset(zeroBuffer, 0, _EntrySize);
+
+	_userFile.Write<char>(
+		zeroBuffer,
+		_EntrySize,
+		freeIndex * _EntrySize);
+
+	delete[] zeroBuffer;
 
 	_userFile.Write<uint8_t>(
 		key,
@@ -150,6 +183,15 @@ void UserDB::AddUser(
 		1,
 		freeIndex * _EntrySize + _ValidOffset);
 
+	if (name.Length() >= _MaxNameLength) {
+		name = name.Substring(0, _MaxNameLength - 1);
+	}
+
+	_userFile.Write<char>(
+		name.CStr(),
+		name.Length() + 1,
+		freeIndex * _EntrySize + _UserNameOffset);
+
 	data = new UserData;
 	data->Next = nullptr;
 	data->IndexInFile = freeIndex;
@@ -157,10 +199,10 @@ void UserDB::AddUser(
 	memcpy(data->PublicKey, key, KEY_SIZE);
 	memcpy(data->SignaturePublicKey, signature, SIGNATURE_PUBLIC_KEY_SIZE);
 	data->AccessTime = accessTime;
+	data->Name = name;
 
 	if (!_first) {
 		_first = data;
-		_last = data;
 	} else if (freeIndex < _first->IndexInFile) {
 		data->Next = _first;
 		_first = data;
@@ -217,6 +259,8 @@ void UserDB::LoadUserData()
 {
 	uint64_t entryCount = _userFile.Size() / _EntrySize;
 
+	UserData *last = nullptr;
+
 	for (uint64_t entryIdx = 0; entryIdx < entryCount; entryIdx++) {
 		uint8_t valid;
 
@@ -248,12 +292,21 @@ void UserDB::LoadUserData()
 			1,
 			entryIdx * _EntrySize + _UserAccessTimeOffset);
 
+		char *nameBuffer = new char[_MaxNameLength];
+		_userFile.Read<char>(
+			nameBuffer,
+			_MaxNameLength,
+			entryIdx * _EntrySize + _UserNameOffset);
+
+		newUser->Name = String(nameBuffer);
+		delete[] nameBuffer;
+
 		if (!_first) {
 			_first = newUser;
-			_last = newUser;
+			last = newUser;
 		} else {
-			_last->Next = newUser;
-			_last = _last->Next;
+			last->Next = newUser;
+			last = last->Next;
 		}
 	}
 }
@@ -270,6 +323,4 @@ void UserDB::FreeUserData()
 			SIGNATURE_PUBLIC_KEY_SIZE);
 		delete data;
 	}
-
-	_last = nullptr;
 }

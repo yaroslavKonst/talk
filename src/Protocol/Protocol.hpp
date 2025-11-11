@@ -4,6 +4,7 @@
 #include "../Crypto/Crypto.hpp"
 #include "../Common/CowBuffer.hpp"
 #include "../Server/UserDB.hpp"
+#include "../Server/MessagePipe.hpp"
 
 struct Session
 {
@@ -49,8 +50,8 @@ struct Session
 	CowBuffer<uint8_t> Receive();
 	void Send(CowBuffer<uint8_t> data);
 
-	virtual bool Process() = 0;
-	virtual bool TimePassed() = 0;
+	virtual bool Process();
+	virtual bool TimePassed();
 };
 
 struct ServerSession : public Session
@@ -65,7 +66,7 @@ struct ServerSession : public Session
 	};
 
 	UserDB *Users;
-	//MessagePipe *Pipe;
+	MessagePipe *Pipe;
 
 	ServerSessionState State;
 

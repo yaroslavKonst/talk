@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cstdio>
 
+#include "../Protocol/Protocol.hpp"
 #include "../Crypto/Crypto.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/MyString.hpp"
@@ -77,13 +78,11 @@ static String GetKey(const char *prompt, int length)
 
 static CowBuffer<uint8_t> ProcessStop()
 {
-	CowBuffer<uint8_t> result(sizeof(uint64_t) + sizeof(int32_t));
+	CowBuffer<uint8_t> result(sizeof(int32_t));
 
-	uint64_t size = result.Size() - sizeof(uint64_t);
 	int32_t command = COMMAND_SHUTDOWN;
 
-	memcpy(result.Pointer(), &size, sizeof(size));
-	memcpy(result.Pointer() + sizeof(size), &command, sizeof(command));
+	memcpy(result.Pointer(), &command, sizeof(command));
 
 	return result;
 }
@@ -135,23 +134,20 @@ static CowBuffer<uint8_t> ProcessAdduser(int argc, char **argv)
 	}
 
 	CowBuffer<uint8_t> resultBuffer(
-		sizeof(uint64_t) +
 		sizeof(int32_t) * 2 +
 		KEY_SIZE +
 		SIGNATURE_PUBLIC_KEY_SIZE +
 		name.Length());
 
-	int32_t *command = (int32_t*)(resultBuffer.Pointer() +
-		sizeof(uint64_t));
-	uint8_t *key = resultBuffer.Pointer() +
-		sizeof(uint64_t) + sizeof(int32_t);
+	int32_t *command = (int32_t*)(resultBuffer.Pointer());
+	uint8_t *key = resultBuffer.Pointer() + sizeof(int32_t);
 	uint8_t *signature = resultBuffer.Pointer() +
-		sizeof(uint64_t) + sizeof(int32_t) + KEY_SIZE;
+		sizeof(int32_t) + KEY_SIZE;
 	int32_t *nameLength = (int32_t*)(resultBuffer.Pointer() +
-		sizeof(uint64_t) + sizeof(int32_t) + KEY_SIZE +
+		sizeof(int32_t) + KEY_SIZE +
 		SIGNATURE_PUBLIC_KEY_SIZE);
 	uint8_t *nameBuffer = resultBuffer.Pointer() +
-		sizeof(uint64_t) + sizeof(int32_t) * 2 + KEY_SIZE +
+		sizeof(int32_t) * 2 + KEY_SIZE +
 		SIGNATURE_PUBLIC_KEY_SIZE;
 
 	*command = COMMAND_ADD_USER;
@@ -160,10 +156,52 @@ static CowBuffer<uint8_t> ProcessAdduser(int argc, char **argv)
 	HexToData(keyHex, key);
 	HexToData(signatureHex, signature);
 
-	uint64_t bufLen = resultBuffer.Size() - sizeof(uint64_t);
-	memcpy(resultBuffer.Pointer(), &bufLen, sizeof(bufLen));
-
 	return resultBuffer;
+}
+
+static CowBuffer<uint8_t> SendRequest(CowBuffer<uint8_t> command)
+{
+	Session session;
+	session.Socket = OpenSocket();
+
+	if (session.Socket == -1) {
+		return CowBuffer<uint8_t>();
+	}
+
+	session.Send(command);
+
+	bool res;
+
+	while (session.CanWrite()) {
+		res = session.Write();
+
+		if (!res) {
+			printf("Failed to send request.\n");
+			return CowBuffer<uint8_t>();
+		}
+	}
+
+	res = session.Read();
+
+	if (!res) {
+		return CowBuffer<uint8_t>();
+	}
+
+	while (session.Input) {
+		res = session.Read();
+
+		if (!res) {
+			return CowBuffer<uint8_t>();
+		}
+	}
+
+	return session.Receive();
+}
+
+void ProcessResponse(const char *command, CowBuffer<uint8_t> response)
+{
+	if (!strcmp(command, "listusers")) {
+	}
 }
 
 int main(int argc, char **argv)
@@ -187,32 +225,18 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	int fd = OpenSocket();
+	CowBuffer<uint8_t> response = SendRequest(command);
 
-	if (fd == -1) {
-		return 1;
-	}
-
-	int wrBytes = write(fd, command.Pointer(), command.Size());
-
-	if (wrBytes != (int)command.Size()) {
-		printf("Failed to send command.\n");
-		return 2;
-	}
-
-	uint8_t response[sizeof(uint64_t) + sizeof(int32_t)];
-
-	int rdBytes = read(fd, response, sizeof(uint64_t) + sizeof(int32_t));
-
-	if (rdBytes != sizeof(uint64_t) + sizeof(int32_t)) {
+	if (response.Size() == 0) {
 		printf("No response from server.\n");
 		return 0;
 	}
 
 	int32_t code;
-	memcpy(&code, response + sizeof(uint64_t), sizeof(code));
+	memcpy(&code, response.Pointer(), sizeof(code));
 
 	if (code == OK) {
+		ProcessResponse(argv[1], response);
 		return 0;
 	}
 

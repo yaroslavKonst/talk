@@ -359,9 +359,12 @@ void WorkScreen::Redraw()
 	ClearScreen();
 
 	move(0, 0);
-	addstr("Help: Exit: END | Mute: Ctrl-M");
+	addstr("Help: Exit: END | Mute: Ctrl-M | Mark read: Ctrl-R");
 
 	move(2, 0);
+	addstr("User");
+
+	move(3, 0);
 	addstr("Chats");
 
 	move(1, _columns / 4);

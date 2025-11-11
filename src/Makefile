@@ -2,25 +2,36 @@ SERVER_MODULES =\
 	Server/Server.o \
 	Server/ServerMain.o \
 	Server/UserDB.o \
+	Server/MessagePipe.o \
 	Protocol/Protocol.o \
 	Common/MyString.o \
 	Common/IniFile.o \
 	Common/BinaryFile.o \
+	Common/MessageContainer.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
 SERVERCTL_MODULES=\
 	ServerCtl/ServerCtlMain.o \
-	Common/MyString.o
+	Server/UserDB.o \
+	Server/MessagePipe.o \
+	Protocol/Protocol.o \
+	Common/MyString.o \
+	Common/BinaryFile.o \
+	Common/MessageContainer.o \
+	Crypto/Crypto.o \
+	ThirdParty/monocypher.o
 
 CLIENT_MODULES=\
 	Client/Client.o \
 	Client/ClientMain.o \
 	Client/UI.o \
 	Server/UserDB.o \
+	Server/MessagePipe.o \
 	Protocol/Protocol.o \
 	Common/MyString.o \
 	Common/BinaryFile.o \
+	Common/MessageContainer.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
@@ -39,11 +50,11 @@ BUILD_DIRS := $(BUILD_DIRS:%=$(BUILD_DIR)/%)
 
 # Server
 $(BUILD_DIR)/talkd: $(SERVER_MODULES_ABS) | $(BUILD_DIRS)
-	$(CXX) -o $@ $(SERVER_MODULES_ABS)
+	$(CXX) $(STATIC_FLAG) -o $@ $(SERVER_MODULES_ABS)
 
 # Server control
 $(BUILD_DIR)/talkdctl: $(SERVERCTL_MODULES_ABS) | $(BUILD_DIRS)
-	$(CXX) -o $@ $(SERVERCTL_MODULES_ABS)
+	$(CXX) $(STATIC_FLAG) -o $@ $(SERVERCTL_MODULES_ABS)
 
 # Client
 $(BUILD_DIR)/talk: $(CLIENT_MODULES_ABS) | $(BUILD_DIRS)
@@ -57,3 +68,14 @@ $(BUILD_DIR)/%.o: %.c | $(BUILD_DIRS)
 
 $(BUILD_DIRS):
 	mkdir -p $(BUILD_DIRS)
+
+DEPS_SOURCE := $(shell find . -name *.cpp)
+DEPS_SOURCE := $(subst ./,,$(DEPS_SOURCE))
+DEPS_RES := $(DEPS_SOURCE:%.cpp=-MT:$(BUILD_DIR)/%.o:)
+DEPS_ARGS := $(join $(DEPS_RES),$(DEPS_SOURCE))
+
+$(BUILD_DIR)/deps.mk: $(DEPS_SOURCE) | $(BUILD_DIRS)
+	truncate -s 0 $@
+	for ENTRY in $(DEPS_ARGS) ; do $(CXX) -MM `echo $$ENTRY | sed "s|:| |g"` >> $@ ; done
+
+include $(BUILD_DIR)/deps.mk
