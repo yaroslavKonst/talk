@@ -1,5 +1,7 @@
 #include "UserDB.hpp"
 
+#include <cstring>
+
 #include "../ThirdParty/monocypher.h"
 #include "../Common/Debug.hpp"
 
@@ -133,7 +135,7 @@ void UserDB::AddUser(
 	int64_t accessTime,
 	String name)
 {
-	DEBUG("Adduser")
+	DEBUG("Adduser");
 
 	uint64_t freeIndex = 0;
 

@@ -3,7 +3,7 @@
 
 #include <curses.h>
 
-#include "../Protocol/Protocol.hpp"
+#include "../Protocol/ClientSession.hpp"
 
 class Chat
 {
@@ -86,6 +86,7 @@ class WorkScreen : public Screen
 {
 public:
 	WorkScreen(ClientSession *session);
+	~WorkScreen();
 
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;

@@ -4,12 +4,11 @@
 #include <cstring>
 #include <cstdio>
 
-#include "../Protocol/Protocol.hpp"
-#include "../Crypto/Crypto.hpp"
+#include "../Protocol/Session.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/MyString.hpp"
-#include "../Common/CowBuffer.hpp"
 #include "../Common/Hex.hpp"
+#include "../Crypto/CryptoDefinitions.hpp"
 
 #include "SocketName.hpp"
 

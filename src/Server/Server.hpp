@@ -1,10 +1,10 @@
 #ifndef _SERVER_HPP
 #define _SERVER_HPP
 
+#include "UserDB.hpp"
 #include "../Common/IniFile.hpp"
-#include "../Common/CowBuffer.hpp"
-#include "../Crypto/Crypto.hpp"
-#include "../Protocol/Protocol.hpp"
+#include "../Protocol/Session.hpp"
+#include "../Crypto/CryptoDefinitions.hpp"
 
 class Server
 {

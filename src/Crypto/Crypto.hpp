@@ -4,22 +4,13 @@
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
 #include "../ThirdParty/monocypher.h"
-
-#define KEY_SIZE 32
-#define SIGNATURE_PRIVATE_KEY_SIZE 64
-#define SIGNATURE_PUBLIC_KEY_SIZE 32
-#define SIGNATURE_SIZE 64
-#define NONCE_SIZE 24
-#define MAC_SIZE 16
-#define SALT_SIZE 16
+#include "CryptoDefinitions.hpp"
 
 struct EncryptedStream
 {
 	uint8_t Key[KEY_SIZE];
 	uint8_t Nonce[NONCE_SIZE];
 };
-
-int64_t GetUnixTime();
 
 void InitStream(EncryptedStream &stream, const uint8_t key[KEY_SIZE]);
 void InitStream(

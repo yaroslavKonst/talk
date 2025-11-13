@@ -2,6 +2,8 @@
 
 #include <poll.h>
 
+#include "../Common/UnixTime.hpp"
+
 Client::Client() : _ui(&_session)
 {
 	_session.Socket = -1;

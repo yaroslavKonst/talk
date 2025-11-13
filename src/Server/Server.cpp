@@ -10,9 +10,13 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 
+#include "../Protocol/ServerSession.hpp"
+#include "../Protocol/ControlSession.hpp"
 #include "../ServerCtl/SocketName.hpp"
 #include "../Common/Hex.hpp"
+#include "../Common/UnixTime.hpp"
 #include "../Common/Debug.hpp"
+#include "../Crypto/Crypto.hpp"
 
 Server::Server() : _configFile("talkd.conf")
 {

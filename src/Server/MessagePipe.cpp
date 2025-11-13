@@ -1,6 +1,7 @@
 #include "MessagePipe.hpp"
 
-#include "../Crypto/Crypto.hpp"
+#include "../Crypto/CryptoDefinitions.hpp"
+#include "../ThirdParty/monocypher.h"
 
 MessagePipe::MessagePipe()
 {

@@ -1,5 +1,6 @@
 #include "UI.hpp"
 
+#include <unistd.h>
 #include <cstdlib>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -358,13 +359,13 @@ Screen *LoginScreen::ProcessEvent(int event)
 // Work screen.
 WorkScreen::WorkScreen(ClientSession *session) : Screen(session)
 {
-	_chat = nullptr;
+	_chatList = nullptr;
 }
 
 WorkScreen::~WorkScreen()
 {
-	if (_chat) {
-		delete _chat;
+	if (_chatList) {
+		delete _chatList;
 	}
 }
 

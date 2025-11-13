@@ -1,7 +1,7 @@
 #ifndef _USERDB_HPP
 #define _USERDB_HPP
 
-#include "../Crypto/Crypto.hpp"
+#include "../Crypto/CryptoDefinitions.hpp"
 #include "../Common/BinaryFile.hpp"
 
 class UserDB

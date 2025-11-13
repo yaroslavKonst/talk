@@ -2,7 +2,7 @@
 #define _CLIENT_HPP
 
 #include "UI.hpp"
-#include "../Protocol/Protocol.hpp"
+#include "../Protocol/ClientSession.hpp"
 
 class Client
 {

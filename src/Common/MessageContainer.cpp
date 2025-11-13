@@ -8,7 +8,7 @@
 
 #include "Hex.hpp"
 #include "BinaryFile.hpp"
-#include "../Crypto/Crypto.hpp"
+#include "../Crypto/CryptoDefinitions.hpp"
 
 MessageContainer::MessageContainer(
 	const uint8_t *key1,

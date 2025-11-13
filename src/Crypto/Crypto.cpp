@@ -2,21 +2,10 @@
 
 #include <unistd.h>
 #include <fcntl.h>
-#include <time.h>
 #include <sys/random.h>
 
+#include "../Common/UnixTime.hpp"
 #include "../Common/Exception.hpp"
-
-int64_t GetUnixTime()
-{
-	int64_t val = time(nullptr);
-
-	if (val == -1) {
-		THROW("Failed to get system time.");
-	}
-
-	return val;
-}
 
 static void Scramble(uint8_t *buffer, uint64_t size, uint8_t init)
 {

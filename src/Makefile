@@ -3,7 +3,10 @@ SERVER_MODULES =\
 	Server/ServerMain.o \
 	Server/UserDB.o \
 	Server/MessagePipe.o \
-	Protocol/Protocol.o \
+	Protocol/Session.o \
+	Protocol/ServerSession.o \
+	Protocol/ControlSession.o \
+	Common/UnixTime.o \
 	Common/MyString.o \
 	Common/IniFile.o \
 	Common/BinaryFile.o \
@@ -13,25 +16,20 @@ SERVER_MODULES =\
 
 SERVERCTL_MODULES=\
 	ServerCtl/ServerCtlMain.o \
-	Server/UserDB.o \
-	Server/MessagePipe.o \
-	Protocol/Protocol.o \
-	Common/MyString.o \
-	Common/BinaryFile.o \
-	Common/MessageContainer.o \
-	Crypto/Crypto.o \
-	ThirdParty/monocypher.o
+	Protocol/Session.o \
+	Common/UnixTime.o \
+	Common/MyString.o
 
 CLIENT_MODULES=\
 	Client/Client.o \
 	Client/ClientMain.o \
 	Client/UI.o \
-	Server/UserDB.o \
-	Server/MessagePipe.o \
-	Protocol/Protocol.o \
+	Protocol/Session.o \
+	Protocol/ClientSession.o \
+	Common/UnixTime.o \
 	Common/MyString.o \
-	Common/BinaryFile.o \
 	Common/MessageContainer.o \
+	Common/BinaryFile.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
