@@ -45,6 +45,9 @@ void PasswordScreen::Redraw()
 {
 	ClearScreen();
 
+	move(0, 0);
+	addstr("Help: Exit: END | Mute: Ctrl-M | Mark read: Ctrl-R");
+
 	move(_rows / 2, 4);
 	addstr("Enter password: ");
 	addstr(_password.CStr());
@@ -141,6 +144,9 @@ LoginScreen::LoginScreen(ClientSession *session) : Screen(session)
 void LoginScreen::Redraw()
 {
 	ClearScreen();
+
+	move(0, 0);
+	addstr("Help: Exit: END | Mute: Ctrl-M | Mark read: Ctrl-R");
 
 	move(_rows / 2 - 10, 4);
 	addstr("Your public key:");
@@ -352,6 +358,14 @@ Screen *LoginScreen::ProcessEvent(int event)
 // Work screen.
 WorkScreen::WorkScreen(ClientSession *session) : Screen(session)
 {
+	_chat = nullptr;
+}
+
+WorkScreen::~WorkScreen()
+{
+	if (_chat) {
+		delete _chat;
+	}
 }
 
 void WorkScreen::Redraw()

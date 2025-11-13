@@ -5,6 +5,32 @@
 
 #include "../Protocol/Protocol.hpp"
 
+class Chat
+{
+public:
+private:
+};
+
+class ChatList
+{
+public:
+	ChatList();
+	~ChatList();
+
+private:
+	struct Elem
+	{
+		Elem *Next;
+		Elem *Prev;
+
+		String Name;
+		uint8_t Key[KEY_SIZE];
+	};
+
+	Elem *_first;
+	Elem *_last;
+};
+
 class Screen
 {
 public:
@@ -65,6 +91,7 @@ public:
 	Screen *ProcessEvent(int event) override;
 
 private:
+	ChatList *_chatList;
 };
 
 class UI

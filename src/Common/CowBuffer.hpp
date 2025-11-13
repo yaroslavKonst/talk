@@ -42,6 +42,10 @@ public:
 
 	CowBuffer &operator=(const CowBuffer &cb)
 	{
+		if (_data == cb._data) {
+			return *this;
+		}
+
 		DecRef();
 		_data = cb._data;
 		IncRef();

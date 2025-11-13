@@ -21,9 +21,8 @@ int64_t GetUnixTime()
 static void Scramble(uint8_t *buffer, uint64_t size, uint8_t init)
 {
 	uint8_t val = init;
-	uint64_t i;
 
-	for (i = 0; i < size; i++) {
+	for (uint64_t i = 0; i < size; i++) {
 		buffer[i] = buffer[i] ^ val;
 		val += 47;
 	}
@@ -74,12 +73,11 @@ static bool VerifyNonce(
 {
 	int64_t prevT;
 	int64_t t;
-	int equal = 1;
-	int i;
+	bool equal = true;
 
-	for (i = 0; i < NONCE_SIZE; i++) {
+	for (int i = 0; i < NONCE_SIZE; i++) {
 		if (prevNonce[i] != nonce[i]) {
-			equal = 0;
+			equal = false;
 		}
 	}
 
@@ -99,9 +97,12 @@ static bool VerifyNonce(
 
 void InitNonce(uint8_t nonce[NONCE_SIZE])
 {
-	memset(nonce, 0, NONCE_SIZE);
 	int64_t t = GetUnixTime();
 	memcpy(nonce, &t, sizeof(t));
+	GenerateRandomData(
+		NONCE_SIZE - sizeof(t),
+		nonce + sizeof(t),
+		false);
 }
 
 void InitStream(
@@ -152,7 +153,9 @@ CowBuffer<uint8_t> Encrypt(
 		plaintext.Pointer(),
 		plaintext.Size());
 
+	GenerateRandomData(1, scramblerInit, false);
 	Scramble(result.Pointer() + 1, result.Size() - 1, scramblerInit[0]);
+
 	return result;
 }
 
@@ -333,4 +336,34 @@ void GetSalt(String file, uint8_t salt[SALT_SIZE])
 	}
 
 	close(fd);
+}
+
+CowBuffer<uint8_t> ApplyScrambler(CowBuffer<uint8_t> data)
+{
+	CowBuffer<uint8_t> result(data.Size() + 1);
+
+	if (data.Size()) {
+		memcpy(result.Pointer() + 1, data.Pointer(), data.Size());
+	}
+
+	GenerateRandomData(1, result.Pointer(), false);
+
+	if (data.Size()) {
+		Scramble(
+			result.Pointer() + 1,
+			result.Size() - 1,
+			result.Pointer()[0]);
+	}
+
+	return result;
+}
+
+CowBuffer<uint8_t> RemoveScrambler(CowBuffer<uint8_t> data)
+{
+	if (data.Size() <= 1) {
+		return CowBuffer<uint8_t>();
+	}
+
+	Scramble(data.Pointer() + 1, data.Size() - 1, data.Pointer()[0]);
+	return data.Slice(1, data.Size() - 1);
 }

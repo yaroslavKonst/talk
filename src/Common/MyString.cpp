@@ -64,6 +64,10 @@ void String::Clear()
 
 String &String::operator=(const String &s)
 {
+	if (_data == s._data) {
+		return *this;
+	}
+
 	FreeRef();
 	_data = s._data;
 	IncRef();

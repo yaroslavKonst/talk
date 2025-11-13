@@ -206,10 +206,14 @@ void Session::Send(CowBuffer<uint8_t> data)
 }
 
 bool Session::Process()
-{ }
+{
+	return false;
+}
 
 bool Session::TimePassed()
-{ }
+{
+	return false;
+}
 
 // Server.
 ServerSession::~ServerSession()
@@ -250,6 +254,7 @@ bool ServerSession::TimePassed()
 bool ServerSession::ProcessFirstSyn()
 {
 	CowBuffer<uint8_t> message = Receive();
+	message = RemoveScrambler(message);
 
 	if (message.Size() != KEY_SIZE + sizeof(int64_t) + SIGNATURE_SIZE) {
 		return false;
@@ -442,7 +447,7 @@ bool ClientSession::InitSession()
 		SignaturePrivateKey,
 		message.Pointer() + KEY_SIZE + sizeof(int64_t));
 
-	Send(message);
+	Send(ApplyScrambler(message));
 
 	State = ClientStateInitialWaitForServer;
 
