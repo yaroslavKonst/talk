@@ -13,7 +13,6 @@
 #include "../Protocol/ServerSession.hpp"
 #include "../Protocol/ControlSession.hpp"
 #include "../ServerCtl/SocketName.hpp"
-#include "../Common/Hex.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Debug.hpp"
 #include "../Crypto/Crypto.hpp"
@@ -122,9 +121,6 @@ void Server::GenerateKeys(const char *password)
 	DeriveKey(password, salt, _privateKey);
 	crypto_wipe(salt, SALT_SIZE);
 	GeneratePublicKey(_privateKey, _publicKey);
-
-	String pkHex = DataToHex(_publicKey, KEY_SIZE);
-	printf("PK:\n%s\n", pkHex.CStr());
 }
 
 void Server::WipeKeys()
@@ -258,6 +254,7 @@ void Server::AcceptControl()
 
 	session->Users = &_userDb;
 	session->Work = &_work;
+	session->PublicKey = _publicKey;
 
 	if (!_sessionFirst) {
 		_sessionFirst = session;

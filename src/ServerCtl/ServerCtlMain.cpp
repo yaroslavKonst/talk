@@ -12,6 +12,12 @@
 
 #include "SocketName.hpp"
 
+static const char *ShutdownCommand = "shutdown";
+static const char *GetKeyCommand = "getkey";
+static const char *AddUserCommand = "adduser";
+static const char *RemoveUserCommand = "removeuser";
+static const char *ListUsersCommand = "listusers";
+
 static int OpenSocket()
 {
 	const char *name = TALKD_SOCKET_NAME;
@@ -38,97 +44,50 @@ static int OpenSocket()
 	return fd;
 }
 
-static String GetKey(const char *prompt, int length)
-{
-	String keyHex;
-	char c;
-
-	printf(prompt);
-	fflush(stdout);
-
-	while (read(0, &c, 1) == 1) {
-		if (c == '\n') {
-			break;
-		}
-
-		keyHex += c;
-	}
-
-	if (keyHex.Length() != length * 2) {
-		printf("Invalid key size, it must be %d.\n", length * 2);
-		return String();
-	}
-
-	for (int i = 0; i < keyHex.Length(); i++) {
-		c = keyHex.CStr()[i];
-
-		bool validChar =
-			(c >= '0' && c <= '9') ||
-			(c >= 'a' && c <= 'f');
-
-		if (!validChar) {
-			printf("Key contains invalid character.\n");
-			return String();
-		}
-	}
-
-	return keyHex;
-}
-
-static CowBuffer<uint8_t> ProcessStop()
+static CowBuffer<uint8_t> RequestStop()
 {
 	CowBuffer<uint8_t> result(sizeof(int32_t));
 
 	int32_t command = COMMAND_SHUTDOWN;
-
 	memcpy(result.Pointer(), &command, sizeof(command));
 
 	return result;
 }
 
-static CowBuffer<uint8_t> ProcessAdduser(int argc, char **argv)
+static CowBuffer<uint8_t> RequestGetKey()
 {
-	String name;
-	String keyHex;
-	String signatureHex;
+	CowBuffer<uint8_t> result(sizeof(int32_t));
 
-	char c;
+	int32_t command = COMMAND_GET_PUBLIC_KEY;
+	memcpy(result.Pointer(), &command, sizeof(command));
 
-	printf("User name: ");
-	fflush(stdout);
+	return result;
+}
 
-	while (read(0, &c, 1) == 1) {
-		if (c == '\n') {
-			break;
-		}
-
-		name += c;
-	}
-
-	keyHex = GetKey("User key: ", KEY_SIZE);
-
-	if (keyHex.Length() == 0) {
+static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
+{
+	if (argc != 5) {
+		printf("Usage: %s name key signature\n", AddUserCommand);
 		return CowBuffer<uint8_t>();
 	}
 
-	signatureHex = GetKey("User signature: ", SIGNATURE_PUBLIC_KEY_SIZE);
+	String name(argv[2]);
+	String keyHex(argv[3]);
+	String signatureHex(argv[4]);
 
-	if (signatureHex.Length() == 0) {
+	if (name.Length() == 0) {
+		printf("Name is empty.\n");
 		return CowBuffer<uint8_t>();
 	}
 
-	printf("User name: %s\nKey: %s\nSignature: %s\n",
-		name.CStr(),
-		keyHex.CStr(),
-		signatureHex.CStr());
-	printf("Correct? [y/N] ");
-	fflush(stdout);
+	if (keyHex.Length() != KEY_SIZE * 2) {
+		printf("Key length is not equal to %d.\n", KEY_SIZE * 2);
+		return CowBuffer<uint8_t>();
+	}
 
-	c = 0;
-	int res = read(0, &c, 1);
-
-	if (res != 1 || c != 'y') {
-		printf("Interrupt.\n");
+	if (signatureHex.Length() != SIGNATURE_PUBLIC_KEY_SIZE * 2) {
+		printf("Signature length is not equal to %d.\n",
+			SIGNATURE_PUBLIC_KEY_SIZE * 2);
 		return CowBuffer<uint8_t>();
 	}
 
@@ -156,6 +115,162 @@ static CowBuffer<uint8_t> ProcessAdduser(int argc, char **argv)
 	HexToData(signatureHex, signature);
 
 	return resultBuffer;
+}
+
+static CowBuffer<uint8_t> RequestRemoveUser(int argc, char **argv)
+{
+	if (argc != 3) {
+		printf("Usage: %s key\n", AddUserCommand);
+		return CowBuffer<uint8_t>();
+	}
+
+	String keyHex(argv[2]);
+
+	if (keyHex.Length() != KEY_SIZE * 2) {
+		printf("Key length is not equal to %d.\n", KEY_SIZE * 2);
+		return CowBuffer<uint8_t>();
+	}
+
+	CowBuffer<uint8_t> resultBuffer(sizeof(int32_t) + KEY_SIZE);
+
+	int32_t *command = (int32_t*)(resultBuffer.Pointer());
+	uint8_t *key = resultBuffer.Pointer() + sizeof(int32_t);
+
+	*command = COMMAND_REMOVE_USER;
+	HexToData(keyHex, key);
+
+	return resultBuffer;
+}
+
+static CowBuffer<uint8_t> RequestListUsers()
+{
+	CowBuffer<uint8_t> result(sizeof(int32_t));
+
+	int32_t command = COMMAND_LIST_USERS;
+	memcpy(result.Pointer(), &command, sizeof(command));
+
+	return result;
+}
+
+static CowBuffer<uint8_t> CreateRequest(int argc, char **argv)
+{
+	CowBuffer<uint8_t> request;
+
+	if (!strcmp(argv[1], ShutdownCommand)) {
+		request = RequestStop();
+	} else if (!strcmp(argv[1], GetKeyCommand)) {
+		request = RequestGetKey();
+	} else if (!strcmp(argv[1], AddUserCommand)) {
+		request = RequestAddUser(argc, argv);
+	} else if (!strcmp(argv[1], RemoveUserCommand)) {
+		request = RequestRemoveUser(argc, argv);
+	} else if (!strcmp(argv[1], ListUsersCommand)) {
+		request = RequestListUsers();
+	}
+
+	return request;
+}
+
+static void PrintError(int32_t code)
+{
+	switch (code) {
+	case ERROR:
+		printf("Error.\n");
+		break;
+	case ERROR_UNKNOWN_COMMAND:
+		printf("Request is not supported by server.\n");
+		break;
+	case ERROR_TOO_SHORT:
+		printf("Request is too short.\n");
+		break;
+	case ERROR_INVALID_SIZE:
+		printf("Request has invalid size.\n");
+		break;
+	case ERROR_INVALID_USER:
+		printf("Requested user does not exist.\n");
+		break;
+	case ERROR_USER_EXISTS:
+		printf("User already exists.\n");
+		break;
+	default:
+		printf("Unknown error code.\n");
+		break;
+	}
+}
+
+static void ProcessGetKey(CowBuffer<uint8_t> response)
+{
+	if (response.Size() != KEY_SIZE) {
+		printf("Invalid response length.\n");
+		return;
+	}
+
+	String keyHex = DataToHex(response.Pointer(), KEY_SIZE);
+
+	printf("%s\n", keyHex.CStr());
+}
+
+static void ProcessListUsers(CowBuffer<uint8_t> response)
+{
+	const int32_t entrySize = KEY_SIZE + 55;
+
+	int32_t userCount;
+
+	if (response.Size() < sizeof(userCount)) {
+		printf("Response does not contain user count.\n");
+		return;
+	}
+
+	memcpy(&userCount, response.Pointer(), sizeof(userCount));
+
+	for (int i = 0; i < userCount; i++) {
+		String name((const char*)response.Pointer() +
+			sizeof(userCount) + entrySize * i + KEY_SIZE);
+		String key = DataToHex(
+			response.Pointer() + sizeof(userCount) + entrySize * i,
+			KEY_SIZE);
+
+		printf("%s\n%s\n\n", name.CStr(), key.CStr());
+	}
+}
+
+static int ProcessResponse(const char *command, CowBuffer<uint8_t> response)
+{
+	int32_t code;
+
+	if (response.Size() < sizeof(code)) {
+		printf("Response size is too small to contain result code.\n");
+		return 1;
+	}
+
+	memcpy(&code, response.Pointer(), sizeof(code));
+
+	if (code != OK) {
+		PrintError(code);
+		return 1;
+	}
+
+	if (response.Size() <= sizeof(code)) {
+		return 0;
+	}
+
+	response = response.Slice(
+		sizeof(code),
+		response.Size() - sizeof(code));
+
+	if (!strcmp(command, ShutdownCommand)) {
+		printf("%s should not have response.\n", ShutdownCommand);
+	} else if (!strcmp(command, GetKeyCommand)) {
+		ProcessGetKey(response);
+	} else if (!strcmp(command, AddUserCommand)) {
+		printf("%s should not have response.\n", AddUserCommand);
+	} else if (!strcmp(command, RemoveUserCommand)) {
+		printf("%s should not have response.\n", RemoveUserCommand);
+	} else if (!strcmp(command, ListUsersCommand)) {
+		ProcessListUsers(response);
+	}
+
+	return 0;
 }
 
 static CowBuffer<uint8_t> SendRequest(CowBuffer<uint8_t> command)
@@ -197,58 +312,36 @@ static CowBuffer<uint8_t> SendRequest(CowBuffer<uint8_t> command)
 	return session.Receive();
 }
 
-void ProcessResponse(const char *command, CowBuffer<uint8_t> response)
+static void PrintHelp()
 {
-	if (!strcmp(command, "listusers")) {
-	}
+	printf("Commands:\n");
+	printf("\t%s\n", ShutdownCommand);
+	printf("\t%s\n", GetKeyCommand);
+	printf("\t%s\n", AddUserCommand);
+	printf("\t%s\n", RemoveUserCommand);
+	printf("\t%s\n", ListUsersCommand);
 }
 
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
-		printf("No command given.\n");
-		printf("Commands:\n\tshutdown\n\tadduser\n");
+		PrintHelp();
 		return 1;
 	}
 
-	CowBuffer<uint8_t> command;
+	CowBuffer<uint8_t> request = CreateRequest(argc, argv);
 
-	if (!strcmp(argv[1], "adduser")) {
-		command = ProcessAdduser(argc, argv);
-	} else if (!strcmp(argv[1], "shutdown")) {
-		command = ProcessStop();
-	}
-
-	if (command.Size() == 0) {
-		printf("Invalid command.\n");
+	if (request.Size() == 0) {
+		printf("Failed to create request.\n");
 		return 1;
 	}
 
-	CowBuffer<uint8_t> response = SendRequest(command);
+	CowBuffer<uint8_t> response = SendRequest(request);
 
 	if (response.Size() == 0) {
 		printf("No response from server.\n");
 		return 0;
 	}
 
-	int32_t code;
-	memcpy(&code, response.Pointer(), sizeof(code));
-
-	if (code == OK) {
-		ProcessResponse(argv[1], response);
-		return 0;
-	}
-
-	if (code == ERROR_UNKNOWN_COMMAND) {
-		printf("Command is not supported by server.\n");
-		return 1;
-	}
-
-	if (code == ERROR_TOO_SHORT) {
-		printf("Command is too short.\n");
-		return 1;
-	}
-
-	printf("Unknown result.\n");
-	return 1;
+	return ProcessResponse(argv[1], response);
 }

@@ -14,17 +14,13 @@ bool ControlSession::TimePassed()
 	return true;
 }
 
-// Command structure.
-// | Command id (int32) |
-// |        stop        |
-// |      add user      | key | signature | name size (int32) | name |
-// |    remove user     | key |
 bool ControlSession::Process()
 {
 	CowBuffer<uint8_t> message = Receive();
 
 	if (message.Size() < sizeof(int32_t)) {
-		return false;
+		ProcessUnknownCommand();
+		return true;
 	}
 
 	int32_t command;
@@ -34,12 +30,17 @@ bool ControlSession::Process()
 	case COMMAND_SHUTDOWN:
 		ProcessShutdownCommand();
 		break;
+	case COMMAND_GET_PUBLIC_KEY:
+		ProcessGetPublicKeyCommand();
+		break;
 	case COMMAND_ADD_USER:
 		ProcessAddUserCommand(message);
 		break;
 	case COMMAND_REMOVE_USER:
 		ProcessRemoveUserCommand(message);
 		break;
+	case COMMAND_LIST_USERS:
+		ProcessListUsersCommand();
 	default:
 		ProcessUnknownCommand();
 		break;
@@ -48,20 +49,34 @@ bool ControlSession::Process()
 	return true;
 }
 
-void ControlSession::SendResponse(int32_t value)
+void ControlSession::SendResponse(int32_t code, CowBuffer<uint8_t> data)
 {
-	CowBuffer<uint8_t> message(sizeof(value));
-	memcpy(message.Pointer(), &value, sizeof(value));
+	CowBuffer<uint8_t> message(sizeof(code) + data.Size());
+	memcpy(message.Pointer(), &code, sizeof(code));
+
+	if (data.Size()) {
+		memcpy(
+			message.Pointer() + sizeof(code),
+			data.Pointer(),
+			data.Size());
+	}
+
 	Send(message);
 }
 
-// |        stop        |
 void ControlSession::ProcessShutdownCommand()
 {
 	*Work = false;
 }
 
-// |      add user      | key | signature | name size (int32) | name |
+void ControlSession::ProcessGetPublicKeyCommand()
+{
+	CowBuffer<uint8_t> message(KEY_SIZE);
+	memcpy(message.Pointer(), PublicKey, KEY_SIZE);
+
+	SendResponse(OK, message);
+}
+
 void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> message)
 {
 	uint32_t minMessageLength =
@@ -71,13 +86,13 @@ void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> message)
 		sizeof(int32_t);
 
 	if (message.Size() < minMessageLength) {
-		SendResponse(ERROR_TOO_SHORT);
+		SendResponse(ERROR_TOO_SHORT, CowBuffer<uint8_t>());
 		return;
 	}
 
 	const uint8_t *key = message.Pointer() + sizeof(int32_t);
-	const uint8_t *signature = message.Pointer() + sizeof(int32_t) +
-		KEY_SIZE;
+	const uint8_t *signature = message.Pointer() +
+		sizeof(int32_t) + KEY_SIZE;
 
 	int32_t nameSize;
 	memcpy(
@@ -95,7 +110,7 @@ void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> message)
 			SIGNATURE_PUBLIC_KEY_SIZE + nameSize;
 
 		if (!messageCorrect) {
-			SendResponse(ERROR_TOO_SHORT);
+			SendResponse(ERROR_TOO_SHORT, CowBuffer<uint8_t>());
 			return;
 		}
 
@@ -107,16 +122,67 @@ void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> message)
 		}
 	}
 
+	if (Users->HasUser(key)) {
+		SendResponse(ERROR_USER_EXISTS, CowBuffer<uint8_t>());
+		return;
+	}
+
 	Users->AddUser(key, signature, GetUnixTime(), name);
 
-	SendResponse(OK);
+	SendResponse(OK, CowBuffer<uint8_t>());
 }
 
 void ControlSession::ProcessRemoveUserCommand(CowBuffer<uint8_t> message)
 {
+	if (message.Size() != sizeof(int32_t) + KEY_SIZE) {
+		SendResponse(ERROR_INVALID_SIZE, CowBuffer<uint8_t>());
+		return;
+	}
+
+	const uint8_t *key = message.Pointer() + sizeof(int32_t);
+
+	bool validUser = Users->HasUser(key);
+
+	if (!validUser) {
+		SendResponse(ERROR_INVALID_USER, CowBuffer<uint8_t>());
+		return;
+	}
+
+	Users->RemoveUser(key);
+
+	SendResponse(OK, CowBuffer<uint8_t>());
+}
+
+void ControlSession::ProcessListUsersCommand()
+{
+	const int32_t entrySize = KEY_SIZE + 55;
+
+	CowBuffer<const uint8_t*> userKeys = Users->ListUsers();
+	int32_t userCount = userKeys.Size();
+
+	CowBuffer<uint8_t> message(sizeof(int32_t) + entrySize * userCount);
+	memcpy(message.Pointer(), &userCount, sizeof(userCount));
+
+	for (int32_t i = 0; i < userCount; i++) {
+		const uint8_t *key = userKeys[i];
+
+		memcpy(
+			message.Pointer() + sizeof(int32_t) + entrySize * i,
+			key,
+			KEY_SIZE);
+
+		String name = Users->GetUserName(key);
+		memcpy(
+			message.Pointer() + sizeof(int32_t) + entrySize * i +
+			KEY_SIZE,
+			name.CStr(),
+			name.Length() + 1);
+	}
+
+	SendResponse(OK, message);
 }
 
 void ControlSession::ProcessUnknownCommand()
 {
-	SendResponse(ERROR_UNKNOWN_COMMAND);
+	SendResponse(ERROR_UNKNOWN_COMMAND, CowBuffer<uint8_t>());
 }

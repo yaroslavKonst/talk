@@ -3,6 +3,7 @@
 
 #include "../Crypto/CryptoDefinitions.hpp"
 #include "../Common/BinaryFile.hpp"
+#include "../Common/CowBuffer.hpp"
 
 class UserDB
 {
@@ -29,18 +30,53 @@ public:
 
 	void RemoveUser(const uint8_t key[KEY_SIZE]);
 
+	int32_t GetUserCount();
+	CowBuffer<const uint8_t*> ListUsers();
+
 private:
 	struct UserData
 	{
-		UserData *Next;
-
 		uint64_t IndexInFile;
 
 		uint8_t PublicKey[KEY_SIZE];
 		uint8_t SignaturePublicKey[SIGNATURE_PUBLIC_KEY_SIZE];
 		int64_t AccessTime;
 		String Name;
+
+		~UserData();
+		int Compare(const uint8_t *key);
 	};
+
+	struct UserTree
+	{
+		UserTree *Left;
+		UserTree *Right;
+
+		UserData *Data;
+
+		~UserTree();
+	};
+
+	struct FreeIndex
+	{
+		int32_t Index;
+		FreeIndex *Next;
+	};
+
+	UserTree *_users;
+	FreeIndex *_freeIndices;
+	UserTree *_deletedUsers;
+
+	UserTree **FindEntry(const uint8_t *key);
+	void AddEntry(UserTree **root, UserTree *entry);
+	void RemoveEntry(UserTree **entry);
+
+	void LoadUserData();
+	void FreeUserData();
+
+	int32_t GetEntryNumber(UserTree *entry);
+
+	void FillUserList(UserTree *entry, const uint8_t **data, int *index);
 
 	// User file structure.
 	// File consists of records with equal size.
@@ -67,11 +103,6 @@ private:
 		sizeof(int64_t);
 
 	BinaryFile _userFile;
-
-	UserData *_first;
-
-	void LoadUserData();
-	void FreeUserData();
 };
 
 #endif

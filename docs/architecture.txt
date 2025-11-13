@@ -1,0 +1,23 @@
+Encryption system
+-----------------
+
+Control system
+--------------
+
+Command structure.
+| Command id (int32) |
+|      shutdown      |
+|   get public key   |
+|      add user      | key | signature | name size (int32) | name |
+|    remove user     | key |
+|     list users     |
+
+Response structure.
+shutdown         | no response
+get public key   | result code | public key |
+add user         | result code |
+remove user      | result code |
+list users       | result code | user count (int32) | key | name (55 bytes) |...
+
+Message system
+--------------
