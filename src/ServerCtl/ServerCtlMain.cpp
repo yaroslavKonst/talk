@@ -276,6 +276,7 @@ static int ProcessResponse(const char *command, CowBuffer<uint8_t> response)
 static CowBuffer<uint8_t> SendRequest(CowBuffer<uint8_t> command)
 {
 	Session session;
+	session.SetInputSizeLimit(1024 * 1024 * 1024);
 	session.Socket = OpenSocket();
 
 	if (session.Socket == -1) {

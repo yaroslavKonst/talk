@@ -6,7 +6,7 @@
 #include "../Server/MessagePipe.hpp"
 #include "../Crypto/Crypto.hpp"
 
-struct ServerSession : public Session
+struct ServerSession : public Session, public SendMessageHandler
 {
 	~ServerSession();
 
@@ -37,6 +37,11 @@ struct ServerSession : public Session
 	bool ProcessActiveSession();
 
 	bool TimePassed() override;
+
+	bool ProcessKeepAlive(CowBuffer<uint8_t> plainText);
+	bool ProcessTextMessage(CowBuffer<uint8_t> plainText);
+
+	void SendMessage(CowBuffer<uint8_t> message) override;
 };
 
 #endif

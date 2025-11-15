@@ -4,6 +4,9 @@
 #include "../Common/UnixTime.hpp"
 #include "../Common/Exception.hpp"
 
+MessageProcessor::~MessageProcessor()
+{ }
+
 ClientSession::~ClientSession()
 {
 	crypto_wipe(SignaturePrivateKey, SIGNATURE_PRIVATE_KEY_SIZE);
@@ -20,6 +23,8 @@ bool ClientSession::InitSession()
 	if (State != ClientStateUnconnected) {
 		THROW("Session is active.");
 	}
+
+	SetInputSizeLimit(1024);
 
 	int64_t currentTime = GetUnixTime();
 
@@ -52,6 +57,34 @@ bool ClientSession::InitSession()
 
 	TimeState = currentTime;
 
+	return true;
+}
+
+bool ClientSession::SendMessage(CowBuffer<uint8_t> message)
+{
+	const uint32_t headerSize = KEY_SIZE * 2 +
+		sizeof(int64_t) + sizeof(int32_t);
+
+	if (!Connected()) {
+		return false;
+	}
+
+	if (message.Size() <= headerSize) {
+		return false;
+	}
+
+	SMHeader = message.Slice(0, headerSize);
+
+	int32_t command = SESSION_COMMAND_TEXT_MESSAGE;
+	CowBuffer<uint8_t> data(message.Size() + sizeof(command));
+	memcpy(data.Pointer(), &command, sizeof(command));
+
+	memcpy(
+		data.Pointer() + sizeof(command),
+		message.Pointer(),
+		message.Size());
+
+	Send(Encrypt(data, OutES));
 	return true;
 }
 
@@ -126,6 +159,8 @@ bool ClientSession::ProcessInitialWaitForServer()
 	State = ClientStateActiveSession;
 	TimeState = 0;
 
+	SetInputSizeLimit(1024 * 1024 * 1024);
+
 	return true;
 }
 
@@ -142,30 +177,56 @@ bool ClientSession::ProcessActiveSession()
 	memcpy(&command, plainText.Pointer(), sizeof(command));
 
 	if (command == SESSION_COMMAND_KEEP_ALIVE) {
-		if (!TimeState) {
-			return false;
-		}
-
-		if (plainText.Size() != sizeof(int32_t) + sizeof(int64_t)) {
-			return false;
-		}
-
-		int64_t timestamp;
-		memcpy(
-			&timestamp,
-			plainText.Pointer() + sizeof(command),
-			sizeof(timestamp));
-
-		if (TimeState != timestamp) {
-			return false;
-		}
-
-		TimeState = 0;
-
-		return true;
+		return ProcessKeepAlive(plainText);
 	} else if (command == SESSION_COMMAND_TEXT_MESSAGE) {
-		return true;
+		return ProcessSendMessage(plainText);
+	} else if (command == SESSION_COMMAND_DELIVER_MESSAGE) {
+		return ProcessDeliverMessage(plainText);
 	}
 
 	return false;
+}
+
+bool ClientSession::ProcessKeepAlive(CowBuffer<uint8_t> plainText)
+{
+	if (!TimeState) {
+		return false;
+	}
+
+	if (plainText.Size() != sizeof(int32_t) + sizeof(int64_t)) {
+		return false;
+	}
+
+	int64_t timestamp;
+	memcpy(
+		&timestamp,
+		plainText.Pointer() + sizeof(int32_t),
+		sizeof(timestamp));
+
+	if (TimeState != timestamp) {
+		return false;
+	}
+
+	TimeState = 0;
+
+	return true;
+}
+
+bool ClientSession::ProcessSendMessage(CowBuffer<uint8_t> plainText)
+{
+	if (!SMHeader.Size()) {
+		return false;
+	}
+
+	Processor->NotifyDelivery(SMHeader);
+	SMHeader = CowBuffer<uint8_t>();
+	return true;
+}
+
+bool ClientSession::ProcessDeliverMessage(CowBuffer<uint8_t> plainText)
+{
+	Processor->DeliverMessage(plainText.Slice(
+		sizeof(int32_t),
+		plainText.Size() - sizeof(int32_t)));
+	return true;
 }

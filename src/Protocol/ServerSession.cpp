@@ -2,10 +2,12 @@
 
 #include "ActiveSession.hpp"
 #include "../Common/UnixTime.hpp"
-#include "../Common/MessageContainer.hpp"
+#include "../Message/MessageStorage.hpp"
 
 ServerSession::~ServerSession()
 {
+	Pipe->Unregister(PublicKey);
+
 	crypto_wipe(InES.Key, KEY_SIZE);
 	crypto_wipe(OutES.Key, KEY_SIZE);
 }
@@ -120,6 +122,9 @@ bool ServerSession::ProcessSecondSyn()
 	}
 
 	State = ServerStateActiveSession;
+	SetInputSizeLimit(1024 * 1024 * 1024);
+
+	Pipe->Register(PublicKey, this);
 
 	return true;
 }
@@ -137,61 +142,81 @@ bool ServerSession::ProcessActiveSession()
 	memcpy(&command, plainText.Pointer(), sizeof(command));
 
 	if (command == SESSION_COMMAND_KEEP_ALIVE) {
-		if (plainText.Size() != sizeof(command) + sizeof(int64_t)) {
-			return false;
-		}
-
-		Send(Encrypt(plainText, OutES));
-		return true;
+		return ProcessKeepAlive(plainText);
 	} else if (command == SESSION_COMMAND_TEXT_MESSAGE) {
-		int32_t status = SESSION_RESPONSE_OK;
-
-		CowBuffer<uint8_t> response(sizeof(int32_t) * 2);
-		memcpy(
-			response.Pointer(),
-			plainText.Pointer(),
-			sizeof(int32_t));
-
-		if (plainText.Size() <= sizeof(command) + KEY_SIZE * 2 +
-			sizeof(int64_t))
-		{
-			status = SESSION_RESPONSE_ERROR_MESSAGE_TOO_SHORT;
-		} else {
-			CowBuffer<uint8_t> message = plainText.Slice(
-				sizeof(command),
-				plainText.Size() - sizeof(command));
-
-			if (!Users->HasUser(message.Pointer())) {
-				status = SESSION_RESPONSE_ERROR_INVALID_USER;
-			}
-
-			if (!Users->HasUser(message.Pointer() + KEY_SIZE)) {
-				status = SESSION_RESPONSE_ERROR_INVALID_USER;
-			}
-
-			if (status == SESSION_RESPONSE_OK) {
-				MessageContainer container1(
-					message.Pointer(),
-					message.Pointer() + KEY_SIZE);
-				container1.AddMessage(message);
-
-				MessageContainer container2(
-					message.Pointer() + KEY_SIZE,
-					message.Pointer());
-				container2.AddMessage(message);
-
-				Pipe->SendMessage(message);
-			}
-		}
-
-		memcpy(
-			response.Pointer() + sizeof(command),
-			&status,
-			sizeof(status));
-
-		Send(Encrypt(response, OutES));
-		return true;
+		return ProcessTextMessage(plainText);
 	}
 
 	return false;
+}
+
+bool ServerSession::ProcessKeepAlive(CowBuffer<uint8_t> plainText)
+{
+	if (plainText.Size() != sizeof(int32_t) + sizeof(int64_t)) {
+		return false;
+	}
+
+	Send(Encrypt(plainText, OutES));
+	return true;
+}
+
+bool ServerSession::ProcessTextMessage(CowBuffer<uint8_t> plainText)
+{
+	int32_t status = SESSION_RESPONSE_OK;
+
+	CowBuffer<uint8_t> response(sizeof(int32_t) * 2);
+	memcpy(
+		response.Pointer(),
+		plainText.Pointer(),
+		sizeof(int32_t));
+
+	if (plainText.Size() <= sizeof(int32_t) * 2 + KEY_SIZE * 2 +
+		sizeof(int64_t))
+	{
+		status = SESSION_RESPONSE_ERROR_MESSAGE_TOO_SHORT;
+	} else {
+		CowBuffer<uint8_t> message = plainText.Slice(
+			sizeof(int32_t),
+			plainText.Size() - sizeof(int32_t));
+
+		if (!Users->HasUser(message.Pointer())) {
+			status = SESSION_RESPONSE_ERROR_INVALID_USER;
+		}
+
+		if (!Users->HasUser(message.Pointer() + KEY_SIZE)) {
+			status = SESSION_RESPONSE_ERROR_INVALID_USER;
+		}
+
+		if (status == SESSION_RESPONSE_OK) {
+			MessageStorage container1(
+				message.Pointer());
+			container1.AddMessage(message);
+
+			MessageStorage container2(
+				message.Pointer() + KEY_SIZE);
+			container2.AddMessage(message);
+
+			Pipe->SendMessage(message);
+		}
+	}
+
+	memcpy(
+		response.Pointer() + sizeof(int32_t),
+		&status,
+		sizeof(status));
+
+	Send(Encrypt(response, OutES));
+	return true;
+}
+
+void ServerSession::SendMessage(CowBuffer<uint8_t> message)
+{
+	int32_t command = SESSION_COMMAND_DELIVER_MESSAGE;
+	CowBuffer<uint8_t> data(message.Size() + sizeof(command));
+	memcpy(
+		data.Pointer() + sizeof(command),
+		message.Pointer(),
+		message.Size());
+
+	Send(Encrypt(data, OutES));
 }

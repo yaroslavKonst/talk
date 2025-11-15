@@ -1,13 +1,17 @@
 #include "Client.hpp"
 
 #include <poll.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 #include "../Common/UnixTime.hpp"
 
 Client::Client() : _ui(&_session)
 {
-	_session.Socket = -1;
+	umask(077);
+
 	_session.State = ClientSession::ClientStateUnconnected;
+	_session.Processor = &_ui;
 }
 
 Client::~Client()
@@ -26,7 +30,7 @@ int Client::Run()
 	int64_t currentTime = GetUnixTime();
 
 	while (work) {
-		bool connected = _session.Socket != -1;
+		bool connected = _session.Connected();
 
 		if (connected)
 		{
@@ -42,7 +46,13 @@ int Client::Run()
 		int res = poll(fds, connected ? 2 : 1, 1000);
 
 		if (res == -1) {
-			work = false;
+			if (errno == EINTR) {
+				_ui.ProcessResize();
+				work = _ui.ProcessEvent();
+				continue;
+			} else {
+				work = false;
+			}
 		}
 
 		int64_t newTime = GetUnixTime();
@@ -76,10 +86,12 @@ int Client::Run()
 			}
 
 			if (endSession) {
-				work = false;
+				_ui.Disconnect();
 			}
 		}
 	}
+
+	delete[] fds;
 
 	return 0;
 }

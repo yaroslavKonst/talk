@@ -4,9 +4,25 @@
 #include "Session.hpp"
 #include "../Crypto/Crypto.hpp"
 
+class MessageProcessor
+{
+public:
+	virtual ~MessageProcessor();
+
+	virtual void NotifyDelivery(CowBuffer<uint8_t> header) = 0;
+	virtual void DeliverMessage(CowBuffer<uint8_t> message) = 0;
+};
+
 struct ClientSession : public Session
 {
 	~ClientSession();
+
+	bool Connected()
+	{
+		return Socket != -1;
+	}
+
+	MessageProcessor *Processor;
 
 	enum ClientSessionState
 	{
@@ -29,12 +45,18 @@ struct ClientSession : public Session
 	EncryptedStream OutES;
 
 	bool InitSession();
+	bool SendMessage(CowBuffer<uint8_t> message);
+	CowBuffer<uint8_t> SMHeader;
 
 	bool Process() override;
 	bool ProcessInitialWaitForServer();
 	bool ProcessActiveSession();
 
 	bool TimePassed() override;
+
+	bool ProcessKeepAlive(CowBuffer<uint8_t> plainText);
+	bool ProcessSendMessage(CowBuffer<uint8_t> plainText);
+	bool ProcessDeliverMessage(CowBuffer<uint8_t> plainText);
 };
 
 #endif

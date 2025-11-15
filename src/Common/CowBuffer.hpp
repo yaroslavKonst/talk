@@ -93,7 +93,7 @@ public:
 		}
 
 		if (copySize) {
-			memcpy(newBuffer, _data->Data, copySize * sizeof(T));
+			CopyData(newBuffer, _data->Data, copySize);
 		}
 
 		if (_data->Size) {
@@ -107,11 +107,18 @@ public:
 	CowBuffer Slice(uint64_t start, uint64_t length) const
 	{
 		CowBuffer result(length);
-		memcpy(result.Pointer(), Pointer() + start, sizeof(T) * length);
+		CopyData(result.Pointer(), Pointer() + start, length);
 		return result;
 	}
 
 private:
+	static void CopyData(T *dest, const T *src, uint64_t size)
+	{
+		for (uint64_t i = 0; i < size; i++) {
+			dest[i] = src[i];
+		}
+	}
+
 	struct Data
 	{
 		int RefCount;
@@ -152,7 +159,7 @@ private:
 
 		if (data->Size) {
 			data->Data = new T[data->Size];
-			memcpy(data->Data, _data->Data, data->Size * sizeof(T));
+			CopyData(data->Data, _data->Data, data->Size);
 		} else {
 			data->Data = nullptr;
 		}

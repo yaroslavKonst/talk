@@ -11,7 +11,7 @@
 static const char *voiceMessage = "Voice status: ";
 
 // Base screen.
-Screen::Screen(ClientSession * session)
+Screen::Screen(ClientSession *session)
 {
 	_session = session;
 	getmaxyx(stdscr, _rows, _columns);
@@ -57,6 +57,10 @@ void PasswordScreen::Redraw()
 
 Screen *PasswordScreen::ProcessEvent(int event)
 {
+	if (event == KEY_END) {
+		return nullptr;
+	}
+
 	if (event == KEY_ENTER || event == '\n') {
 		if (_password.Length() == 0) {
 			int y;
@@ -79,7 +83,7 @@ Screen *PasswordScreen::ProcessEvent(int event)
 
 		GenerateKeys();
 
-		return new LoginScreen(_session);
+		return new WorkScreen(_session);
 	}
 
 	if (event == KEY_BACKSPACE || event == '\b') {
@@ -100,7 +104,7 @@ Screen *PasswordScreen::ProcessEvent(int event)
 		int x;
 		getyx(stdscr, y, x);
 		move(_rows / 2 + 2, 10);
-		addstr("Password too long.         ");
+		addstr("Password is too long.      ");
 		move(y, x);
 		return this;
 	}
@@ -193,6 +197,10 @@ void LoginScreen::Redraw()
 
 Screen *LoginScreen::ProcessEvent(int event)
 {
+	if (event == KEY_END) {
+		return nullptr;
+	}
+
 	if (event == KEY_ENTER || event == '\n') {
 		if (_writingIp) {
 			_writingIp = false;
@@ -211,6 +219,16 @@ Screen *LoginScreen::ProcessEvent(int event)
 		}
 
 		// Transition to work state.
+		if (_serverKeyHex.Length() != KEY_SIZE * 2) {
+			int y;
+			int x;
+			getyx(stdscr, y, x);
+			move(_rows / 2 + 3, 10);
+			addstr("Invalid server key length.");
+			move(y, x);
+			return this;
+		}
+
 		HexToData(_serverKeyHex, _session->PeerPublicKey);
 
 		{
@@ -292,7 +310,7 @@ Screen *LoginScreen::ProcessEvent(int event)
 			return this;
 		}
 
-		return new WorkScreen(_session);
+		return nullptr;
 	}
 
 	if (event == KEY_BACKSPACE || event == '\b') {
@@ -359,36 +377,42 @@ Screen *LoginScreen::ProcessEvent(int event)
 // Work screen.
 WorkScreen::WorkScreen(ClientSession *session) : Screen(session)
 {
-	_chatList = nullptr;
+	_overlay = nullptr;
 }
 
 WorkScreen::~WorkScreen()
 {
-	if (_chatList) {
-		delete _chatList;
+	if (_overlay) {
+		delete _overlay;
+		_overlay = nullptr;
 	}
 }
 
 void WorkScreen::Redraw()
 {
+	if (_overlay) {
+		_overlay->ProcessResize();
+		return;
+	}
+
 	ClearScreen();
 
 	move(0, 0);
 	addstr("Help: Exit: END | Mute: Ctrl-M | Mark read: Ctrl-R");
 
-	move(2, 0);
+	move(1, 0);
 	addstr("User");
 
 	move(3, 0);
 	addstr("Chats");
 
-	move(1, _columns / 4);
+	move(2, _columns / 4);
 	addch(ACS_TTEE);
 
 	move(_rows - 2, _columns / 4);
 	addch(ACS_BTEE);
 
-	for (int i = 2; i < _rows - 2; i++) {
+	for (int i = 3; i < _rows - 2; i++) {
 		move(i, _columns / 4);
 		addch(ACS_VLINE);
 	}
@@ -398,7 +422,7 @@ void WorkScreen::Redraw()
 			continue;
 		}
 
-		move(1, i);
+		move(2, i);
 		addch(ACS_HLINE);
 
 		move(_rows - 2, i);
@@ -414,7 +438,39 @@ void WorkScreen::Redraw()
 
 Screen *WorkScreen::ProcessEvent(int event)
 {
+	if (event == KEY_HOME) {
+		Connect();
+		return this;
+	}
+
+	if (_overlay) {
+		Screen *overlay = _overlay->ProcessEvent(event);
+		refresh();
+
+		if (!overlay) {
+			delete _overlay;
+			_overlay = nullptr;
+			Redraw();
+		}
+
+		return this;
+	}
+
+	if (event == KEY_END) {
+		return nullptr;
+	}
+
 	return this;
+}
+
+void WorkScreen::Connect()
+{
+	if (_session->Connected() || _overlay) {
+		return;
+	}
+
+	_overlay = new LoginScreen(_session);
+	_overlay->Redraw();
 }
 
 // UI main.
@@ -438,7 +494,9 @@ UI::~UI()
 
 void UI::ProcessResize()
 {
-	_screen->ProcessResize();
+	if (_screen) {
+		_screen->ProcessResize();
+	}
 }
 
 bool UI::ProcessEvent()
@@ -450,10 +508,6 @@ bool UI::ProcessEvent()
 		return true;
 	}
 
-	if (event == KEY_END) {
-		return false;
-	}
-
 	Screen *newScreen = _screen->ProcessEvent(event);
 	refresh();
 
@@ -462,9 +516,30 @@ bool UI::ProcessEvent()
 	}
 
 	delete _screen;
-
 	_screen = newScreen;
-	_screen->Redraw();
+
+	if (_screen) {
+		_screen->Redraw();
+	}
 
 	return _screen;
+}
+
+void UI::NotifyDelivery(CowBuffer<uint8_t> header)
+{
+}
+
+void UI::DeliverMessage(CowBuffer<uint8_t> header)
+{
+}
+
+void UI::Disconnect()
+{
+	if (!_session->Connected()) {
+		return;
+	}
+
+	if (_screen) {
+		_screen->Redraw();
+	}
 }

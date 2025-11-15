@@ -2,6 +2,7 @@
 #define _SERVER_HPP
 
 #include "UserDB.hpp"
+#include "MessagePipe.hpp"
 #include "../Common/IniFile.hpp"
 #include "../Protocol/Session.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
@@ -16,6 +17,7 @@ public:
 
 private:
 	UserDB _userDb;
+	MessagePipe _pipe;
 
 	Session *_sessionFirst;
 	Session *_sessionLast;

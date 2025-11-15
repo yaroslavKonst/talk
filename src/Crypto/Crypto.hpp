@@ -22,11 +22,15 @@ void InitNonce(uint8_t nonce[NONCE_SIZE]);
 
 CowBuffer<uint8_t> Encrypt(
 	const CowBuffer<uint8_t> plaintext,
-	EncryptedStream &stream);
+	EncryptedStream &stream,
+	const uint8_t *addData = nullptr,
+	uint64_t addSize = 0);
 
 CowBuffer<uint8_t> Decrypt(
 	const CowBuffer<uint8_t> cyphertext,
-	struct EncryptedStream &stream);
+	struct EncryptedStream &stream,
+	const uint8_t *addData = nullptr,
+	uint64_t addSize = 0);
 
 void Sign(
 	const CowBuffer<uint8_t> data,

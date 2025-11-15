@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 
 #include "../Protocol/ServerSession.hpp"
 #include "../Protocol/ControlSession.hpp"
@@ -19,6 +20,8 @@
 
 Server::Server() : _configFile("talkd.conf")
 {
+	umask(077);
+
 	_sessionFirst = nullptr;
 	_sessionLast = nullptr;
 
@@ -227,7 +230,7 @@ void Server::AcceptConnection()
 	session->Socket = fd;
 
 	session->Users = &_userDb;
-	// session->Pipe = ...
+	session->Pipe = &_pipe;
 	session->State = ServerSession::ServerStateWaitFirstSyn;
 	session->SignatureKey = nullptr;
 	session->PeerPublicKey = nullptr;

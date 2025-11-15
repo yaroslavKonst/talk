@@ -3,9 +3,6 @@
 
 #include "../Common/CowBuffer.hpp"
 
-// Message structure
-// | sender key | receiver key | timestamp (int64_t) | encrypted data |
-
 class SendMessageHandler
 {
 public:
@@ -20,10 +17,7 @@ public:
 
 	void SendMessage(CowBuffer<uint8_t> message);
 
-	void Register(
-		const uint8_t *key,
-		SendMessageHandler *handler);
-
+	void Register(const uint8_t *key, SendMessageHandler *handler);
 	void Unregister(const uint8_t *key);
 
 private:
@@ -35,7 +29,7 @@ private:
 		SendMessageHandler *Handler;
 	};
 
-	OnlineUser *_onlineUsers;
+	OnlineUser *_first;
 
 	void FreeData();
 };

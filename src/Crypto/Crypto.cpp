@@ -111,14 +111,11 @@ void InitStream(
 	memcpy(stream.Nonce, nonce, NONCE_SIZE);
 }
 
-/*
-Encrypted block structure.
-| scrambler init |               data             |
-                 | mac | nonce |      message     |
-*/
 CowBuffer<uint8_t> Encrypt(
 	const CowBuffer<uint8_t> plaintext,
-	EncryptedStream &stream)
+	EncryptedStream &stream,
+	const uint8_t *addData,
+	uint64_t addSize)
 {
 	CowBuffer<uint8_t> result(
 		1 + MAC_SIZE + NONCE_SIZE + plaintext.Size());
@@ -137,8 +134,8 @@ CowBuffer<uint8_t> Encrypt(
 		mac,
 		stream.Key,
 		nonce,
-		nullptr,
-		0,
+		addData,
+		addSize,
 		plaintext.Pointer(),
 		plaintext.Size());
 
@@ -150,7 +147,9 @@ CowBuffer<uint8_t> Encrypt(
 
 CowBuffer<uint8_t> Decrypt(
 	const CowBuffer<uint8_t> cyphertext,
-	EncryptedStream &stream)
+	EncryptedStream &stream,
+	const uint8_t *addData,
+	uint64_t addSize)
 {
 	if (cyphertext.Size() <= 1 + MAC_SIZE + NONCE_SIZE) {
 		return CowBuffer<uint8_t>();
@@ -182,8 +181,8 @@ CowBuffer<uint8_t> Decrypt(
 		mac,
 		stream.Key,
 		nonce,
-		nullptr,
-		0,
+		addData,
+		addSize,
 		message,
 		result.Size());
 

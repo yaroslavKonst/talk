@@ -65,4 +65,30 @@ inline String DataToHex(const uint8_t *data, uint64_t size)
 	return res;
 }
 
+template <typename T>
+String ToHex(T value)
+{
+	uint8_t data[sizeof(T)];
+
+	for (uint32_t i = 0; i < sizeof(T); i++) {
+		data[i] = ((const uint8_t*)&value)[sizeof(T) - 1 - i];
+	}
+
+	return DataToHex(data, sizeof(T));
+}
+
+template <typename T>
+T HexToInt(String string)
+{
+	uint8_t data[sizeof(T)];
+	HexToData(string, data);
+	T value;
+
+	for (uint32_t i = 0; i < sizeof(T); i++) {
+		((uint8_t*)&value)[sizeof(T) - 1 - i] = data[i];
+	}
+
+	return value;
+}
+
 #endif

@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 #include <sys/socket.h>
+#include <errno.h>
 
 #include "../Common/UnixTime.hpp"
 
@@ -11,6 +12,8 @@ Session::Session()
 
 	Time = GetUnixTime();
 	Socket = -1;
+
+	InputSizeLimit = 1024;
 
 	Input = nullptr;
 	ExpectedInput = 0;
@@ -47,14 +50,20 @@ Session::~Session()
 		delete Output;
 	}
 
-	if (Socket != -1) {
-		shutdown(Socket, SHUT_RDWR);
-		close(Socket);
-	}
+	Close();
+}
+
+void Session::SetInputSizeLimit(uint64_t limit)
+{
+	InputSizeLimit = limit;
 }
 
 bool Session::Read()
 {
+	if (Closed()) {
+		return false;
+	}
+
 	Time = GetUnixTime();
 
 	if (!Input) {
@@ -62,7 +71,19 @@ bool Session::Read()
 
 		int res = read(Socket, &size, sizeof(size));
 
+		if (res == -1) {
+			if (errno == EINTR) {
+				return true;
+			}
+
+			return false;
+		}
+
 		if (res != sizeof(size)) {
+			return false;
+		}
+
+		if (size > InputSizeLimit) {
 			return false;
 		}
 
@@ -75,6 +96,14 @@ bool Session::Read()
 		Socket,
 		Input->Pointer() + Input->Size() - ExpectedInput,
 		ExpectedInput);
+
+	if (readBytes == -1) {
+		if (errno == EINTR) {
+			return true;
+		}
+
+		return false;
+	}
 
 	if (readBytes <= 0) {
 		return false;
@@ -103,6 +132,10 @@ bool Session::Read()
 
 bool Session::Write()
 {
+	if (Closed()) {
+		return false;
+	}
+
 	Time = GetUnixTime();
 
 	if (!Output && !OutputSequence) {
@@ -130,6 +163,14 @@ bool Session::Write()
 
 		int res = write(Socket, &size, sizeof(size));
 
+		if (res == -1) {
+			if (errno == EINTR) {
+				return true;
+			}
+
+			return false;
+		}
+
 		if (res != sizeof(size)) {
 			return false;
 		}
@@ -137,7 +178,7 @@ bool Session::Write()
 		RequiredOutput = size;
 	}
 
-	uint64_t limit = 1024;
+	uint64_t limit = 1024 * 16;
 
 	if (RequiredOutput < limit) {
 		limit = RequiredOutput;
@@ -147,6 +188,14 @@ bool Session::Write()
 		Socket,
 		Output->Pointer() + Output->Size() - RequiredOutput,
 		limit);
+
+	if (writtenBytes == -1) {
+		if (errno == EINTR) {
+			return true;
+		}
+
+		return false;
+	}
 
 	if (writtenBytes <= 0) {
 		return false;
@@ -207,4 +256,24 @@ bool Session::Process()
 bool Session::TimePassed()
 {
 	return false;
+}
+
+void Session::Close()
+{
+	if (Socket != -1) {
+		shutdown(Socket, SHUT_RDWR);
+
+		bool intr;
+
+		do {
+			intr = false;
+			int ret = close(Socket);
+
+			if (ret == -1 && errno == EINTR) {
+				intr = true;
+			}
+		} while (intr);
+
+		Socket = -1;
+	}
 }

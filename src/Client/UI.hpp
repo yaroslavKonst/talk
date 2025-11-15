@@ -5,32 +5,6 @@
 
 #include "../Protocol/ClientSession.hpp"
 
-class Chat
-{
-public:
-private:
-};
-
-class ChatList
-{
-public:
-	ChatList();
-	~ChatList();
-
-private:
-	struct Elem
-	{
-		Elem *Next;
-		Elem *Prev;
-
-		String Name;
-		uint8_t Key[KEY_SIZE];
-	};
-
-	Elem *_first;
-	Elem *_last;
-};
-
 class Screen
 {
 public:
@@ -92,21 +66,27 @@ public:
 	Screen *ProcessEvent(int event) override;
 
 private:
-	ChatList *_chatList;
+	Screen *_overlay;
+
+	void Connect();
 };
 
-class UI
+class UI : public MessageProcessor
 {
 public:
 	UI(ClientSession *session);
 	~UI();
 
 	bool ProcessEvent();
+	void ProcessResize();
+
+	void NotifyDelivery(CowBuffer<uint8_t> header) override;
+	void DeliverMessage(CowBuffer<uint8_t> message) override;
+
+	void Disconnect();
 
 private:
 	Screen *_screen;
-
-	void ProcessResize();
 
 	ClientSession *_session;
 };

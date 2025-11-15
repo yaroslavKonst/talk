@@ -10,7 +10,8 @@ SERVER_MODULES =\
 	Common/MyString.o \
 	Common/IniFile.o \
 	Common/BinaryFile.o \
-	Common/MessageContainer.o \
+	Message/StorageBase.o \
+	Message/MessageStorage.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
@@ -28,8 +29,9 @@ CLIENT_MODULES=\
 	Protocol/ClientSession.o \
 	Common/UnixTime.o \
 	Common/MyString.o \
-	Common/MessageContainer.o \
 	Common/BinaryFile.o \
+	Message/StorageBase.o \
+	Message/MessageStorage.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 

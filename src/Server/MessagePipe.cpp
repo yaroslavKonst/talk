@@ -5,7 +5,7 @@
 
 MessagePipe::MessagePipe()
 {
-	_onlineUsers = nullptr;
+	_first = nullptr;
 }
 
 MessagePipe::~MessagePipe()
@@ -17,7 +17,7 @@ void MessagePipe::SendMessage(CowBuffer<uint8_t> message)
 {
 	const uint8_t *key = message.Pointer() + KEY_SIZE;
 
-	OnlineUser *user = _onlineUsers;
+	OnlineUser *user = _first;
 
 	while (user) {
 		if (!crypto_verify32(key, user->Key)) {
@@ -27,11 +27,37 @@ void MessagePipe::SendMessage(CowBuffer<uint8_t> message)
 	}
 }
 
+void MessagePipe::Register(const uint8_t *key, SendMessageHandler *handler)
+{
+	OnlineUser *user = new OnlineUser;
+	user->Key = key;
+	user->Handler = handler;
+	user->Next = _first;
+
+	_first = user;
+}
+
+void MessagePipe::Unregister(const uint8_t *key)
+{
+	OnlineUser **user = &_first;
+
+	while (*user) {
+		if (!crypto_verify32(key, (*user)->Key)) {
+			OnlineUser *tmp = *user;
+			*user = (*user)->Next;
+			delete tmp;
+			return;
+		}
+
+		user = &((*user)->Next);
+	}
+}
+
 void MessagePipe::FreeData()
 {
-	while (_onlineUsers) {
-		OnlineUser *user = _onlineUsers;
-		_onlineUsers = _onlineUsers->Next;
+	while (_first) {
+		OnlineUser *user = _first;
+		_first = _first->Next;
 		delete user;
 	}
 }

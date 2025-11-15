@@ -19,6 +19,9 @@ struct Session
 	int64_t Time;
 	int Socket;
 
+	uint64_t InputSizeLimit;
+	void SetInputSizeLimit(uint64_t limit);
+
 	uint64_t ExpectedInput;
 	CowBuffer<uint8_t> *Input;
 
@@ -49,6 +52,13 @@ struct Session
 
 	virtual bool Process();
 	virtual bool TimePassed();
+
+	void Close();
+
+	bool Closed()
+	{
+		return Socket == -1;
+	}
 };
 
 #endif
