@@ -7,6 +7,16 @@
 MessageProcessor::~MessageProcessor()
 { }
 
+ClientSession::ClientSession()
+{
+	Processor = nullptr;
+	State = ClientStateUnconnected;
+	TimeState = 0;
+
+	SMUserPointersFirst = nullptr;
+	SMUserPointersLast = nullptr;
+}
+
 ClientSession::~ClientSession()
 {
 	crypto_wipe(SignaturePrivateKey, SIGNATURE_PRIVATE_KEY_SIZE);
@@ -16,12 +26,18 @@ ClientSession::~ClientSession()
 	crypto_wipe(PrivateKey, KEY_SIZE);
 	crypto_wipe(InES.Key, KEY_SIZE);
 	crypto_wipe(OutES.Key, KEY_SIZE);
+
+	while (SMUserPointersFirst) {
+		SMUser *tmp = SMUserPointersFirst;
+		SMUserPointersFirst = SMUserPointersFirst->Next;
+		delete tmp;
+	}
 }
 
 bool ClientSession::InitSession()
 {
 	if (State != ClientStateUnconnected) {
-		THROW("Session is active.");
+		return false;
 	}
 
 	SetInputSizeLimit(1024);
@@ -60,7 +76,7 @@ bool ClientSession::InitSession()
 	return true;
 }
 
-bool ClientSession::SendMessage(CowBuffer<uint8_t> message)
+bool ClientSession::SendMessage(CowBuffer<uint8_t> message, void *userPointer)
 {
 	const uint32_t headerSize = KEY_SIZE * 2 +
 		sizeof(int64_t) + sizeof(int32_t);
@@ -73,7 +89,17 @@ bool ClientSession::SendMessage(CowBuffer<uint8_t> message)
 		return false;
 	}
 
-	SMHeader = message.Slice(0, headerSize);
+	SMUser *userPtr = new SMUser;
+	userPtr->Next = nullptr;
+	userPtr->Pointer = userPointer;
+
+	if (SMUserPointersFirst) {
+		SMUserPointersLast->Next = userPtr;
+		SMUserPointersLast = userPtr;
+	} else {
+		SMUserPointersFirst = userPtr;
+		SMUserPointersLast = userPtr;
+	}
 
 	int32_t command = SESSION_COMMAND_TEXT_MESSAGE;
 	CowBuffer<uint8_t> data(message.Size() + sizeof(command));
@@ -85,6 +111,19 @@ bool ClientSession::SendMessage(CowBuffer<uint8_t> message)
 		message.Size());
 
 	Send(Encrypt(data, OutES));
+	return true;
+}
+
+bool ClientSession::RequestUserList()
+{
+	if (!Connected()) {
+		return false;
+	}
+
+	int32_t command = SESSION_COMMAND_LIST_USERS;
+	CowBuffer<uint8_t> request(sizeof(command));
+	memcpy(request.Pointer(), &command, sizeof(command));
+	Send(Encrypt(request, OutES));
 	return true;
 }
 
@@ -182,6 +221,8 @@ bool ClientSession::ProcessActiveSession()
 		return ProcessSendMessage(plainText);
 	} else if (command == SESSION_COMMAND_DELIVER_MESSAGE) {
 		return ProcessDeliverMessage(plainText);
+	} else if (command == SESSION_COMMAND_LIST_USERS) {
+		return ProcessListUsers(plainText);
 	}
 
 	return false;
@@ -214,19 +255,70 @@ bool ClientSession::ProcessKeepAlive(CowBuffer<uint8_t> plainText)
 
 bool ClientSession::ProcessSendMessage(CowBuffer<uint8_t> plainText)
 {
-	if (!SMHeader.Size()) {
+	if (!SMUserPointersFirst) {
 		return false;
 	}
 
-	Processor->NotifyDelivery(SMHeader);
-	SMHeader = CowBuffer<uint8_t>();
+	if (plainText.Size() != sizeof(int32_t) * 2) {
+		return false;
+	}
+
+	int32_t status;
+	memcpy(&status, plainText.Pointer() + sizeof(int32_t), sizeof(status));
+
+	void *userPointer = SMUserPointersFirst->Pointer;
+	SMUser *tmp = SMUserPointersFirst;
+	SMUserPointersFirst = SMUserPointersFirst->Next;
+	delete tmp;
+
+	if (!SMUserPointersFirst) {
+		SMUserPointersLast = nullptr;
+	}
+
+	Processor->NotifyDelivery(userPointer, status);
 	return true;
 }
 
 bool ClientSession::ProcessDeliverMessage(CowBuffer<uint8_t> plainText)
 {
+	if (plainText.Size() <= sizeof(int32_t)) {
+		return false;
+	}
+
 	Processor->DeliverMessage(plainText.Slice(
 		sizeof(int32_t),
 		plainText.Size() - sizeof(int32_t)));
+	return true;
+}
+
+bool ClientSession::ProcessListUsers(CowBuffer<uint8_t> plainText)
+{
+	if (plainText.Size() < sizeof(int32_t) * 2) {
+		return false;
+	}
+
+	int32_t userCount;
+	memcpy(
+		&userCount,
+		plainText.Pointer() + sizeof(int32_t),
+		sizeof(userCount));
+
+	const int entrySize = KEY_SIZE + 55;
+
+	if (plainText.Size() != sizeof(int32_t) * 2 + entrySize * userCount) {
+		return false;
+	}
+
+	for (int i = 0; i < userCount; i++) {
+		const uint8_t *key = plainText.Pointer() +
+			sizeof(int32_t) * 2 + i * entrySize;
+
+		String name((const char*)plainText.Pointer() +
+			sizeof(int32_t) * 2 +
+			i * entrySize + KEY_SIZE);
+
+		Processor->UpdateUserData(key, name);
+	}
+
 	return true;
 }

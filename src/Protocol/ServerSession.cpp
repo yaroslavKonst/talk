@@ -4,9 +4,11 @@
 #include "../Common/UnixTime.hpp"
 #include "../Message/MessageStorage.hpp"
 
+#include "../Common/Debug.hpp"
+
 ServerSession::~ServerSession()
 {
-	Pipe->Unregister(PublicKey);
+	Pipe->Unregister(PeerPublicKey);
 
 	crypto_wipe(InES.Key, KEY_SIZE);
 	crypto_wipe(OutES.Key, KEY_SIZE);
@@ -124,7 +126,7 @@ bool ServerSession::ProcessSecondSyn()
 	State = ServerStateActiveSession;
 	SetInputSizeLimit(1024 * 1024 * 1024);
 
-	Pipe->Register(PublicKey, this);
+	Pipe->Register(PeerPublicKey, this);
 
 	return true;
 }
@@ -145,6 +147,8 @@ bool ServerSession::ProcessActiveSession()
 		return ProcessKeepAlive(plainText);
 	} else if (command == SESSION_COMMAND_TEXT_MESSAGE) {
 		return ProcessTextMessage(plainText);
+	} else if (command == SESSION_COMMAND_LIST_USERS) {
+		return ProcessListUsers(plainText);
 	}
 
 	return false;
@@ -190,13 +194,17 @@ bool ServerSession::ProcessTextMessage(CowBuffer<uint8_t> plainText)
 		if (status == SESSION_RESPONSE_OK) {
 			MessageStorage container1(
 				message.Pointer());
-			container1.AddMessage(message);
+			bool addSuccessful = container1.AddMessage(message);
 
-			MessageStorage container2(
-				message.Pointer() + KEY_SIZE);
-			container2.AddMessage(message);
+			if (addSuccessful) {
+				MessageStorage container2(
+					message.Pointer() + KEY_SIZE);
+				addSuccessful = container2.AddMessage(message);
+			}
 
-			Pipe->SendMessage(message);
+			if (addSuccessful) {
+				Pipe->SendMessage(message);
+			}
 		}
 	}
 
@@ -209,10 +217,71 @@ bool ServerSession::ProcessTextMessage(CowBuffer<uint8_t> plainText)
 	return true;
 }
 
+bool ServerSession::ProcessListUsers(CowBuffer<uint8_t> plainText)
+{
+	DEBUG("Processing list users");
+
+	const int32_t entrySize = KEY_SIZE + 55;
+
+	CowBuffer<const uint8_t*> userKeys = Users->ListUsers();
+	int32_t userCount = userKeys.Size() - 1;
+
+	if (userCount < 0) {
+		DEBUG("empty user list");
+		return false;
+	}
+
+	CowBuffer<uint8_t> message(sizeof(int32_t) * 2 + entrySize * userCount);
+	memcpy(message.Pointer(), plainText.Pointer(), sizeof(int32_t));
+	memcpy(
+		message.Pointer() + sizeof(int32_t),
+		&userCount,
+		sizeof(userCount));
+
+	if (userCount) {
+		DEBUG("building user list");
+		int index = 0;
+
+		for (int32_t i = 0; i < userCount + 1; i++) {
+			DEBUG("entry");
+			const uint8_t *key = userKeys[i];
+
+			if (!crypto_verify32(PeerPublicKey, key)) {
+				DEBUG("entry skip");
+				continue;
+			}
+
+			if (index >= userCount) {
+				return false;
+			}
+
+			memcpy(
+				message.Pointer() + sizeof(int32_t) * 2 +
+				entrySize * index,
+				key,
+				KEY_SIZE);
+
+			String name = Users->GetUserName(key);
+			memcpy(
+				message.Pointer() + sizeof(int32_t) * 2 +
+				entrySize * index + KEY_SIZE,
+				name.CStr(),
+				name.Length() + 1);
+
+			++index;
+		}
+	}
+
+	DEBUG("send response");
+	Send(Encrypt(message, OutES));
+	return true;
+}
+
 void ServerSession::SendMessage(CowBuffer<uint8_t> message)
 {
 	int32_t command = SESSION_COMMAND_DELIVER_MESSAGE;
 	CowBuffer<uint8_t> data(message.Size() + sizeof(command));
+	memcpy(data.Pointer(), &command, sizeof(command));
 	memcpy(
 		data.Pointer() + sizeof(command),
 		message.Pointer(),

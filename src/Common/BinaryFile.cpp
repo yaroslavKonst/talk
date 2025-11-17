@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 
 BinaryFile::BinaryFile(String path, bool create)
 {
@@ -19,7 +20,17 @@ BinaryFile::BinaryFile(String path, bool create)
 BinaryFile::~BinaryFile()
 {
 	if (_fd != -1) {
-		close(_fd);
+		bool intr;
+
+		do {
+			intr = false;
+			int res = close(_fd);
+
+			if (res == -1 && errno == EINTR) {
+				intr = true;
+			}
+		} while (intr);
+
 		_fd = -1;
 	}
 }
@@ -33,6 +44,26 @@ uint64_t BinaryFile::Size()
 	}
 
 	return size;
+}
+
+void BinaryFile::Clear()
+{
+	bool intr;
+
+	do {
+		intr = false;
+		int res = ftruncate(_fd, 0);
+
+		if (res == -1) {
+			if (errno == EINTR) {
+				intr = true;
+			} else {
+				THROW("Failed to clear file.");
+			}
+		}
+	} while (intr);
+
+	Seek(0);
 }
 
 void BinaryFile::Seek(uint64_t offset)

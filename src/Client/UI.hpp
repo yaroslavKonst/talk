@@ -4,6 +4,171 @@
 #include <curses.h>
 
 #include "../Protocol/ClientSession.hpp"
+#include "../Message/ContactStorage.hpp"
+#include "../Message/MessageStorage.hpp"
+#include "../Message/AttributeStorage.hpp"
+
+class NotifyRedrawHandler
+{
+public:
+	virtual ~NotifyRedrawHandler()
+	{ }
+
+	virtual void NotifyRedraw() = 0;
+};
+
+class NotificationSystem
+{
+public:
+	NotificationSystem(NotifyRedrawHandler *handler);
+	~NotificationSystem();
+
+	void Notify(String message);
+
+	void Redraw();
+	bool ProcessEvent(int event);
+
+private:
+	struct Notification
+	{
+		Notification *Next;
+		String Message;
+	};
+
+	Notification *_first;
+	Notification *_last;
+
+	NotifyRedrawHandler *_handler;
+};
+
+class MessageDescriptor
+{
+public:
+	MessageDescriptor(AttributeStorage *attrStorage);
+
+	MessageDescriptor *Next;
+
+	CowBuffer<uint8_t> Message;
+
+	bool Read;
+	bool Sent;
+	bool SendFailure;
+	bool SendInProcess;
+
+	String Text;
+
+	void SetRead(bool value);
+	void SetSent(bool value);
+	void SetSendFailure(bool value);
+
+private:
+	AttributeStorage *_attributeStorage;
+
+	void SaveAttributes();
+};
+
+class Chat
+{
+public:
+	Chat(
+		ClientSession *session,
+		const uint8_t *peerKey,
+		NotificationSystem *notificationSystem);
+	~Chat();
+
+	const uint8_t *GetPeerKey()
+	{
+		return _peerKey;
+	}
+
+	void Redraw(int rows, int columns);
+
+	bool HasUnread();
+	bool HasUnsent();
+
+	bool Typing();
+
+	void StartTyping();
+	void ProcessTyping(int event);
+
+	void SwitchUp();
+	void SwitchDown();
+
+	void DeliverMessage(CowBuffer<uint8_t> message);
+
+private:
+	ClientSession *_session;
+
+	int _rows;
+	int _columns;
+
+	void RedrawMessageWindow();
+	void RedrawTextWindow();
+	CowBuffer<String> MakeMultiline(String text, int limit);
+
+	static int64_t _LastLoadedTime;
+
+	const uint8_t *_peerKey;
+
+	bool _typing;
+
+	MessageStorage _messageStorage;
+	AttributeStorage _attributeStorage;
+
+	MessageDescriptor *_last;
+	int _loadedMessages;
+	int _currentMessage;
+
+	void LoadMessages(int count);
+	void UnloadMessages();
+
+	CowBuffer<uint8_t> EncryptMessage(
+		String text,
+		const uint8_t *senderKey,
+		const uint8_t *receiverKey,
+		int64_t timestamp,
+		int32_t index);
+	String DecryptMessage(CowBuffer<uint8_t> message);
+
+	void SendMessage();
+
+	String _draft;
+
+	NotificationSystem *_notificationSystem;
+};
+
+class ChatList
+{
+public:
+	ChatList(
+		ClientSession *session,
+		NotificationSystem *notificationSystem);
+	~ChatList();
+
+	void Redraw(int rows, int columns);
+
+	Chat *GetCurrentChat();
+
+	void SwitchUp();
+	void SwitchDown();
+
+	void UpdateUserData(const uint8_t *key, String name);
+	void DeliverMessage(CowBuffer<uint8_t> message);
+
+private:
+	ClientSession *_session;
+
+	Chat **_chatList;
+	int _chatCount;
+	int _currentChat;
+
+	int _rows;
+	int _columns;
+
+	ContactStorage _contactList;
+
+	NotificationSystem *_notificationSystem;
+};
 
 class Screen
 {
@@ -56,7 +221,10 @@ private:
 	String _serverKeyHex;
 };
 
-class WorkScreen : public Screen
+class WorkScreen :
+	public Screen,
+	public MessageProcessor,
+	public NotifyRedrawHandler
 {
 public:
 	WorkScreen(ClientSession *session);
@@ -65,13 +233,30 @@ public:
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;
 
+	void NotifyDelivery(void *userPointer, int32_t status) override;
+	void DeliverMessage(CowBuffer<uint8_t> message) override;
+	void UpdateUserData(const uint8_t *key, String name) override;
+
+	void NotifyRedraw() override
+	{
+		Redraw();
+	}
+
 private:
+	NotificationSystem _notificationSystem;
+
 	Screen *_overlay;
 
 	void Connect();
+
+	ChatList _chatList;
+	Chat *_activeChat;
+
+	void ProcessChatListEvent(int event);
+	void ProcessChatScreenEvent(int event);
 };
 
-class UI : public MessageProcessor
+class UI
 {
 public:
 	UI(ClientSession *session);
@@ -79,9 +264,6 @@ public:
 
 	bool ProcessEvent();
 	void ProcessResize();
-
-	void NotifyDelivery(CowBuffer<uint8_t> header) override;
-	void DeliverMessage(CowBuffer<uint8_t> message) override;
 
 	void Disconnect();
 

@@ -32,6 +32,8 @@ CLIENT_MODULES=\
 	Common/BinaryFile.o \
 	Message/StorageBase.o \
 	Message/MessageStorage.o \
+	Message/ContactStorage.o \
+	Message/AttributeStorage.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 

@@ -17,23 +17,23 @@ MessageStorage::~MessageStorage()
 
 void MessageStorage::GetFreeTimestampIndex(
 	const uint8_t *peerKey,
-	int64_t &timestamp,
+	int64_t timestamp,
 	int32_t &index)
 {
-	timestamp = GetUnixTime();
 	index = 0;
 
 	String peerKeyHex = DataToHex(peerKey, KEY_SIZE);
 	String ownerKeyHex = DataToHex(_ownerKey, KEY_SIZE);
 	String timeString = ToHex(timestamp);
 
-	String path = ownerKeyHex + "/storage/" + peerKeyHex + "/" +
-		timeString + "_" + ToHex(index) + "_s";
+	String prefix = String("storage/") + ownerKeyHex + "/storage/" +
+		peerKeyHex + "/";
+
+	String path = prefix + timeString + "_" + ToHex(index) + "_s";
 
 	while (FileExists(path)) {
 		++index;
-		path = ownerKeyHex + "/storage/" + peerKeyHex + "/" +
-			timeString + "_" + ToHex(index) + "_s";
+		path = prefix + timeString + "_" + ToHex(index) + "_s";
 	}
 }
 
@@ -46,14 +46,14 @@ bool MessageStorage::MessageExists(
 	String peerKeyHex = DataToHex(peerKey, KEY_SIZE);
 	String ownerKeyHex = DataToHex(_ownerKey, KEY_SIZE);
 
-	String path = ownerKeyHex + "/storage/" + peerKeyHex + "/" +
-		ToHex(timestamp) + "_" + ToHex(index) +
+	String path = String("storage/") + ownerKeyHex + "/storage/" +
+		peerKeyHex + "/" + ToHex(timestamp) + "_" + ToHex(index) +
 		(incoming ? "_r" : "_s");
 
 	return FileExists(path);
 }
 
-void MessageStorage::AddMessage(CowBuffer<uint8_t> message)
+bool MessageStorage::AddMessage(CowBuffer<uint8_t> message)
 {
 	int64_t timestamp;
 	int32_t index;
@@ -78,8 +78,9 @@ void MessageStorage::AddMessage(CowBuffer<uint8_t> message)
 	String peerKeyHex = DataToHex(peerKey, KEY_SIZE);
 	String ownerKeyHex = DataToHex(_ownerKey, KEY_SIZE);
 
-	String entryPath = ownerKeyHex;
-
+	String entryPath = "storage";
+	CreateDirectory(entryPath);
+	entryPath += String("/") + ownerKeyHex;
 	CreateDirectory(entryPath);
 	entryPath += "/storage";
 	CreateDirectory(entryPath);
@@ -90,7 +91,7 @@ void MessageStorage::AddMessage(CowBuffer<uint8_t> message)
 		(incoming ? "_r" : "_s");
 
 	if (FileExists(entryPath)) {
-		THROW("Added message already exists.");
+		return false;
 	}
 
 	BinaryFile file(entryPath, true);
@@ -99,6 +100,8 @@ void MessageStorage::AddMessage(CowBuffer<uint8_t> message)
 		message.Pointer(),
 		message.Size(),
 		0);
+
+	return true;
 }
 
 CowBuffer<uint8_t> *MessageStorage::GetMessageRange(
@@ -119,7 +122,7 @@ CowBuffer<uint8_t> *MessageStorage::GetMessageRange(
 
 	messageCount = 0;
 
-	String path = ownerKeyHex + "/storage";
+	String path = String("storage/") + ownerKeyHex + "/storage";
 
 	if (!FileExists(path)) {
 		return nullptr;
@@ -207,7 +210,8 @@ CowBuffer<uint8_t> *MessageStorage::GetMessageRange(
 
 	messageCount = 0;
 
-	String path = ownerKeyHex + "/storage/" + peerKeyHex;
+	String path = String("storage/") + ownerKeyHex + "/storage/" +
+		peerKeyHex;
 
 	if (!FileExists(path)) {
 		return nullptr;
@@ -243,6 +247,76 @@ CowBuffer<uint8_t> *MessageStorage::GetMessageRange(
 			last = &((*last)->Next);
 
 			++messageCount;
+		}
+	}
+
+	if (!messageCount) {
+		return nullptr;
+	}
+
+	CowBuffer<uint8_t> *result = new CowBuffer<uint8_t>[messageCount];
+	uint64_t index = 0;
+
+	while (first) {
+		result[index] = first->Message;
+		++index;
+
+		Elem *tmp = first;
+		first = first->Next;
+		delete tmp;
+	}
+
+	return result;
+}
+
+CowBuffer<uint8_t> *MessageStorage::GetLatestNMessages(
+	const uint8_t *peerKey,
+	uint64_t requestedMessageCount,
+	uint64_t &messageCount)
+{
+	struct Elem
+	{
+		Elem *Next;
+		CowBuffer<uint8_t> Message;
+	};
+
+	String ownerKeyHex = DataToHex(_ownerKey, KEY_SIZE);
+	String peerKeyHex = DataToHex(peerKey, KEY_SIZE);
+
+	Elem *first = nullptr;
+	Elem **last = &first;
+
+	messageCount = 0;
+
+	String path = String("storage/") + ownerKeyHex + "/storage/" +
+		peerKeyHex;
+
+	if (!FileExists(path)) {
+		return nullptr;
+	}
+
+	CowBuffer<String> messageFiles = ListDirectory(path);
+
+	for (int msgIdx = messageFiles.Size() - 1; msgIdx >= 0; msgIdx--) {
+		String name = messageFiles[msgIdx];
+
+		Elem *elem = new Elem;
+		elem->Next = nullptr;
+
+		BinaryFile file(path + "/" + name, false);
+		elem->Message = CowBuffer<uint8_t>(file.Size());
+		file.Read<uint8_t>(
+			elem->Message.Pointer(),
+			elem->Message.Size(),
+			0);
+
+		*last = elem;
+		last = &((*last)->Next);
+
+		++messageCount;
+
+		if (messageCount >= requestedMessageCount) {
+			break;
 		}
 	}
 

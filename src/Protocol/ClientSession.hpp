@@ -9,12 +9,15 @@ class MessageProcessor
 public:
 	virtual ~MessageProcessor();
 
-	virtual void NotifyDelivery(CowBuffer<uint8_t> header) = 0;
+	virtual void NotifyDelivery(void *userPointer, int32_t status) = 0;
 	virtual void DeliverMessage(CowBuffer<uint8_t> message) = 0;
+
+	virtual void UpdateUserData(const uint8_t *key, String name) = 0;
 };
 
 struct ClientSession : public Session
 {
+	ClientSession();
 	~ClientSession();
 
 	bool Connected()
@@ -45,8 +48,17 @@ struct ClientSession : public Session
 	EncryptedStream OutES;
 
 	bool InitSession();
-	bool SendMessage(CowBuffer<uint8_t> message);
-	CowBuffer<uint8_t> SMHeader;
+	bool SendMessage(CowBuffer<uint8_t> message, void *userPointer);
+	struct SMUser
+	{
+		void *Pointer;
+		SMUser *Next;
+	};
+
+	SMUser *SMUserPointersFirst;
+	SMUser *SMUserPointersLast;
+	void ResetAllSent();
+	bool RequestUserList();
 
 	bool Process() override;
 	bool ProcessInitialWaitForServer();
@@ -57,6 +69,7 @@ struct ClientSession : public Session
 	bool ProcessKeepAlive(CowBuffer<uint8_t> plainText);
 	bool ProcessSendMessage(CowBuffer<uint8_t> plainText);
 	bool ProcessDeliverMessage(CowBuffer<uint8_t> plainText);
+	bool ProcessListUsers(CowBuffer<uint8_t> plainText);
 };
 
 #endif

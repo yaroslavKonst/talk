@@ -45,6 +45,8 @@ public:
 		}
 	}
 
+	void Clear();
+
 private:
 	int _fd;
 

@@ -40,6 +40,7 @@ struct ServerSession : public Session, public SendMessageHandler
 
 	bool ProcessKeepAlive(CowBuffer<uint8_t> plainText);
 	bool ProcessTextMessage(CowBuffer<uint8_t> plainText);
+	bool ProcessListUsers(CowBuffer<uint8_t> plainText);
 
 	void SendMessage(CowBuffer<uint8_t> message) override;
 };

@@ -62,6 +62,12 @@ CowBuffer<String> Storage::ListDirectory(String path)
 	int entryCount = 0;
 
 	while ((dent = readdir(dir)) != nullptr) {
+		String name = dent->d_name;
+
+		if (name == "." || name == "..") {
+			continue;
+		}
+
 		++entryCount;
 
 		*last = new Entry;

@@ -11,7 +11,7 @@ Client::Client() : _ui(&_session)
 	umask(077);
 
 	_session.State = ClientSession::ClientStateUnconnected;
-	_session.Processor = &_ui;
+	_session.Processor = nullptr;
 }
 
 Client::~Client()
