@@ -81,7 +81,23 @@ All unencrypted fields are signed.
 Index field is used to distinguish messages sent during one second and
 thus having the same timestamps.
 
-Message storage structure.
+Commands from client to server.
+  command (int32)
+|  text message   | message |
+|   list users    |
+
+Response
+text message | command id | status (int32) |
+list users   | command id | user count (int32) | key | name (55 bytes) |...
+
+Commands from server to client.
+| deliver message | message |
+
+     response
+deliver message | no response
+
+Storage structure
+-----------------
 Files containing message data blocks.
 /owner_key/storage/peer_key/timestamp_index_s - outgoing message
 /owner_key/storage/peer_key/timestamp_index_r - incoming message
@@ -102,6 +118,8 @@ Each file contains user name.
 
 Client configuration.
 /owner_key/talk.conf in ini format.
+[base]
+ProfileName
 [connection]
 ServerIP
 ServerPort
