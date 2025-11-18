@@ -24,8 +24,6 @@ void MessagePipe::SendMessage(CowBuffer<uint8_t> message)
 	while (user) {
 		if (!crypto_verify32(key, user->Key)) {
 			user->Handler->SendMessage(message);
-			// DEBUG
-			printf("Message sent.\n");
 			return;
 		}
 
@@ -41,16 +39,10 @@ void MessagePipe::Register(const uint8_t *key, SendMessageHandler *handler)
 	user->Next = _first;
 
 	_first = user;
-
-	// DEBUG
-	printf("New user registered.\n");
 }
 
 void MessagePipe::Unregister(const uint8_t *key)
 {
-	// DEBUG
-	printf("User asked for unregister.\n");
-
 	OnlineUser **user = &_first;
 
 	while (*user) {
@@ -58,7 +50,6 @@ void MessagePipe::Unregister(const uint8_t *key)
 			OnlineUser *tmp = *user;
 			*user = (*user)->Next;
 			delete tmp;
-			printf("User unregistered.\n");
 			return;
 		}
 

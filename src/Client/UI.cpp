@@ -98,6 +98,8 @@ void NotificationSystem::Redraw()
 	}
 
 	// Frame.
+	attrset(COLOR_PAIR(YELLOW_TEXT));
+
 	for (int r = baseY + 2; r < limitY - 2; r++) {
 		move(r, baseX + 1);
 		addch(ACS_VLINE);
@@ -126,6 +128,9 @@ void NotificationSystem::Redraw()
 	move(baseY + 1, baseX + 2);
 	addstr("Notification");
 
+	attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+	// Message.
 	move(baseY + 3, columns / 2 - messageSize / 2);
 	addstr(_first->Message.CStr());
 
@@ -200,12 +205,14 @@ void MessageDescriptor::SaveAttributes()
 Chat::Chat(
 	ClientSession *session,
 	const uint8_t *peerKey,
-	NotificationSystem *notificationSystem) :
+	NotificationSystem *notificationSystem,
+	int64_t *latestReceiveTime) :
 	_messageStorage(session->PublicKey),
 	_attributeStorage(session->PublicKey)
 {
 	_session = session;
 	_notificationSystem = notificationSystem;
+	_latestReceiveTime = latestReceiveTime;
 
 	_typing = false;
 
@@ -302,6 +309,12 @@ void Chat::ProcessTyping(int event)
 			return;
 		}
 
+		if (!_session->Connected()) {
+			_notificationSystem->Notify(
+				"No connection. Unable to send message.");
+			return;
+		}
+
 		SendMessage();
 		return;
 	}
@@ -356,16 +369,20 @@ void Chat::DeliverMessage(CowBuffer<uint8_t> message)
 		sizeof(index));
 
 	bool duplicate = _messageStorage.MessageExists(
-		message.Pointer(),
+		_peerKey,
 		timestamp,
 		index,
-		true);
+		!crypto_verify32(_peerKey, message.Pointer()));
 
 	if (duplicate) {
 		return;
 	}
 
 	_messageStorage.AddMessage(message);
+
+	if (*_latestReceiveTime < timestamp) {
+		*_latestReceiveTime = timestamp;
+	}
 
 	MessageDescriptor *md = new MessageDescriptor(&_attributeStorage);
 	md->Message = message;
@@ -385,8 +402,19 @@ void Chat::DeliverMessage(CowBuffer<uint8_t> message)
 	if (_currentMessage) {
 		_currentMessage += 1;
 	}
+}
 
-	RedrawMessageWindow();
+void Chat::MarkRead()
+{
+	MessageDescriptor *md = _last;
+
+	while (md) {
+		if (!md->Read) {
+			md->SetRead(true);
+		}
+
+		md = md->Next;
+	}
 }
 
 void Chat::RedrawMessageWindow()
@@ -516,10 +544,31 @@ void Chat::RedrawMessageWindow()
 		move(drawBase, _columns / 4 + 2);
 
 		if (outgoing) {
+			attrset(COLOR_PAIR(GREEN_TEXT));
 			addstr("You");
+			attrset(COLOR_PAIR(DEFAULT_TEXT));
 		} else {
 			addstr("User");
 		}
+
+		--drawBase;
+
+		if (drawBase <= drawLimit) {
+			move(3, _columns - 1);
+			addch(ACS_UARROW);
+			move(4, _columns - 1);
+			addch('|');
+			return;
+		}
+
+		attrset(COLOR_PAIR(YELLOW_TEXT));
+
+		for (int c = _columns / 4 + 2; c < _columns - 1; c += 2) {
+			move(drawBase, c);
+			addch('-');
+		}
+
+		attrset(COLOR_PAIR(DEFAULT_TEXT));
 
 		drawBase -= 2;
 
@@ -714,6 +763,16 @@ void Chat::LoadMessages(int count)
 
 	while (_loadedMessages < (int64_t)messages.Size()) {
 		if (!*last) {
+			int64_t timestamp;
+			memcpy(
+				&timestamp,
+				messages[index].Pointer() + KEY_SIZE * 2,
+				sizeof(timestamp));
+
+			if (*_latestReceiveTime < timestamp) {
+				*_latestReceiveTime = timestamp;
+			}
+
 			*last = new MessageDescriptor(&_attributeStorage);
 			(*last)->Next = nullptr;
 			(*last)->Message = messages[index];
@@ -903,6 +962,8 @@ ChatList::ChatList(
 	NotificationSystem *notificationSystem) :
 	_contactList(session->PublicKey)
 {
+	_latestReceiveTime = 0;
+
 	_session = session;
 	_notificationSystem = notificationSystem;
 
@@ -917,7 +978,8 @@ ChatList::ChatList(
 			_chatList[i] = new Chat(
 				_session,
 				_contactList.GetContactKey(i),
-				_notificationSystem);
+				_notificationSystem,
+				&_latestReceiveTime);
 		}
 	}
 }
@@ -1054,22 +1116,29 @@ void ChatList::UpdateUserData(const uint8_t *key, String name)
 		_chatList[_chatCount - 1] = new Chat(
 			_session,
 			_contactList.GetContactKey(_chatCount - 1),
-			_notificationSystem);
+			_notificationSystem,
+			&_latestReceiveTime);
 	}
 }
 
 void ChatList::DeliverMessage(CowBuffer<uint8_t> message)
 {
-	const uint8_t *senderKey = message.Pointer();
+	const uint8_t *peerKey;
+
+	if (!crypto_verify32(_session->PublicKey, message.Pointer())) {
+		peerKey = message.Pointer() + KEY_SIZE;
+	} else {
+		peerKey = message.Pointer();
+	}
 
 	for (int i = 0; i < _chatCount; i++) {
-		if (!crypto_verify32(senderKey, _chatList[i]->GetPeerKey())) {
+		if (!crypto_verify32(peerKey, _chatList[i]->GetPeerKey())) {
 			_chatList[i]->DeliverMessage(message);
 			return;
 		}
 	}
 
-	UpdateUserData(senderKey, "");
+	UpdateUserData(peerKey, "");
 	_chatList[_chatCount - 1]->DeliverMessage(message);
 }
 
@@ -1661,6 +1730,8 @@ void WorkScreen::ProcessChatListEvent(int event)
 		_chatList.Redraw(_rows, _columns);
 	} else if (event == KEY_ENTER || event == '\n') {
 		_activeChat = _chatList.GetCurrentChat();
+		_activeChat->MarkRead();
+		_chatList.Redraw(_rows, _columns);
 		_activeChat->Redraw(_rows, _columns);
 	}
 }
@@ -1668,6 +1739,7 @@ void WorkScreen::ProcessChatListEvent(int event)
 void WorkScreen::ProcessChatScreenEvent(int event)
 {
 	if (event == '\e') {
+		_activeChat->MarkRead();
 		_activeChat = nullptr;
 		Redraw();
 	} else if (event == KEY_ENTER || event == '\n') {
@@ -1745,21 +1817,7 @@ void UI::Disconnect()
 		return;
 	}
 
-	_session->Close();
-	_session->State = ClientSession::ClientStateUnconnected;
-
-	while (_session->SMUserPointersFirst) {
-		ClientSession::SMUser *tmp = _session->SMUserPointersFirst;
-		_session->SMUserPointersFirst =
-			_session->SMUserPointersFirst->Next;
-
-		_session->Processor->NotifyDelivery(
-			tmp->Pointer,
-			SESSION_RESPONSE_ERROR_CONNECTION_LOST);
-		delete tmp;
-	}
-
-	_session->SMUserPointersLast = nullptr;
+	_session->Disconnect();
 
 	if (_screen) {
 		_screen->Redraw();

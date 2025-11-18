@@ -149,6 +149,8 @@ bool ServerSession::ProcessActiveSession()
 		return ProcessTextMessage(plainText);
 	} else if (command == SESSION_COMMAND_LIST_USERS) {
 		return ProcessListUsers(plainText);
+	} else if (command == SESSION_COMMAND_GET_MESSAGES) {
+		return ProcessGetMessages(plainText);
 	}
 
 	return false;
@@ -219,15 +221,12 @@ bool ServerSession::ProcessTextMessage(CowBuffer<uint8_t> plainText)
 
 bool ServerSession::ProcessListUsers(CowBuffer<uint8_t> plainText)
 {
-	DEBUG("Processing list users");
-
 	const int32_t entrySize = KEY_SIZE + 55;
 
 	CowBuffer<const uint8_t*> userKeys = Users->ListUsers();
 	int32_t userCount = userKeys.Size() - 1;
 
 	if (userCount < 0) {
-		DEBUG("empty user list");
 		return false;
 	}
 
@@ -239,7 +238,6 @@ bool ServerSession::ProcessListUsers(CowBuffer<uint8_t> plainText)
 		sizeof(userCount));
 
 	if (userCount) {
-		DEBUG("building user list");
 		int index = 0;
 
 		for (int32_t i = 0; i < userCount + 1; i++) {
@@ -272,8 +270,36 @@ bool ServerSession::ProcessListUsers(CowBuffer<uint8_t> plainText)
 		}
 	}
 
-	DEBUG("send response");
 	Send(Encrypt(message, OutES));
+	return true;
+}
+
+bool ServerSession::ProcessGetMessages(CowBuffer<uint8_t> plainText)
+{
+	int64_t timestamp;
+
+	if (plainText.Size() != sizeof(int32_t) + sizeof(timestamp)) {
+		return false;
+	}
+
+	memcpy(
+		&timestamp,
+		plainText.Pointer() + sizeof(int32_t),
+		sizeof(timestamp));
+
+	const int64_t intMax = 0x7fffffffffffffff;
+
+	MessageStorage container(
+		PeerPublicKey);
+
+	CowBuffer<CowBuffer<uint8_t>> messages = container.GetMessageRange(
+		timestamp,
+		intMax);
+
+	for (uint32_t i = 0; i < messages.Size(); i++) {
+		SendMessage(messages[i]);
+	}
+
 	return true;
 }
 

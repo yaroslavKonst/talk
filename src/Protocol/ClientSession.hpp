@@ -13,6 +13,8 @@ public:
 	virtual void DeliverMessage(CowBuffer<uint8_t> message) = 0;
 
 	virtual void UpdateUserData(const uint8_t *key, String name) = 0;
+
+	virtual int64_t GetLatestReceiveTimestamp() = 0;
 };
 
 struct ClientSession : public Session
@@ -24,6 +26,8 @@ struct ClientSession : public Session
 	{
 		return Socket != -1;
 	}
+
+	void Disconnect();
 
 	MessageProcessor *Processor;
 
@@ -58,7 +62,9 @@ struct ClientSession : public Session
 	SMUser *SMUserPointersFirst;
 	SMUser *SMUserPointersLast;
 	void ResetAllSent();
+
 	bool RequestUserList();
+	bool RequestNewMessages(int64_t timestamp);
 
 	bool Process() override;
 	bool ProcessInitialWaitForServer();

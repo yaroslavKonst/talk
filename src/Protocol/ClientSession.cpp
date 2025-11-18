@@ -34,6 +34,13 @@ ClientSession::~ClientSession()
 	}
 }
 
+void ClientSession::Disconnect()
+{
+	Close();
+	State = ClientSession::ClientStateUnconnected;
+	ResetAllSent();
+}
+
 bool ClientSession::InitSession()
 {
 	if (State != ClientStateUnconnected) {
@@ -114,6 +121,21 @@ bool ClientSession::SendMessage(CowBuffer<uint8_t> message, void *userPointer)
 	return true;
 }
 
+void ClientSession::ResetAllSent()
+{
+	while (SMUserPointersFirst) {
+		SMUser *tmp = SMUserPointersFirst;
+		SMUserPointersFirst = SMUserPointersFirst->Next;
+
+		Processor->NotifyDelivery(
+			tmp->Pointer,
+			SESSION_RESPONSE_ERROR_CONNECTION_LOST);
+		delete tmp;
+	}
+
+	SMUserPointersLast = nullptr;
+}
+
 bool ClientSession::RequestUserList()
 {
 	if (!Connected()) {
@@ -123,6 +145,23 @@ bool ClientSession::RequestUserList()
 	int32_t command = SESSION_COMMAND_LIST_USERS;
 	CowBuffer<uint8_t> request(sizeof(command));
 	memcpy(request.Pointer(), &command, sizeof(command));
+	Send(Encrypt(request, OutES));
+	return true;
+}
+
+bool ClientSession::RequestNewMessages(int64_t timestamp)
+{
+	if (!Connected()) {
+		return false;
+	}
+
+	int32_t command = SESSION_COMMAND_GET_MESSAGES;
+	CowBuffer<uint8_t> request(sizeof(command) + sizeof(timestamp));
+	memcpy(request.Pointer(), &command, sizeof(command));
+	memcpy(
+		request.Pointer() + sizeof(command),
+		&timestamp,
+		sizeof(timestamp));
 	Send(Encrypt(request, OutES));
 	return true;
 }
@@ -199,6 +238,9 @@ bool ClientSession::ProcessInitialWaitForServer()
 	TimeState = 0;
 
 	SetInputSizeLimit(1024 * 1024 * 1024);
+
+	int64_t latestTimestamp = Processor->GetLatestReceiveTimestamp();
+	RequestNewMessages(latestTimestamp);
 
 	return true;
 }

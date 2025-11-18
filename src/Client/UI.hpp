@@ -73,7 +73,8 @@ public:
 	Chat(
 		ClientSession *session,
 		const uint8_t *peerKey,
-		NotificationSystem *notificationSystem);
+		NotificationSystem *notificationSystem,
+		int64_t *latestReceiveTime);
 	~Chat();
 
 	const uint8_t *GetPeerKey()
@@ -95,6 +96,8 @@ public:
 	void SwitchDown();
 
 	void DeliverMessage(CowBuffer<uint8_t> message);
+
+	void MarkRead();
 
 private:
 	ClientSession *_session;
@@ -135,6 +138,8 @@ private:
 	String _draft;
 
 	NotificationSystem *_notificationSystem;
+
+	int64_t *_latestReceiveTime;
 };
 
 class ChatList
@@ -155,6 +160,11 @@ public:
 	void UpdateUserData(const uint8_t *key, String name);
 	void DeliverMessage(CowBuffer<uint8_t> message);
 
+	int64_t GetLatestTimestamp()
+	{
+		return _latestReceiveTime;
+	}
+
 private:
 	ClientSession *_session;
 
@@ -168,6 +178,8 @@ private:
 	ContactStorage _contactList;
 
 	NotificationSystem *_notificationSystem;
+
+	int64_t _latestReceiveTime;
 };
 
 class Screen
@@ -236,6 +248,10 @@ public:
 	void NotifyDelivery(void *userPointer, int32_t status) override;
 	void DeliverMessage(CowBuffer<uint8_t> message) override;
 	void UpdateUserData(const uint8_t *key, String name) override;
+	int64_t GetLatestReceiveTimestamp() override
+	{
+		return _chatList.GetLatestTimestamp();
+	}
 
 	void NotifyRedraw() override
 	{

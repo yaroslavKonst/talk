@@ -85,10 +85,12 @@ Commands from client to server.
   command (int32)
 |  text message   | message |
 |   list users    |
+|  get messages   | timestamp |
 
 Response
 text message | command id | status (int32) |
 list users   | command id | user count (int32) | key | name (55 bytes) |...
+get messages | no response
 
 Commands from server to client.
 | deliver message | message |

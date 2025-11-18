@@ -90,5 +90,7 @@ CowBuffer<String> Storage::ListDirectory(String path)
 		delete tmp;
 	}
 
+	closedir(dir);
+
 	return result;
 }
