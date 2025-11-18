@@ -99,8 +99,9 @@ deliver message | no response
 Storage structure
 -----------------
 Files containing message data blocks.
-/owner_key/storage/peer_key/timestamp_index_s - outgoing message
-/owner_key/storage/peer_key/timestamp_index_r - incoming message
+/owner_key/storage/peer_key/index - index for fast search
+/owner_key/storage/peer_key/in/timestamp_index - incoming message
+/owner_key/storage/peer_key/out/timestamp_index - outgoing message
 
 Message attributes.
 /owner_key/attributes/peer_key/timestamp_index_{s,r}

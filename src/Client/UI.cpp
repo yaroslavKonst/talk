@@ -296,6 +296,12 @@ void Chat::ProcessTyping(int event)
 	}
 
 	if (event == 's' - 'a' + 1) {
+		if (!_draft.Length()) {
+			_notificationSystem->Notify(
+				"Empty messages are not allowed.");
+			return;
+		}
+
 		SendMessage();
 		return;
 	}
@@ -310,10 +316,24 @@ void Chat::ProcessTyping(int event)
 
 void Chat::SwitchUp()
 {
+	++_currentMessage;
+
+	if (_currentMessage >= _loadedMessages) {
+		_currentMessage = _loadedMessages - 1;
+	}
+
+	if (_currentMessage < 0) {
+		_currentMessage = 0;
+	}
 }
 
 void Chat::SwitchDown()
 {
+	--_currentMessage;
+
+	if (_currentMessage < 0) {
+		_currentMessage = 0;
+	}
 }
 
 void Chat::DeliverMessage(CowBuffer<uint8_t> message)
@@ -360,6 +380,8 @@ void Chat::DeliverMessage(CowBuffer<uint8_t> message)
 	md->Next = _last;
 	_last = md;
 
+	++_loadedMessages;
+
 	if (_currentMessage) {
 		_currentMessage += 1;
 	}
@@ -369,7 +391,7 @@ void Chat::DeliverMessage(CowBuffer<uint8_t> message)
 
 void Chat::RedrawMessageWindow()
 {
-	for (int r = 4; r < _rows - 8; r++) {
+	for (int r = 3; r < _rows - 8; r++) {
 		for (int c = _columns / 4 + 1; c < _columns; c++) {
 			move(r, c);
 			addch(' ');
@@ -385,7 +407,7 @@ void Chat::RedrawMessageWindow()
 		move(_rows - 10, _columns - 1);
 		addch('|');
 		move(_rows - 9, _columns - 1);
-		addch('V');
+		addch(ACS_DARROW);
 	} else {
 		move(_rows - 10, _columns - 1);
 		addch(' ');
@@ -397,6 +419,10 @@ void Chat::RedrawMessageWindow()
 
 	while (last) {
 		if (messageIndex < _currentMessage) {
+			if (!last->Next) {
+				LoadMessages(_loadedMessages + 10);
+			}
+
 			last = last->Next;
 			++messageIndex;
 			continue;
@@ -415,6 +441,11 @@ void Chat::RedrawMessageWindow()
 
 		for (int line = lines.Size() - 1; line >= 0; line--) {
 			if (drawBase <= drawLimit) {
+				attrset(COLOR_PAIR(DEFAULT_TEXT));
+				move(3, _columns - 1);
+				addch(ACS_UARROW);
+				move(4, _columns - 1);
+				addch('|');
 				return;
 			}
 
@@ -426,6 +457,10 @@ void Chat::RedrawMessageWindow()
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 
 		if (drawBase <= drawLimit) {
+			move(3, _columns - 1);
+			addch(ACS_UARROW);
+			move(4, _columns - 1);
+			addch('|');
 			return;
 		}
 
@@ -458,9 +493,19 @@ void Chat::RedrawMessageWindow()
 			attrset(COLOR_PAIR(DEFAULT_TEXT));
 		}
 
+		if (last->SendInProcess) {
+			attrset(COLOR_PAIR(GREEN_TEXT));
+			addstr(" in process");
+			attrset(COLOR_PAIR(DEFAULT_TEXT));
+		}
+
 		--drawBase;
 
 		if (drawBase <= drawLimit) {
+			move(3, _columns - 1);
+			addch(ACS_UARROW);
+			move(4, _columns - 1);
+			addch('|');
 			return;
 		}
 
@@ -477,9 +522,27 @@ void Chat::RedrawMessageWindow()
 		}
 
 		drawBase -= 2;
+
+		if (!last->Next) {
+			LoadMessages(_loadedMessages + 10);
+		}
+
 		last = last->Next;
 		++messageIndex;
 	}
+
+	if (drawBase <= drawLimit) {
+		move(3, _columns - 1);
+		addch(ACS_UARROW);
+		move(4, _columns - 1);
+		addch('|');
+		return;
+	}
+
+	String startText = "Start of conversation.";
+
+	move(drawBase, _columns * 5 / 8 - startText.Length() / 2);
+	addstr(startText.CStr());
 }
 
 void Chat::RedrawTextWindow()
@@ -640,20 +703,16 @@ void Chat::LoadMessages(int count)
 
 	MessageDescriptor **last = &_last;
 
-	uint64_t messageCount;
+	CowBuffer<CowBuffer<uint8_t>> messages =
+		_messageStorage.GetLatestNMessages(_peerKey, count);
 
-	CowBuffer<uint8_t> *messages = _messageStorage.GetLatestNMessages(
-		_peerKey,
-		count,
-		messageCount);
-
-	if (!messages) {
+	if (!messages.Size()) {
 		return;
 	}
 
 	int index = 0;
 
-	while (_loadedMessages < (int64_t)messageCount) {
+	while (_loadedMessages < (int64_t)messages.Size()) {
 		if (!*last) {
 			*last = new MessageDescriptor(&_attributeStorage);
 			(*last)->Next = nullptr;
@@ -665,6 +724,7 @@ void Chat::LoadMessages(int count)
 			(*last)->Read = !(attrs & ATTRIBUTE_READ);
 			(*last)->Sent = !(attrs & ATTRIBUTE_SENT);
 			(*last)->SendFailure = attrs & ATTRIBUTE_FAILURE;
+			(*last)->SendInProcess = false;
 
 			(*last)->Text = DecryptMessage((*last)->Message);
 
@@ -674,8 +734,6 @@ void Chat::LoadMessages(int count)
 		last = &((*last)->Next);
 		++index;
 	}
-
-	delete[] messages;
 }
 
 void Chat::UnloadMessages()
@@ -808,6 +866,7 @@ void Chat::SendMessage()
 
 	_messageStorage.AddMessage(message);
 
+	_messageStorage.AddMessage(message);
 	MessageDescriptor *data = new MessageDescriptor(&_attributeStorage);
 	data->Message = message;
 	data->Read = true;
@@ -818,6 +877,8 @@ void Chat::SendMessage()
 
 	data->Next = _last;
 	_last = data;
+
+	++_loadedMessages;
 
 	_draft.Wipe();
 
@@ -918,8 +979,18 @@ void ChatList::Redraw(int rows, int columns)
 			name = name.Substring(0, colLimit);
 		}
 
+		int attrs = 0;
+
 		if (hasUnread || hasUnsent) {
-			attrset(COLOR_PAIR(YELLOW_TEXT));
+			attrs |= COLOR_PAIR(YELLOW_TEXT);
+		}
+
+		if (i == _currentChat) {
+			attrs |= A_BOLD;
+		}
+
+		if (attrs) {
+			attrset(attrs);
 		}
 
 		move(rowBase + i - start, 0);
@@ -1557,7 +1628,6 @@ void WorkScreen::NotifyDelivery(void *userPointer, int32_t status)
 
 void WorkScreen::DeliverMessage(CowBuffer<uint8_t> header)
 {
-	DEBUGTTY("Message arrived.");
 	_chatList.DeliverMessage(header);
 	Redraw();
 }
