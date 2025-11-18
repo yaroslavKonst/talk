@@ -287,7 +287,6 @@ void Chat::ProcessTyping(int event)
 {
 	if (event == '\e') {
 		_typing = false;
-		Redraw(_rows, _columns);
 		return;
 	}
 
@@ -298,7 +297,6 @@ void Chat::ProcessTyping(int event)
 			_draft.Clear();
 		}
 
-		RedrawTextWindow();
 		return;
 	}
 
@@ -324,7 +322,6 @@ void Chat::ProcessTyping(int event)
 	}
 
 	_draft += event;
-	RedrawTextWindow();
 };
 
 void Chat::SwitchUp()
@@ -419,13 +416,6 @@ void Chat::MarkRead()
 
 void Chat::RedrawMessageWindow()
 {
-	for (int r = 3; r < _rows - 8; r++) {
-		for (int c = _columns / 4 + 1; c < _columns; c++) {
-			move(r, c);
-			addch(' ');
-		}
-	}
-
 	int drawBase = _rows - 9;
 	int drawLimit = 2;
 
@@ -596,13 +586,6 @@ void Chat::RedrawMessageWindow()
 
 void Chat::RedrawTextWindow()
 {
-	for (int r = _rows - 7; r < _rows - 2; r++) {
-		for (int c = _columns / 4 + 1; c < _columns; c++) {
-			move(r, c);
-			addch(' ');
-		}
-	}
-
 	move(_rows - 7, _columns / 4 + 1);
 
 	if (!_draft.Length()) {
@@ -941,9 +924,6 @@ void Chat::SendMessage()
 
 	_draft.Wipe();
 
-	RedrawMessageWindow();
-	RedrawTextWindow();
-
 	bool res = _session->SendMessage(message, data);
 
 	if (!res) {
@@ -1061,7 +1041,6 @@ void ChatList::Redraw(int rows, int columns)
 	}
 
 	move(rowBase + _currentChat - start, 0);
-	refresh();
 }
 
 Chat *ChatList::GetCurrentChat()
@@ -1181,6 +1160,11 @@ void PasswordScreen::Redraw()
 	move(0, 0);
 	addstr("Help: Exit: END | Mute: Ctrl-M | Mark read: Ctrl-R");
 
+	if (_status.Length() > 0) {
+		move(_rows / 2 + 2, _columns / 2 - _status.Length() / 2);
+		addstr(_status.CStr());
+	}
+
 	move(_rows / 2, 4);
 	addstr("Enter password: ");
 	addstr(_password.CStr());
@@ -1195,23 +1179,13 @@ Screen *PasswordScreen::ProcessEvent(int event)
 
 	if (event == KEY_ENTER || event == '\n') {
 		if (_password.Length() == 0) {
-			int y;
-			int x;
-			getyx(stdscr, y, x);
-			move(_rows / 2 + 2, 10);
-			addstr("Password must not be empty.");
-			move(y, x);
+			_status = "Password must not be empty.";
 			return this;
 		}
 
 		// Transition to connection.
-		int y;
-		int x;
-		getyx(stdscr, y, x);
-		move(_rows / 2 + 2, 10);
-		addstr("Processing...              ");
-		move(y, x);
-		refresh();
+		_status = "Processing...";
+		Redraw();
 
 		GenerateKeys();
 
@@ -1223,26 +1197,16 @@ Screen *PasswordScreen::ProcessEvent(int event)
 			return this;
 		}
 
-		addch('\b');
-		addch(' ');
-		addch('\b');
-
 		_password = _password.Substring(0, _password.Length() - 1);
 		return this;
 	}
 
 	if (_password.Length() > 50) {
-		int y;
-		int x;
-		getyx(stdscr, y, x);
-		move(_rows / 2 + 2, 10);
-		addstr("Password is too long.      ");
-		move(y, x);
+		_status = "Password is too long.";
 		return this;
 	}
 
 	_password += event;
-	addch(event);
 
 	return this;
 }
@@ -1310,6 +1274,11 @@ void LoginScreen::Redraw()
 	move(_rows / 2 + 1, 4);
 	addstr(_serverKeyHex.CStr());
 
+	if (_status.Length() > 0) {
+		move(_rows / 2 + 3, _columns / 2 - _status.Length() / 2);
+		addstr(_status.CStr());
+	}
+
 	if (_writingIp) {
 		move(
 			_rows / 2 - 4,
@@ -1337,50 +1306,25 @@ Screen *LoginScreen::ProcessEvent(int event)
 		if (_writingIp) {
 			_writingIp = false;
 			_writingPort = true;
-			move(
-				_rows / 2 - 2,
-				4 + strlen(portMessage) + strlen(_port.CStr()));
 			return this;
 		} else if (_writingPort) {
 			_writingPort = false;
 			_writingKey = true;
-			move(
-				_rows / 2 + 1,
-				4 + strlen(_serverKeyHex.CStr()));
 			return this;
 		}
 
 		// Transition to work state.
 		if (_serverKeyHex.Length() != KEY_SIZE * 2) {
-			int y;
-			int x;
-			getyx(stdscr, y, x);
-			move(_rows / 2 + 3, 10);
-			addstr("Invalid server key length.");
-			move(y, x);
+			_status = "Invalid server key length.";
 			return this;
 		}
 
 		HexToData(_serverKeyHex, _session->PeerPublicKey);
 
-		{
-			int y;
-			int x;
-			getyx(stdscr, y, x);
-			move(_rows / 2 + 3, 10);
-			addstr("Connecting...");
-			move(y, x);
-		}
-
 		uint16_t port = atoi(_port.CStr());
 
 		if (port == 0) {
-			int y;
-			int x;
-			getyx(stdscr, y, x);
-			move(_rows / 2 + 3, 10);
-			addstr("Invalid port number.");
-			move(y, x);
+			_status = "Invalid port number.";
 			return this;
 		}
 
@@ -1390,24 +1334,17 @@ Screen *LoginScreen::ProcessEvent(int event)
 		int res = inet_aton(_ip.CStr(), &addr.sin_addr);
 
 		if (!res) {
-			int y;
-			int x;
-			getyx(stdscr, y, x);
-			move(_rows / 2 + 3, 10);
-			addstr("Invalid IP address.");
-			move(y, x);
+			_status = "Invalid IP address.";
 			return this;
 		}
+
+		_status = "Connecting...";
+		Redraw();
 
 		_session->Socket = socket(AF_INET, SOCK_STREAM, 0);
 
 		if (_session->Socket == -1) {
-			int y;
-			int x;
-			getyx(stdscr, y, x);
-			move(_rows / 2 + 3, 10);
-			addstr("Failed to create socket.");
-			move(y, x);
+			_status = "Failed to create socket.";
 			return this;
 		}
 
@@ -1419,26 +1356,15 @@ Screen *LoginScreen::ProcessEvent(int event)
 		if (res == -1) {
 			close(_session->Socket);
 			_session->Socket = -1;
-			int y;
-			int x;
-			getyx(stdscr, y, x);
-			move(_rows / 2 + 3, 10);
-			addstr("Failed to connect.");
-			move(y, x);
+			_status = "Failed to connect.";
 			return this;
 		}
 
 		bool initRes = _session->InitSession();
 
 		if (!initRes) {
-			close(_session->Socket);
-			_session->Socket = -1;
-			int y;
-			int x;
-			getyx(stdscr, y, x);
-			move(_rows / 2 + 3, 10);
-			addstr("Failed to init session.");
-			move(y, x);
+			_session->Close();
+			_status = "Failed to init session.";
 			return this;
 		}
 
@@ -1456,10 +1382,6 @@ Screen *LoginScreen::ProcessEvent(int event)
 			if (_port.Length() == 0) {
 				_writingPort = false;
 				_writingIp = true;
-				move(
-					_rows / 2 - 4,
-					4 + strlen(ipMessage) +
-					strlen(_ip.CStr()));
 				return this;
 			}
 
@@ -1468,10 +1390,6 @@ Screen *LoginScreen::ProcessEvent(int event)
 			if (_serverKeyHex.Length() == 0) {
 				_writingKey = false;
 				_writingPort = true;
-				move(
-					_rows / 2 - 2,
-					4 + strlen(portMessage) +
-					strlen(_port.CStr()));
 				return this;
 			}
 
@@ -1480,9 +1398,6 @@ Screen *LoginScreen::ProcessEvent(int event)
 				_serverKeyHex.Length() - 1);
 		}
 
-		addch('\b');
-		addch(' ');
-		addch('\b');
 		return this;
 	}
 
@@ -1502,7 +1417,6 @@ Screen *LoginScreen::ProcessEvent(int event)
 		_serverKeyHex += event;
 	}
 
-	addch(event);
 	return this;
 }
 
@@ -1606,25 +1520,22 @@ Screen *WorkScreen::ProcessEvent(int event)
 	bool hasNotification = _notificationSystem.ProcessEvent(event);
 
 	if (hasNotification) {
-		Redraw();
-		return this;
-	}
-
-	if (event == KEY_HOME) {
-		Connect();
 		return this;
 	}
 
 	if (_overlay) {
 		Screen *overlay = _overlay->ProcessEvent(event);
-		refresh();
 
 		if (!overlay) {
 			delete _overlay;
 			_overlay = nullptr;
-			Redraw();
 		}
 
+		return this;
+	}
+
+	if (event == KEY_HOME) {
+		Connect();
 		return this;
 	}
 
@@ -1644,6 +1555,7 @@ Screen *WorkScreen::ProcessEvent(int event)
 		++count;
 
 		_notificationSystem.Notify(text);
+		return this;
 	}
 
 	if (!_activeChat) {
@@ -1681,7 +1593,7 @@ void WorkScreen::NotifyDelivery(void *userPointer, int32_t status)
 
 	if (status == SESSION_RESPONSE_ERROR_INVALID_USER) {
 		_notificationSystem.Notify(
-			"Sent message contains invalid user.");
+			"Sent message contains invalid user public key.");
 	} else if (status == SESSION_RESPONSE_ERROR_MESSAGE_TOO_SHORT) {
 		_notificationSystem.Notify("Sent message has invalid format.");
 	} else if (status == SESSION_RESPONSE_ERROR_CONNECTION_LOST) {
@@ -1714,7 +1626,6 @@ void WorkScreen::Connect()
 	}
 
 	_overlay = new LoginScreen(_session);
-	_overlay->Redraw();
 }
 
 void WorkScreen::ProcessChatListEvent(int event)
@@ -1724,15 +1635,11 @@ void WorkScreen::ProcessChatListEvent(int event)
 		_session->RequestUserList();
 	} else if (event == KEY_UP) {
 		_chatList.SwitchUp();
-		_chatList.Redraw(_rows, _columns);
 	} else if (event == KEY_DOWN) {
 		_chatList.SwitchDown();
-		_chatList.Redraw(_rows, _columns);
 	} else if (event == KEY_ENTER || event == '\n') {
 		_activeChat = _chatList.GetCurrentChat();
 		_activeChat->MarkRead();
-		_chatList.Redraw(_rows, _columns);
-		_activeChat->Redraw(_rows, _columns);
 	}
 }
 
@@ -1741,16 +1648,12 @@ void WorkScreen::ProcessChatScreenEvent(int event)
 	if (event == '\e') {
 		_activeChat->MarkRead();
 		_activeChat = nullptr;
-		Redraw();
 	} else if (event == KEY_ENTER || event == '\n') {
 		_activeChat->StartTyping();
-		_activeChat->Redraw(_rows, _columns);
 	} else if (event == KEY_UP) {
 		_activeChat->SwitchUp();
-		_activeChat->Redraw(_rows, _columns);
 	} else if (event == KEY_DOWN) {
 		_activeChat->SwitchDown();
-		_activeChat->Redraw(_rows, _columns);
 	}
 }
 
@@ -1795,7 +1698,10 @@ bool UI::ProcessEvent()
 	}
 
 	Screen *newScreen = _screen->ProcessEvent(event);
-	refresh();
+
+	if (newScreen) {
+		newScreen->Redraw();
+	}
 
 	if (newScreen == _screen) {
 		return true;
@@ -1803,10 +1709,6 @@ bool UI::ProcessEvent()
 
 	delete _screen;
 	_screen = newScreen;
-
-	if (_screen) {
-		_screen->Redraw();
-	}
 
 	return _screen;
 }

@@ -211,6 +211,7 @@ public:
 
 private:
 	String _password;
+	String _status;
 
 	void GenerateKeys();
 };
@@ -231,6 +232,8 @@ private:
 	String _ip;
 	String _port;
 	String _serverKeyHex;
+
+	String _status;
 };
 
 class WorkScreen :
