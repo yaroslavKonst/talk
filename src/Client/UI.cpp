@@ -128,7 +128,7 @@ void NotificationSystem::Redraw()
 	move(baseY + 3, columns / 2 - messageSize / 2);
 	addstr(_first->Message.CStr());
 
-	move(baseY + 5, baseX + 3);
+	move(baseY + 5, columns / 2 - 10);
 	addstr("Press enter to close.");
 }
 

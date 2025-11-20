@@ -296,17 +296,35 @@ void MessageStorageIndex::RotateLeft(uint32_t address)
 	uint32_t addressB = node2.Left;
 	uint32_t addressC = node2.Right;
 
+	uint32_t depthA = -1;
+	uint32_t depthB = -1;
+	uint32_t depthC = -1;
+
+	if (addressA) {
+		depthA = _cache[addressA].operator IndexEntry().Depth;
+	}
+
+	if (addressB) {
+		depthB = _cache[addressB].operator IndexEntry().Depth;
+	}
+
+	if (addressC) {
+		depthC = _cache[addressC].operator IndexEntry().Depth;
+	}
+
 	uint32_t parentAddress = node1.Parent;
 	IndexEntry parentNode = _cache[parentAddress];
 
 	node1.Left = addressA;
 	node1.Right = addressB;
 	node1.Parent = address2;
+	node1.Depth = (depthA > depthB ? depthA : depthB) + 1;
 	_cache[address1] = node1;
 
 	node2.Left = address1;
 	node2.Right = addressC;
 	node2.Parent = parentAddress;
+	node2.Depth = (node1.Depth > depthC ? node1.Depth : depthC) + 1;
 	_cache[address2] = node2;
 
 	if (parentNode.Left == address1) {
