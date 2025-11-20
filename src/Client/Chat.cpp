@@ -391,7 +391,9 @@ void Chat::RedrawMessageWindow()
 			addstr("You");
 			attrset(COLOR_PAIR(DEFAULT_TEXT));
 		} else {
+			attrset(COLOR_PAIR(YELLOW_TEXT));
 			addstr(peerName.CStr());
+			attrset(COLOR_PAIR(DEFAULT_TEXT));
 		}
 
 		--drawBase;

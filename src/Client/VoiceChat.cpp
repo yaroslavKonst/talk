@@ -6,6 +6,62 @@
 #include "../Common/Hex.hpp"
 #include "TextColor.hpp"
 
+// Filters
+struct LPFData
+{
+	int32_t Size;
+	int16_t *Buffer;
+
+	int Position;
+	int bf;
+	int bfSize;
+
+	LPFData(int size)
+	{
+		Size = size;
+		Buffer = new int16_t[Size];
+		Position = 0;
+		bf = 0;
+		bfSize = 0;
+	}
+
+	~LPFData()
+	{
+		delete Buffer;
+	}
+};
+
+static void LowPassFilter(
+	int16_t *buffer,
+	int size,
+	LPFData *data)
+{
+	for (int i = 0; i < size; i++) {
+		if (data->bfSize == data->Size) {
+			int prevPos = data->Position - 1;
+
+			if (prevPos < 0) {
+				prevPos = data->Size - 1;
+			}
+
+			data->bf -= data->Buffer[prevPos];
+			data->bfSize -= 1;
+		}
+
+		data->Buffer[data->Position] = buffer[i];
+		data->bf += buffer[i];
+		data->bfSize += 1;
+
+		data->Position += 1;
+
+		if (data->Position >= data->Size) {
+			data->Position = 0;
+		}
+
+		buffer[i] = data->bf / data->bfSize;
+	}
+}
+
 VoiceChat::VoiceChat()
 {
 	_state = VoiceStateOff;
@@ -20,6 +76,12 @@ VoiceChat::~VoiceChat()
 
 void VoiceChat::ProcessInput()
 {
+	static LPFData *data = nullptr;
+
+	if (!data) {
+		data = new LPFData(5);
+	}
+
 	CowBuffer<int16_t> audioData = _audio.ReadRaw();
 
 	if (_state != VoiceStateActive) {
@@ -57,6 +119,11 @@ void VoiceChat::ProcessInput()
 		_silence = false;
 		_voiceProcessor->VoiceRedrawRequested();
 	}
+
+	LowPassFilter(
+		audioData.Pointer(),
+		audioData.Size(),
+		data);
 
 	_voiceProcessor->SendVoiceFrame(EncryptSoundFrame(audioData));
 }
