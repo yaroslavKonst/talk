@@ -83,6 +83,11 @@ public:
 		return _peerKey;
 	}
 
+	void SetPeerName(String name)
+	{
+		_peerName = name;
+	}
+
 	void Redraw(int rows, int columns);
 
 	bool HasUnread();
@@ -113,6 +118,7 @@ private:
 	static int64_t _LastLoadedTime;
 
 	const uint8_t *_peerKey;
+	String _peerName;
 
 	bool _typing;
 
@@ -167,6 +173,7 @@ public:
 	}
 
 	String GetUserNameByKey(const uint8_t *key);
+	int GetUserIndexByKey(const uint8_t *key);
 
 private:
 	ClientSession *_session;
@@ -291,6 +298,8 @@ private:
 	void ProcessChatScreenEvent(int event);
 
 	VoiceChat *_voiceChat;
+
+	void DrawHelp();
 };
 
 class UI

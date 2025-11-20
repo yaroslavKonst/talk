@@ -10,6 +10,7 @@ VoiceChat::VoiceChat()
 {
 	_state = VoiceStateOff;
 	_silence = true;
+	_mute = false;
 }
 
 VoiceChat::~VoiceChat()
@@ -26,6 +27,10 @@ void VoiceChat::ProcessInput()
 	}
 
 	if (!_voiceProcessor) {
+		return;
+	}
+
+	if (_mute) {
 		return;
 	}
 
@@ -137,7 +142,7 @@ void VoiceChat::Redraw(int rows, int columns)
 	move(baseY + 3, columns / 2 - _peerName.Length() / 2);
 	addstr(_peerName.CStr());
 
-	move(baseY + 5, baseX + 3);
+	move(baseY + 5, columns / 2 - choice.Length() / 2);
 	addstr(choice.CStr());
 }
 
@@ -163,6 +168,13 @@ bool VoiceChat::ProcessEvent(int event)
 		Stop();
 		_voiceProcessor->EndVoice();
 		return true;
+	}
+
+	if (event == 'b' - 'a' + 1) {
+		if (_state == VoiceStateActive) {
+			_mute = !_mute;
+			return true;
+		}
 	}
 
 	return false;
@@ -227,6 +239,7 @@ void VoiceChat::Start()
 void VoiceChat::Stop()
 {
 	_state = VoiceStateOff;
+	_mute = false;
 	crypto_wipe(_outES.Key, KEY_SIZE);
 	crypto_wipe(_inES.Key, KEY_SIZE);
 }
@@ -279,7 +292,11 @@ void VoiceChat::RedrawState(int rows, int columns)
 		attrset(COLOR_PAIR(GREEN_TEXT));
 		addstr("active");
 
-		if (_silence) {
+		if (_mute) {
+			attrset(COLOR_PAIR(RED_TEXT));
+			addstr(" (mute)");
+			attrset(COLOR_PAIR(GREEN_TEXT));
+		} else if (_silence) {
 			addstr(" (silence)");
 		}
 		break;

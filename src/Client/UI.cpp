@@ -427,6 +427,12 @@ void Chat::RedrawMessageWindow()
 		addch(' ');
 	}
 
+	String peerName = _peerName;
+
+	if (peerName.Length() > _columns * 3 / 4 - 3) {
+		peerName = peerName.Substring(0, _columns * 3 / 4 - 3);
+	}
+
 	MessageDescriptor *last = _last;
 
 	while (last) {
@@ -532,7 +538,7 @@ void Chat::RedrawMessageWindow()
 			addstr("You");
 			attrset(COLOR_PAIR(DEFAULT_TEXT));
 		} else {
-			addstr("User");
+			addstr(peerName.CStr());
 		}
 
 		--drawBase;
@@ -954,6 +960,8 @@ ChatList::ChatList(
 				_contactList.GetContactKey(i),
 				_notificationSystem,
 				&_latestReceiveTime);
+			_chatList[i]->SetPeerName(
+				_contactList.GetNameForPresentation(i));
 		}
 	}
 }
@@ -1091,6 +1099,12 @@ void ChatList::UpdateUserData(const uint8_t *key, String name)
 			_contactList.GetContactKey(_chatCount - 1),
 			_notificationSystem,
 			&_latestReceiveTime);
+		_chatList[_chatCount - 1]->SetPeerName(
+			_contactList.GetNameForPresentation(_chatCount - 1));
+	} else {
+		int index = GetUserIndexByKey(key);
+		_chatList[index]->SetPeerName(
+			_contactList.GetNameForPresentation(index));
 	}
 }
 
@@ -1124,6 +1138,17 @@ String ChatList::GetUserNameByKey(const uint8_t *key)
 	}
 
 	return DataToHex(key, KEY_SIZE);
+}
+
+int ChatList::GetUserIndexByKey(const uint8_t *key)
+{
+	for (int i = 0; i < _contactList.GetContactCount(); i++) {
+		if (!crypto_verify32(key, _contactList.GetContactKey(i))) {
+			return i;
+		}
+	}
+
+	THROW("Contact not found.");
 }
 
 // Base screen.
@@ -1165,7 +1190,7 @@ void PasswordScreen::Redraw()
 	ClearScreen();
 
 	move(0, 0);
-	addstr("Help: Exit: END | Mute: Ctrl-M | Mark read: Ctrl-R");
+	addstr("Help: Exit: End | Proceed: Enter");
 
 	if (_status.Length() > 0) {
 		move(_rows / 2 + 2, _columns / 2 - _status.Length() / 2);
@@ -1254,7 +1279,7 @@ void LoginScreen::Redraw()
 	ClearScreen();
 
 	move(0, 0);
-	addstr("Help: Exit: END | Mute: Ctrl-M | Mark read: Ctrl-R");
+	addstr("Exit: End | Next: Enter | Remove/Previous: Backspace");
 
 	move(_rows / 2 - 10, 4);
 	addstr("Your public key:");
@@ -1460,8 +1485,7 @@ void WorkScreen::Redraw()
 
 	ClearScreen();
 
-	move(0, 0);
-	addstr("Help: Exit: END | Mute: Ctrl-M | Mark read: Ctrl-R");
+	DrawHelp();
 
 	move(1, 0);
 	addstr("Connection status: ");
@@ -1554,21 +1578,6 @@ Screen *WorkScreen::ProcessEvent(int event)
 
 	if (event == KEY_END) {
 		return nullptr;
-	}
-
-	if (event == 'n' - 'a' + 1) {
-		static int count = 1;
-
-		String text;
-
-		for (int i = 0; i < count; i++) {
-			text += "a";
-		}
-
-		++count;
-
-		_notificationSystem.Notify(text);
-		return this;
 	}
 
 	if (!_activeChat) {
@@ -1773,7 +1782,12 @@ void WorkScreen::ProcessChatListEvent(int event)
 {
 	if (event == 'u' - 'a' + 1) {
 		// Ctrl-U.
-		_session->RequestUserList();
+		bool res = _session->RequestUserList();
+
+		if (!res) {
+			_notificationSystem.Notify(
+				"Failed to request user list.");
+		}
 	} else if (event == KEY_UP) {
 		_chatList.SwitchUp();
 	} else if (event == KEY_DOWN) {
@@ -1798,6 +1812,100 @@ void WorkScreen::ProcessChatScreenEvent(int event)
 	} else if (event == 'v' - 'a' + 1) {
 		VoiceInit(_activeChat->GetPeerKey());
 	}
+}
+
+void WorkScreen::DrawHelp()
+{
+	struct Item
+	{
+		Item *Next;
+		String Value;
+
+		Item(String value)
+		{
+			Value = value;
+			Next = nullptr;
+		}
+
+		~Item()
+		{
+			if (Next) {
+				delete Next;
+			}
+		}
+
+		Item *Add(String value)
+		{
+			Next = new Item(value);
+			return Next;
+		}
+	};
+
+	Item *first = nullptr;
+	Item *last = nullptr;
+
+	first = new Item("Exit: End");
+	last = first;
+
+	if (!_session->Connected()) {
+		last = last->Add("Connect: Home");
+	}
+
+	if (!_activeChat) {
+		last = last->Add("Select: Enter");
+		last = last->Add("Next: Down");
+		last = last->Add("Prev: Up");
+		last = last->Add("Update: Ctrl-U");
+	} else if (!_activeChat->Typing()) {
+		last = last->Add("Type: Enter");
+		last = last->Add("Scroll: Up/Down");
+		last = last->Add("Back: Escape");
+
+		if (!_voiceChat->Active()) {
+			last = last->Add("Voice: Ctrl-V");
+		}
+	} else {
+		last = last->Add("Back: Escape");
+	}
+
+	if (_voiceChat->Active()) {
+		last = last->Add("End voice: Ctrl-V");
+		last = last->Add("Mute: Ctrl-B");
+	}
+
+	bool firstLine = true;
+	int offset = 0;
+
+	for (Item *it = first; it; it = it->Next) {
+		String value = it->Value;
+
+		if (firstLine) {
+			if (value.Length() + 3 > _columns - offset) {
+				firstLine = false;
+				offset = 0;
+			}
+		}
+
+		if (offset) {
+			if (firstLine) {
+				value = String(" | ") + value;
+			} else {
+				value = value + " | ";
+			}
+		}
+
+		if (firstLine) {
+			move(0, offset);
+			addstr(value.CStr());
+		} else {
+			move(1, _columns - offset - value.Length());
+			addstr(value.CStr());
+		}
+
+		offset += value.Length();
+	}
+
+	delete first;
 }
 
 // UI main.
