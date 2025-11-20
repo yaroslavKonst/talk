@@ -26,6 +26,13 @@ CLIENT_MODULES=\
 	Client/ClientMain.o \
 	Client/UI.o \
 	Client/VoiceChat.o \
+	Client/Screen.o \
+	Client/PasswordScreen.o \
+	Client/WorkScreen.o \
+	Client/LoginScreen.o \
+	Client/NotificationSystem.o \
+	Client/Chat.o \
+	Client/ChatList.o \
 	Protocol/Session.o \
 	Protocol/ClientSession.o \
 	Common/UnixTime.o \

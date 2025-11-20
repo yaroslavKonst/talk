@@ -6,17 +6,6 @@
 #include "../Crypto/CryptoDefinitions.hpp"
 #include "../ThirdParty/monocypher.h"
 
-// DEBUG
-#include <fcntl.h>
-
-static void DEBUGTTY(String message)
-{
-	int fd = open("/dev/pts/0", O_WRONLY);
-	write(fd, message.CStr(), message.Length());
-	write(fd, "\n", 1);
-	close(fd);
-}
-
 // Index.
 MessageStorageIndex::MessageStorageIndex(String path) :
 	_file(path, true),

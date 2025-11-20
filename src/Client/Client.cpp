@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 
+#include "../Common/Exception.hpp"
 #include "../Common/UnixTime.hpp"
 
 Client::Client() : _ui(&_session)
