@@ -86,17 +86,29 @@ Commands from client to server.
 |  text message   | message |
 |   list users    |
 |  get messages   | timestamp |
+|   voice init    | peer key | timestamp |
+|    voice end    |
+|   voice data    | voice block |
 
 Response
 text message | command id | status (int32) |
 list users   | command id | user count (int32) | key | name (55 bytes) |...
 get messages | no response
+voice init   | command id | status (int32) |
+voice end    | no response
+voice data   | no response
 
 Commands from server to client.
 | deliver message | message |
+|  voice request  | peer key | timestamp |
+|    voice end    |
+|   voice data    | voice block |
 
      response
 deliver message | no response
+voice request   | command id | status (int32) |
+voice end       | no response
+voice data      | no response
 
 Storage structure
 -----------------

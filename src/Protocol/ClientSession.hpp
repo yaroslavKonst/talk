@@ -9,12 +9,19 @@ class MessageProcessor
 public:
 	virtual ~MessageProcessor();
 
+	// Text.
 	virtual void NotifyDelivery(void *userPointer, int32_t status) = 0;
 	virtual void DeliverMessage(CowBuffer<uint8_t> message) = 0;
 
 	virtual void UpdateUserData(const uint8_t *key, String name) = 0;
 
 	virtual int64_t GetLatestReceiveTimestamp() = 0;
+
+	// Voice.
+	virtual void VoiceRequest(const uint8_t *key, int64_t timestamp) = 0;
+	virtual void VoiceInitResponse(int32_t code) = 0;
+	virtual void VoiceEnd() = 0;
+	virtual void ReceiveVoiceFrame(CowBuffer<uint8_t> frame) = 0;
 };
 
 struct ClientSession : public Session
@@ -66,6 +73,11 @@ struct ClientSession : public Session
 	bool RequestUserList();
 	bool RequestNewMessages(int64_t timestamp);
 
+	bool InitVoice(const uint8_t *key, int64_t timestamp);
+	bool ResponseVoiceRequest(bool accept);
+	bool EndVoice();
+	bool SendVoiceFrame(CowBuffer<uint8_t> frame);
+
 	bool Process() override;
 	bool ProcessInitialWaitForServer();
 	bool ProcessActiveSession();
@@ -76,6 +88,11 @@ struct ClientSession : public Session
 	bool ProcessSendMessage(CowBuffer<uint8_t> plainText);
 	bool ProcessDeliverMessage(CowBuffer<uint8_t> plainText);
 	bool ProcessListUsers(CowBuffer<uint8_t> plainText);
+
+	bool ProcessVoiceInit(CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceRequest(CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceEnd(CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceFrame(CowBuffer<uint8_t> plainText);
 };
 
 #endif

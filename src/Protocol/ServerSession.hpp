@@ -44,6 +44,32 @@ struct ServerSession : public Session, public SendMessageHandler
 	bool ProcessGetMessages(CowBuffer<uint8_t> plainText);
 
 	void SendMessage(CowBuffer<uint8_t> message) override;
+
+	// Voice.
+	enum ServerSessionVoiceState
+	{
+		VoiceStateInactive = 0,
+		VoiceStateWaitingForCallee = 1,
+		VoiceStateRinging = 2,
+		VoiceStateActive = 3
+	};
+
+	ServerSessionVoiceState VoiceState;
+	SendMessageHandler *VoicePeer;
+	bool InVoice() override;
+	void SendVoiceFrame(CowBuffer<uint8_t> frame) override;
+	void StartVoice(
+		const uint8_t *peerKey,
+		int64_t timestamp,
+		SendMessageHandler *handler) override;
+	void AcceptVoice() override;
+	void DeclineVoice() override;
+	void EndVoice() override;
+
+	bool ProcessVoiceInit(CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceRequest(CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceEnd(CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceData(CowBuffer<uint8_t> plainText);
 };
 
 #endif

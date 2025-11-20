@@ -14,7 +14,6 @@ public:
 
 private:
 	ClientSession _session;
-
 	UI _ui;
 };
 

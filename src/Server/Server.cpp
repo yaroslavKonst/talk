@@ -236,6 +236,8 @@ void Server::AcceptConnection()
 	session->PeerPublicKey = nullptr;
 	session->PublicKey = _publicKey;
 	session->PrivateKey = _privateKey;
+	session->VoiceState = ServerSession::VoiceStateInactive;
+	session->VoicePeer = nullptr;
 
 	if (!_sessionFirst) {
 		_sessionFirst = session;

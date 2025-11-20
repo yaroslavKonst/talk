@@ -31,6 +31,21 @@ void MessagePipe::SendMessage(CowBuffer<uint8_t> message)
 	}
 }
 
+SendMessageHandler *MessagePipe::GetHandler(const uint8_t *key)
+{
+	OnlineUser *user = _first;
+
+	while (user) {
+		if (!crypto_verify32(key, user->Key)) {
+			return user->Handler;
+		}
+
+		user = user->Next;
+	}
+
+	return nullptr;
+}
+
 void MessagePipe::Register(const uint8_t *key, SendMessageHandler *handler)
 {
 	OnlineUser *user = new OnlineUser;

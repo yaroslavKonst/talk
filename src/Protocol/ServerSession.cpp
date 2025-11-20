@@ -8,7 +8,15 @@
 
 ServerSession::~ServerSession()
 {
-	Pipe->Unregister(PeerPublicKey);
+	if (InVoice()) {
+		VoicePeer->EndVoice();
+		VoicePeer = nullptr;
+		VoiceState = VoiceStateInactive;
+	}
+
+	if (PeerPublicKey) {
+		Pipe->Unregister(PeerPublicKey);
+	}
 
 	crypto_wipe(InES.Key, KEY_SIZE);
 	crypto_wipe(OutES.Key, KEY_SIZE);
@@ -53,6 +61,10 @@ bool ServerSession::ProcessFirstSyn()
 	}
 
 	if (!Users->HasUser(message.Pointer())) {
+		return false;
+	}
+
+	if (Pipe->GetHandler(message.Pointer())) {
 		return false;
 	}
 
@@ -151,6 +163,14 @@ bool ServerSession::ProcessActiveSession()
 		return ProcessListUsers(plainText);
 	} else if (command == SESSION_COMMAND_GET_MESSAGES) {
 		return ProcessGetMessages(plainText);
+	} else if (command == SESSION_COMMAND_VOICE_INIT) {
+		return ProcessVoiceInit(plainText);
+	} else if (command == SESSION_COMMAND_VOICE_REQUEST) {
+		return ProcessVoiceRequest(plainText);
+	} else if (command == SESSION_COMMAND_VOICE_END) {
+		return ProcessVoiceEnd(plainText);
+	} else if (command == SESSION_COMMAND_VOICE_DATA) {
+		return ProcessVoiceData(plainText);
 	}
 
 	return false;
@@ -314,4 +334,205 @@ void ServerSession::SendMessage(CowBuffer<uint8_t> message)
 		message.Size());
 
 	Send(Encrypt(data, OutES));
+}
+
+bool ServerSession::InVoice()
+{
+	return VoicePeer;
+}
+
+void ServerSession::SendVoiceFrame(CowBuffer<uint8_t> frame)
+{
+	if (!InVoice() || VoiceState != VoiceStateActive) {
+		return;
+	}
+
+	Send(Encrypt(frame, OutES));
+}
+
+void ServerSession::StartVoice(
+	const uint8_t *peerKey,
+	int64_t timestamp,
+	SendMessageHandler *handler)
+{
+	VoicePeer = handler;
+	VoiceState = VoiceStateRinging;
+
+	int32_t command = SESSION_COMMAND_VOICE_REQUEST;
+
+	CowBuffer<uint8_t> request(
+		sizeof(command) + KEY_SIZE + sizeof(timestamp));
+
+	memcpy(request.Pointer(), &command, sizeof(command));
+	memcpy(request.Pointer() + sizeof(command), peerKey, KEY_SIZE);
+	memcpy(
+		request.Pointer() + sizeof(command) + KEY_SIZE,
+		&timestamp,
+		sizeof(timestamp));
+
+	Send(Encrypt(request, OutES));
+}
+
+void ServerSession::AcceptVoice()
+{
+	int32_t command = SESSION_COMMAND_VOICE_INIT;
+	int32_t code = SESSION_RESPONSE_VOICE_ACCEPT;
+	CowBuffer<uint8_t> response(sizeof(command) + sizeof(code));
+	memcpy(response.Pointer(), &command, sizeof(command));
+	memcpy(response.Pointer() + sizeof(command), &code, sizeof(code));
+
+	VoiceState = VoiceStateActive;
+
+	Send(Encrypt(response, OutES));
+}
+
+void ServerSession::DeclineVoice()
+{
+	int32_t command = SESSION_COMMAND_VOICE_INIT;
+	int32_t code = SESSION_RESPONSE_VOICE_DECLINE;
+	CowBuffer<uint8_t> response(sizeof(command) + sizeof(code));
+	memcpy(response.Pointer(), &command, sizeof(command));
+	memcpy(response.Pointer() + sizeof(command), &code, sizeof(code));
+
+	VoiceState = VoiceStateInactive;
+	VoicePeer = nullptr;
+
+	Send(Encrypt(response, OutES));
+}
+
+void ServerSession::EndVoice()
+{
+	int32_t command = SESSION_COMMAND_VOICE_END;
+	CowBuffer<uint8_t> response(sizeof(command));
+	memcpy(response.Pointer(), &command, sizeof(command));
+
+	VoiceState = VoiceStateInactive;
+	VoicePeer = nullptr;
+
+	Send(Encrypt(response, OutES));
+}
+
+bool ServerSession::ProcessVoiceInit(CowBuffer<uint8_t> plainText)
+{
+	if (plainText.Size() != sizeof(int32_t) + KEY_SIZE + sizeof(int64_t)) {
+		return false;
+	}
+
+	CowBuffer<uint8_t> response(sizeof(int32_t) * 2);
+	memcpy(response.Pointer(), plainText.Pointer(), sizeof(int32_t));
+
+	const uint8_t *peerKey = plainText.Pointer() + sizeof(int32_t);
+
+	int64_t timestamp;
+	memcpy(
+		&timestamp,
+		plainText.Pointer() + sizeof(int32_t) + KEY_SIZE,
+		sizeof(timestamp));
+
+	if (InVoice()) {
+		int32_t code = SESSION_RESPONSE_ERROR_YOU_IN_VOICE;
+		memcpy(
+			response.Pointer() + sizeof(int32_t),
+			&code,
+			sizeof(code));
+		Send(Encrypt(response, OutES));
+		return true;
+	}
+
+	if (!Users->HasUser(peerKey)) {
+		int32_t code = SESSION_RESPONSE_ERROR_INVALID_USER;
+		memcpy(
+			response.Pointer() + sizeof(int32_t),
+			&code,
+			sizeof(code));
+		Send(Encrypt(response, OutES));
+		return true;
+	}
+
+	SendMessageHandler *handler = Pipe->GetHandler(peerKey);
+
+	if (!handler) {
+		int32_t code = SESSION_RESPONSE_ERROR_USER_OFFLINE;
+		memcpy(
+			response.Pointer() + sizeof(int32_t),
+			&code,
+			sizeof(code));
+		Send(Encrypt(response, OutES));
+		return true;
+	}
+
+	if (handler->InVoice()) {
+		int32_t code = SESSION_RESPONSE_ERROR_USER_IN_VOICE;
+		memcpy(
+			response.Pointer() + sizeof(int32_t),
+			&code,
+			sizeof(code));
+		Send(Encrypt(response, OutES));
+		return true;
+	}
+
+	VoicePeer = handler;
+	VoiceState = VoiceStateWaitingForCallee;
+
+	VoicePeer->StartVoice(PeerPublicKey, timestamp, this);
+
+	int32_t code = SESSION_RESPONSE_VOICE_RINGING;
+	memcpy(
+		response.Pointer() + sizeof(int32_t),
+		&code,
+		sizeof(code));
+	Send(Encrypt(response, OutES));
+	return true;
+}
+
+bool ServerSession::ProcessVoiceRequest(CowBuffer<uint8_t> plainText)
+{
+	if (plainText.Size() != sizeof(int32_t) * 2) {
+		return false;
+	}
+
+	if (!VoicePeer || VoiceState != VoiceStateRinging) {
+		EndVoice();
+		return true;
+	}
+
+	int32_t code;
+	memcpy(&code, plainText.Pointer() + sizeof(int32_t), sizeof(code));
+
+	if (code == SESSION_RESPONSE_VOICE_ACCEPT) {
+		VoicePeer->AcceptVoice();
+		VoiceState = VoiceStateActive;
+		return true;
+	}
+
+	if (code == SESSION_RESPONSE_VOICE_DECLINE) {
+		VoicePeer->DeclineVoice();
+		VoicePeer = nullptr;
+		VoiceState = VoiceStateInactive;
+		return true;
+	}
+
+	return false;
+}
+
+bool ServerSession::ProcessVoiceEnd(CowBuffer<uint8_t> plainText)
+{
+	if (!InVoice()) {
+		return true;
+	}
+
+	VoicePeer->EndVoice();
+	VoicePeer = nullptr;
+	VoiceState = VoiceStateInactive;
+	return true;
+}
+
+bool ServerSession::ProcessVoiceData(CowBuffer<uint8_t> plainText)
+{
+	if (!InVoice() || VoiceState != VoiceStateActive) {
+		return true;
+	}
+
+	VoicePeer->SendVoiceFrame(plainText);
+	return true;
 }

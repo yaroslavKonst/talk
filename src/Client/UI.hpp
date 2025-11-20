@@ -3,6 +3,7 @@
 
 #include <curses.h>
 
+#include "VoiceChat.hpp"
 #include "../Protocol/ClientSession.hpp"
 #include "../Message/ContactStorage.hpp"
 #include "../Message/MessageStorage.hpp"
@@ -165,6 +166,8 @@ public:
 		return _latestReceiveTime;
 	}
 
+	String GetUserNameByKey(const uint8_t *key);
+
 private:
 	ClientSession *_session;
 
@@ -204,7 +207,7 @@ protected:
 class PasswordScreen : public Screen
 {
 public:
-	PasswordScreen(ClientSession *session);
+	PasswordScreen(ClientSession *session, VoiceChat *voiceChat);
 
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;
@@ -214,6 +217,8 @@ private:
 	String _status;
 
 	void GenerateKeys();
+
+	VoiceChat *_voiceChat;
 };
 
 class LoginScreen : public Screen
@@ -239,10 +244,11 @@ private:
 class WorkScreen :
 	public Screen,
 	public MessageProcessor,
-	public NotifyRedrawHandler
+	public NotifyRedrawHandler,
+	public VoiceProcessor
 {
 public:
-	WorkScreen(ClientSession *session);
+	WorkScreen(ClientSession *session, VoiceChat *voiceChat);
 	~WorkScreen();
 
 	void Redraw() override;
@@ -261,6 +267,16 @@ public:
 		Redraw();
 	}
 
+	void VoiceInit(const uint8_t *key);
+	void VoiceRequest(const uint8_t *key, int64_t timestamp) override;
+	void VoiceInitResponse(int32_t code) override;
+	void VoiceEnd() override;
+	void EndVoice() override;
+	void VoiceRedrawRequested() override;
+	void ReceiveVoiceFrame(CowBuffer<uint8_t> frame) override;
+	void SendVoiceFrame(CowBuffer<uint8_t> frame) override;
+	void AnswerVoiceRequest(bool accept) override;
+
 private:
 	NotificationSystem _notificationSystem;
 
@@ -273,6 +289,8 @@ private:
 
 	void ProcessChatListEvent(int event);
 	void ProcessChatScreenEvent(int event);
+
+	VoiceChat *_voiceChat;
 };
 
 class UI
@@ -286,10 +304,15 @@ public:
 
 	void Disconnect();
 
+	int GetSoundReadFileDescriptor();
+	void ProcessSound();
+
 private:
 	Screen *_screen;
 
 	ClientSession *_session;
+
+	VoiceChat _voiceChat;
 };
 
 #endif

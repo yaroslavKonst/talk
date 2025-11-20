@@ -10,13 +10,7 @@
 #include "../Protocol/ActiveSession.hpp"
 #include "../Common/Hex.hpp"
 #include "../Common/UnixTime.hpp"
-
-static const char *voiceMessage = "Voice status: ";
-
-#define DEFAULT_TEXT 0
-#define GREEN_TEXT 1
-#define YELLOW_TEXT 2
-#define RED_TEXT 3
+#include "TextColor.hpp"
 
 // DEBUG
 #include <fcntl.h>
@@ -1121,6 +1115,17 @@ void ChatList::DeliverMessage(CowBuffer<uint8_t> message)
 	_chatList[_chatCount - 1]->DeliverMessage(message);
 }
 
+String ChatList::GetUserNameByKey(const uint8_t *key)
+{
+	for (int i = 0; i < _contactList.GetContactCount(); i++) {
+		if (!crypto_verify32(key, _contactList.GetContactKey(i))) {
+			return _contactList.GetNameForPresentation(i);
+		}
+	}
+
+	return DataToHex(key, KEY_SIZE);
+}
+
 // Base screen.
 Screen::Screen(ClientSession *session)
 {
@@ -1149,8 +1154,10 @@ void Screen::ClearScreen()
 }
 
 // Password screen.
-PasswordScreen::PasswordScreen(ClientSession *session) : Screen(session)
+PasswordScreen::PasswordScreen(ClientSession *session, VoiceChat *voiceChat) :
+	Screen(session)
 {
+	_voiceChat = voiceChat;
 }
 
 void PasswordScreen::Redraw()
@@ -1183,13 +1190,13 @@ Screen *PasswordScreen::ProcessEvent(int event)
 			return this;
 		}
 
-		// Transition to connection.
+		// Transition to work screen.
 		_status = "Processing...";
 		Redraw();
 
 		GenerateKeys();
 
-		return new WorkScreen(_session);
+		return new WorkScreen(_session, _voiceChat);
 	}
 
 	if (event == KEY_BACKSPACE || event == '\b') {
@@ -1421,11 +1428,14 @@ Screen *LoginScreen::ProcessEvent(int event)
 }
 
 // Work screen.
-WorkScreen::WorkScreen(ClientSession *session) :
+WorkScreen::WorkScreen(ClientSession *session, VoiceChat *voiceChat) :
 	Screen(session),
 	_notificationSystem(this),
 	_chatList(session, &_notificationSystem)
 {
+	_voiceChat = voiceChat;
+	_voiceChat->RegisterProcessor(this);
+
 	_session->Processor = this;
 	_overlay = nullptr;
 	_activeChat = nullptr;
@@ -1500,16 +1510,13 @@ void WorkScreen::Redraw()
 		}
 	}
 
-	move(_rows - 1, 0);
-	addstr(voiceMessage);
-	addstr("not connected.");
-
 	_chatList.Redraw(_rows, _columns);
 
 	if (_activeChat) {
 		_activeChat->Redraw(_rows, _columns);
 	}
 
+	_voiceChat->Redraw(_rows, _columns);
 	_notificationSystem.Redraw();
 
 	refresh();
@@ -1520,6 +1527,12 @@ Screen *WorkScreen::ProcessEvent(int event)
 	bool hasNotification = _notificationSystem.ProcessEvent(event);
 
 	if (hasNotification) {
+		return this;
+	}
+
+	bool voiceProcessed = _voiceChat->ProcessEvent(event);
+
+	if (voiceProcessed) {
 		return this;
 	}
 
@@ -1619,9 +1632,137 @@ void WorkScreen::UpdateUserData(const uint8_t *key, String name)
 	Redraw();
 }
 
+void WorkScreen::VoiceInit(const uint8_t *key)
+{
+	if (_voiceChat->Active()) {
+		_notificationSystem.Notify("Voice chat is already active.");
+		return;
+	}
+
+	int64_t timestamp = GetUnixTime();
+
+	bool res = _session->InitVoice(key, timestamp);
+
+	if (!res) {
+		_notificationSystem.Notify("Failed to send voice request.");
+		return;
+	}
+
+	_voiceChat->Prepare(
+		_chatList.GetUserNameByKey(key),
+		key,
+		timestamp,
+		false,
+		_session->PrivateKey,
+		_session->PublicKey);
+}
+
+void WorkScreen::VoiceRequest(const uint8_t *key, int64_t timestamp)
+{
+	if (_voiceChat->Active()) {
+		_session->ResponseVoiceRequest(false);
+		return;
+	}
+
+	_voiceChat->Prepare(
+		_chatList.GetUserNameByKey(key),
+		key,
+		timestamp,
+		true,
+		_session->PrivateKey,
+		_session->PublicKey);
+	_voiceChat->Ask();
+	Redraw();
+}
+
+void WorkScreen::VoiceInitResponse(int32_t code)
+{
+	if (code == SESSION_RESPONSE_ERROR_YOU_IN_VOICE) {
+		_notificationSystem.Notify("You are in voice on server side.");
+		_voiceChat->Stop();
+	} else if (code == SESSION_RESPONSE_ERROR_INVALID_USER) {
+		_notificationSystem.Notify("Called user ID does not exist.");
+		_voiceChat->Stop();
+	} else if (code == SESSION_RESPONSE_ERROR_USER_OFFLINE) {
+		_notificationSystem.Notify("Called user is offline.");
+		_voiceChat->Stop();
+	} else if (code == SESSION_RESPONSE_ERROR_USER_IN_VOICE) {
+		_notificationSystem.Notify("Called user is in other call.");
+		_voiceChat->Stop();
+	} else if (code == SESSION_RESPONSE_VOICE_RINGING) {
+		_voiceChat->Wait();
+	} else if (code == SESSION_RESPONSE_VOICE_ACCEPT) {
+		_voiceChat->Start();
+	} else if (code == SESSION_RESPONSE_VOICE_DECLINE) {
+		_notificationSystem.Notify("Call declined.");
+		_voiceChat->Stop();
+	} else {
+		_notificationSystem.Notify(
+			"Unknown error code in voice request.");
+		_voiceChat->Stop();
+	}
+
+	Redraw();
+}
+
+// Received voice end.
+void WorkScreen::VoiceEnd()
+{
+	_voiceChat->Stop();
+	Redraw();
+}
+
+// Voice end initiated locally.
+void WorkScreen::EndVoice()
+{
+	bool res = _session->EndVoice();
+
+	if (!res) {
+		_notificationSystem.Notify("Failed to send voice end message.");
+	}
+}
+
+void WorkScreen::VoiceRedrawRequested()
+{
+	Redraw();
+}
+
+void WorkScreen::ReceiveVoiceFrame(CowBuffer<uint8_t> frame)
+{
+	bool res = _voiceChat->ReceiveVoiceFrame(frame);
+
+	if (!res) {
+		_notificationSystem.Notify("Voice stream failure.");
+		Redraw();
+	}
+}
+
+void WorkScreen::SendVoiceFrame(CowBuffer<uint8_t> frame)
+{
+	bool res = _session->SendVoiceFrame(frame);
+
+	if (!res) {
+		_notificationSystem.Notify("Failed to send voice frame.");
+		_voiceChat->Stop();
+		Redraw();
+	}
+}
+
+void WorkScreen::AnswerVoiceRequest(bool accept)
+{
+	bool res = _session->ResponseVoiceRequest(accept);
+
+	if (!res) {
+		_notificationSystem.Notify("Failed to send voice response.");
+		_voiceChat->Stop();
+		return;
+	}
+}
+
 void WorkScreen::Connect()
 {
 	if (_session->Connected() || _overlay) {
+		_notificationSystem.Notify("Connection is already active.");
 		return;
 	}
 
@@ -1654,6 +1795,8 @@ void WorkScreen::ProcessChatScreenEvent(int event)
 		_activeChat->SwitchUp();
 	} else if (event == KEY_DOWN) {
 		_activeChat->SwitchDown();
+	} else if (event == 'v' - 'a' + 1) {
+		VoiceInit(_activeChat->GetPeerKey());
 	}
 }
 
@@ -1671,7 +1814,7 @@ UI::UI(ClientSession *session)
 	init_pair(RED_TEXT, COLOR_RED, COLOR_BLACK);
 
 	_session = session;
-	_screen = new PasswordScreen(_session);
+	_screen = new PasswordScreen(_session, &_voiceChat);
 
 	ProcessResize();
 }
@@ -1724,4 +1867,14 @@ void UI::Disconnect()
 	if (_screen) {
 		_screen->Redraw();
 	}
+}
+
+int UI::GetSoundReadFileDescriptor()
+{
+	return _voiceChat.GetSoundReadFileDescriptor();
+}
+
+void UI::ProcessSound()
+{
+	_voiceChat.ProcessInput();
 }

@@ -25,6 +25,7 @@ CLIENT_MODULES=\
 	Client/Client.o \
 	Client/ClientMain.o \
 	Client/UI.o \
+	Client/VoiceChat.o \
 	Protocol/Session.o \
 	Protocol/ClientSession.o \
 	Common/UnixTime.o \
@@ -34,10 +35,11 @@ CLIENT_MODULES=\
 	Message/MessageStorage.o \
 	Message/ContactStorage.o \
 	Message/AttributeStorage.o \
+	Audio/Audio.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
-CLIENT_LIBS = -lncurses
+CLIENT_LIBS = -lncurses -lportaudio
 
 .PHONY: all
 

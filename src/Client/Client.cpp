@@ -22,10 +22,13 @@ int Client::Run()
 {
 	bool work = true;
 
-	struct pollfd *fds = new struct pollfd[2];
+	struct pollfd *fds = new struct pollfd[3];
 
 	fds[0].fd = 0;
 	fds[0].events = POLLIN;
+
+	fds[1].fd = _ui.GetSoundReadFileDescriptor();
+	fds[1].events = POLLIN;
 
 	int64_t currentTime = GetUnixTime();
 
@@ -34,16 +37,16 @@ int Client::Run()
 
 		if (connected)
 		{
-			fds[1].fd = _session.Socket;
+			fds[2].fd = _session.Socket;
 
 			if (_session.CanWrite()) {
-				fds[1].events = POLLIN | POLLOUT;
+				fds[2].events = POLLIN | POLLOUT;
 			} else {
-				fds[1].events = POLLIN;
+				fds[2].events = POLLIN;
 			}
 		}
 
-		int res = poll(fds, connected ? 2 : 1, 1000);
+		int res = poll(fds, connected ? 3 : 2, 1000);
 
 		if (res == -1) {
 			if (errno == EINTR) {
@@ -51,7 +54,7 @@ int Client::Run()
 				work = _ui.ProcessEvent();
 				continue;
 			} else {
-				work = false;
+				THROW("Error on poll.");
 			}
 		}
 
@@ -66,14 +69,18 @@ int Client::Run()
 			work = _ui.ProcessEvent();
 		}
 
+		if (fds[1].revents & POLLIN) {
+			_ui.ProcessSound();
+		}
+
 		if (connected) {
 			bool endSession = false;
 
-			if (fds[1].revents & POLLOUT) {
+			if (fds[2].revents & POLLOUT) {
 				endSession = !_session.Write();
 			}
 
-			if (!endSession && (fds[1].revents & POLLIN)) {
+			if (!endSession && (fds[2].revents & POLLIN)) {
 				endSession = !_session.Read();
 			}
 

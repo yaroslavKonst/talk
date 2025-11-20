@@ -166,6 +166,84 @@ bool ClientSession::RequestNewMessages(int64_t timestamp)
 	return true;
 }
 
+bool ClientSession::InitVoice(const uint8_t *key, int64_t timestamp)
+{
+	if (!Connected()) {
+		return false;
+	}
+
+	int32_t command = SESSION_COMMAND_VOICE_INIT;
+	CowBuffer<uint8_t> request(
+		sizeof(command) + KEY_SIZE + sizeof(timestamp));
+
+	memcpy(request.Pointer(), &command, sizeof(command));
+	memcpy(request.Pointer() + sizeof(command), key, KEY_SIZE);
+	memcpy(
+		request.Pointer() + sizeof(command) + KEY_SIZE,
+		&timestamp,
+		sizeof(timestamp));
+
+	Send(Encrypt(request, OutES));
+	return true;
+}
+
+bool ClientSession::ResponseVoiceRequest(bool accept)
+{
+	if (!Connected()) {
+		return false;
+	}
+
+	int32_t command = SESSION_COMMAND_VOICE_REQUEST;
+	int32_t code;
+
+	if (accept) {
+		code = SESSION_RESPONSE_VOICE_ACCEPT;
+	} else {
+		code = SESSION_RESPONSE_VOICE_DECLINE;
+	}
+
+	CowBuffer<uint8_t> response(sizeof(command) + sizeof(code));
+	memcpy(response.Pointer(), &command, sizeof(command));
+	memcpy(response.Pointer() + sizeof(command), &code, sizeof(code));
+
+	Send(Encrypt(response, OutES));
+	return true;
+}
+
+bool ClientSession::EndVoice()
+{
+	if (!Connected()) {
+		return false;
+	}
+
+	int32_t command = SESSION_COMMAND_VOICE_END;
+
+	CowBuffer<uint8_t> request(sizeof(command));
+	memcpy(request.Pointer(), &command, sizeof(command));
+
+	Send(Encrypt(request, OutES));
+	return true;
+}
+
+bool ClientSession::SendVoiceFrame(CowBuffer<uint8_t> frame)
+{
+	if (!Connected()) {
+		return false;
+	}
+
+	int32_t command = SESSION_COMMAND_VOICE_DATA;
+	CowBuffer<uint8_t> request(sizeof(command) + frame.Size());
+
+	memcpy(request.Pointer(), &command, sizeof(command));
+	memcpy(
+		request.Pointer() + sizeof(command),
+		frame.Pointer(),
+		frame.Size());
+
+	Send(Encrypt(request, OutES));
+	return true;
+}
+
 bool ClientSession::Process()
 {
 	switch (State) {
@@ -265,6 +343,14 @@ bool ClientSession::ProcessActiveSession()
 		return ProcessDeliverMessage(plainText);
 	} else if (command == SESSION_COMMAND_LIST_USERS) {
 		return ProcessListUsers(plainText);
+	} else if (command == SESSION_COMMAND_VOICE_INIT) {
+		return ProcessVoiceInit(plainText);
+	} else if (command == SESSION_COMMAND_VOICE_REQUEST) {
+		return ProcessVoiceRequest(plainText);
+	} else if (command == SESSION_COMMAND_VOICE_END) {
+		return ProcessVoiceEnd(plainText);
+	} else if (command == SESSION_COMMAND_VOICE_DATA) {
+		return ProcessVoiceFrame(plainText);
 	}
 
 	return false;
@@ -362,5 +448,53 @@ bool ClientSession::ProcessListUsers(CowBuffer<uint8_t> plainText)
 		Processor->UpdateUserData(key, name);
 	}
 
+	return true;
+}
+
+bool ClientSession::ProcessVoiceInit(CowBuffer<uint8_t> plainText)
+{
+	if (plainText.Size() != sizeof(int32_t) * 2) {
+		return false;
+	}
+
+	int32_t code;
+	memcpy(&code, plainText.Pointer() + sizeof(int32_t), sizeof(code));
+
+	Processor->VoiceInitResponse(code);
+	return true;
+}
+
+bool ClientSession::ProcessVoiceRequest(CowBuffer<uint8_t> plainText)
+{
+	if (plainText.Size() != sizeof(int32_t) + KEY_SIZE + sizeof(int64_t)) {
+		return false;
+	}
+
+	const uint8_t *key = plainText.Pointer() + sizeof(int32_t);
+	int64_t timestamp;
+	memcpy(
+		&timestamp,
+		plainText.Pointer() + sizeof(int32_t) + KEY_SIZE,
+		sizeof(timestamp));
+
+	Processor->VoiceRequest(key, timestamp);
+	return true;
+}
+
+bool ClientSession::ProcessVoiceEnd(CowBuffer<uint8_t> plainText)
+{
+	Processor->VoiceEnd();
+	return true;
+}
+
+bool ClientSession::ProcessVoiceFrame(CowBuffer<uint8_t> plainText)
+{
+	if (plainText.Size() <= sizeof(int32_t)) {
+		return false;
+	}
+
+	Processor->ReceiveVoiceFrame(plainText.Slice(
+		sizeof(int32_t),
+		plainText.Size() - sizeof(int32_t)));
 	return true;
 }
