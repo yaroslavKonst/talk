@@ -348,7 +348,10 @@ void WorkScreen::ProcessChatListEvent(int event)
 		_chatList.SwitchDown();
 	} else if (event == KEY_ENTER || event == '\n') {
 		_activeChat = _chatList.GetCurrentChat();
-		_activeChat->MarkRead();
+
+		if (_activeChat) {
+			_activeChat->MarkRead();
+		}
 	}
 }
 
