@@ -1,10 +1,12 @@
 #ifndef _CONTACT_STORAGE_HPP
 #define _CONTACT_STORAGE_HPP
 
-#include "StorageBase.hpp"
+#include <cstdint>
+
+#include "../Common/MyString.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
-class ContactStorage : public Storage
+class ContactStorage
 {
 public:
 	ContactStorage(const uint8_t *ownerKey);

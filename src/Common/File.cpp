@@ -1,4 +1,4 @@
-#include "StorageBase.hpp"
+#include "File.hpp"
 
 #include <cstdlib>
 #include <unistd.h>
@@ -10,7 +10,7 @@
 
 #include "../Common/Exception.hpp"
 
-void Storage::CreateDirectory(String path)
+void CreateDirectory(String path)
 {
 	int fd = open(path.CStr(), O_RDONLY | O_DIRECTORY);
 
@@ -29,7 +29,7 @@ void Storage::CreateDirectory(String path)
 	}
 }
 
-bool Storage::FileExists(String path)
+bool FileExists(String path)
 {
 	int fd = open(path.CStr(), O_RDONLY);
 
@@ -41,7 +41,7 @@ bool Storage::FileExists(String path)
 	return true;
 }
 
-CowBuffer<String> Storage::ListDirectory(String path)
+CowBuffer<String> ListDirectory(String path)
 {
 	DIR *dir = opendir(path.CStr());
 

@@ -1,13 +1,13 @@
 #ifndef _ATTRIBUTE_STORAGE_HPP
 #define _ATTRIBUTE_STORAGE_HPP
 
-#include "StorageBase.hpp"
+#include "../Common/CowBuffer.hpp"
 
 #define ATTRIBUTE_READ 0x1
 #define ATTRIBUTE_SENT 0x2
 #define ATTRIBUTE_FAILURE 0x4
 
-class AttributeStorage : public Storage
+class AttributeStorage
 {
 public:
 	AttributeStorage(const uint8_t *ownerKey);

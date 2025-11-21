@@ -1,8 +1,8 @@
 #ifndef _MESSAGE_STORAGE_HPP
 #define _MESSAGE_STORAGE_HPP
 
-#include "StorageBase.hpp"
 #include "../Common/BinaryFile.hpp"
+#include "../Common/CowBuffer.hpp"
 
 class MessageStorageIndex
 {
@@ -201,7 +201,7 @@ private:
 	void Free(uint32_t address);
 };
 
-class MessageStorage : public Storage
+class MessageStorage
 {
 public:
 	MessageStorage(const uint8_t *ownerKey);

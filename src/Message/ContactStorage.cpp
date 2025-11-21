@@ -2,6 +2,7 @@
 
 #include "../Common/Hex.hpp"
 #include "../Common/BinaryFile.hpp"
+#include "../Common/File.hpp"
 #include "../ThirdParty/monocypher.h"
 
 ContactStorage::ContactStorage(const uint8_t *ownerKey)

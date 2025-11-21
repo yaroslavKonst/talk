@@ -3,6 +3,7 @@
 #include "../Common/Hex.hpp"
 #include "../Common/BinaryFile.hpp"
 #include "../Common/UnixTime.hpp"
+#include "../Common/File.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 #include "../ThirdParty/monocypher.h"
 
