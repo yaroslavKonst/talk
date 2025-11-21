@@ -65,6 +65,7 @@ VoiceChat::VoiceChat()
 	_volume = 100;
 	_applyFilter = true;
 	_silenceLevel = 3;
+	_silenceSlope = 0;
 
 	_configFile = nullptr;
 	_settingsMode = false;
@@ -120,12 +121,29 @@ void VoiceChat::ProcessInput()
 			_voiceProcessor->VoiceRedrawRequested();
 		}
 
+		--_silenceSlope;
+	} else {
+		if (_silence) {
+			_silence = false;
+			_voiceProcessor->VoiceRedrawRequested();
+		}
+
+		_silenceSlope += 50;
+	}
+
+
+	if (_silenceSlope > 100) {
+		_silenceSlope = 100;
+	} else if (_silenceSlope < 0) {
+		_silenceSlope = 0;
+	}
+
+	if (!_silenceSlope) {
 		return;
 	}
 
-	if (_silence) {
-		_silence = false;
-		_voiceProcessor->VoiceRedrawRequested();
+	for (unsigned int i = 0; i < audioData.Size(); i++) {
+		audioData[i] = audioData[i] * _silenceSlope / 100;
 	}
 
 	_voiceProcessor->SendVoiceFrame(EncryptSoundFrame(audioData));

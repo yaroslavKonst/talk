@@ -91,6 +91,7 @@ private:
 	CowBuffer<int16_t> DecryptSoundFrame(CowBuffer<uint8_t> frame);
 
 	bool _silence;
+	int _silenceSlope;
 	bool _mute;
 
 	int _volume;

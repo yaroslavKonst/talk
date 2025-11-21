@@ -47,7 +47,7 @@ CLIENT_MODULES=\
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
-CLIENT_LIBS = -lncursesw -lportaudio
+CLIENT_LIBS = -lncursesw -lpulse-simple -pthread
 
 .PHONY: all
 
