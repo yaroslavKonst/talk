@@ -277,6 +277,22 @@ String String::Substring(int start, int length) const
 	return String(data);
 }
 
+String String::Replace(char from, char to) const
+{
+	String res = *this;
+	res.MakeExclusive();
+
+	for (int i = 0; i < res.Length(); i++) {
+		char c = res._data->Data[i];
+
+		if (c == from) {
+			res._data->Data[i] = to;
+		}
+	}
+
+	return res;
+}
+
 void String::Wipe()
 {
 	MakeExclusive();

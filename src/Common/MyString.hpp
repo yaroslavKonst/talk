@@ -26,6 +26,7 @@ public:
 	String *Split(char delim, bool removeEmpty, int &partCount) const;
 	String Trim() const;
 	String Substring(int start, int length) const;
+	String Replace(char from, char to) const;
 
 	void Wipe();
 
