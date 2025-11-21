@@ -261,11 +261,9 @@ bool ServerSession::ProcessListUsers(CowBuffer<uint8_t> plainText)
 		int index = 0;
 
 		for (int32_t i = 0; i < userCount + 1; i++) {
-			DEBUG("entry");
 			const uint8_t *key = userKeys[i];
 
 			if (!crypto_verify32(PeerPublicKey, key)) {
-				DEBUG("entry skip");
 				continue;
 			}
 

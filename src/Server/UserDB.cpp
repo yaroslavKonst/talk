@@ -94,8 +94,6 @@ void UserDB::AddUser(
 	int64_t accessTime,
 	String name)
 {
-	DEBUG("Adduser");
-
 	// Free index lookup.
 	uint64_t freeIndex;
 
@@ -107,9 +105,6 @@ void UserDB::AddUser(
 	} else {
 		freeIndex = _userFile.Size() / _EntrySize;
 	}
-
-	// DEBUG
-	printf("New user index %ld\n", freeIndex);
 
 	// Write to file.
 	char *zeroBuffer = new char[_EntrySize];
