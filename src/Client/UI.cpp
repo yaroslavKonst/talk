@@ -1,10 +1,14 @@
 #include "UI.hpp"
 
+#include "locale.h"
+
 #include "TextColor.hpp"
 #include "PasswordScreen.hpp"
 
 UI::UI(ClientSession *session)
 {
+	setlocale(LC_ALL, "");
+
 	initscr();
 	raw();
 	noecho();

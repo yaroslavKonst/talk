@@ -106,6 +106,8 @@ private:
 
 	void SendMessage();
 
+	int _utf8ExpectedSize;
+	String _utf8Buffer;
 	String _draft;
 
 	NotificationSystem *_notificationSystem;

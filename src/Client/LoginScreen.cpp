@@ -215,17 +215,26 @@ Screen *LoginScreen::ProcessEvent(int event)
 
 	if (_writingIp) {
 		if ((event < '0' || event > '9') && event != '.') {
+			_status = "Illegal character.";
 			return this;
 		}
 
 		_ip += event;
 	} else if (_writingPort) {
 		if (event < '0' || event > '9') {
+			_status = "Illegal character.";
 			return this;
 		}
 
 		_port += event;
 	} else if (_writingKey) {
+		if ((event < '0' || event > '9') &&
+			(event < 'a' || event > 'f'))
+		{
+			_status = "Illegal character.";
+			return this;
+		}
+
 		_serverKeyHex += event;
 	}
 

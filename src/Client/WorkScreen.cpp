@@ -422,8 +422,7 @@ void WorkScreen::DrawHelp()
 
 	if (!_activeChat) {
 		last = last->Add("Select: Enter");
-		last = last->Add("Next: Down");
-		last = last->Add("Prev: Up");
+		last = last->Add("Scroll: Up/Down");
 		last = last->Add("Update: Ctrl-U");
 	} else if (!_activeChat->Typing()) {
 		last = last->Add("Type: Enter");

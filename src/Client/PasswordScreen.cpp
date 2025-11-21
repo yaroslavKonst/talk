@@ -4,6 +4,11 @@
 
 #include "WorkScreen.hpp"
 
+bool LegalCharacter(int c)
+{
+	return c >= ' ' && c <= '~';
+}
+
 PasswordScreen::PasswordScreen(ClientSession *session, VoiceChat *voiceChat) :
 	Screen(session)
 {
@@ -60,6 +65,11 @@ Screen *PasswordScreen::ProcessEvent(int event)
 
 	if (_password.Length() > 50) {
 		_status = "Password is too long.";
+		return this;
+	}
+
+	if (!LegalCharacter(event)) {
+		_status = "Illegal character.";
 		return this;
 	}
 

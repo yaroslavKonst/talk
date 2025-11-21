@@ -62,6 +62,7 @@ Chat::Chat(
 	_latestReceiveTime = latestReceiveTime;
 
 	_typing = false;
+	_utf8ExpectedSize = 0;
 
 	_last = nullptr;
 	_loadedMessages = 0;
@@ -139,6 +140,15 @@ void Chat::ProcessTyping(int event)
 
 	if (event == KEY_BACKSPACE || event == '\b') {
 		if (_draft.Length() > 1) {
+			while (_draft.Length() > 1 &&
+				(_draft.CStr()[_draft.Length() - 1] & 0xc0) ==
+				0x80)
+			{
+				_draft = _draft.Substring(
+					0,
+					_draft.Length() - 1);
+			}
+
 			_draft = _draft.Substring(0, _draft.Length() - 1);
 		} else if (_draft.Length() == 1) {
 			_draft.Clear();
@@ -166,6 +176,52 @@ void Chat::ProcessTyping(int event)
 
 	if (event == KEY_ENTER) {
 		event = '\n';
+	}
+
+	if (event != '\n' && (event > 0xff || event < ' ')) {
+		return;
+	}
+
+	if ((event & 0x80) || _utf8ExpectedSize) {
+		if (!_utf8ExpectedSize) {
+			if ((event & 0xc0) == 0x80) {
+				_notificationSystem->Notify(
+					"Lonely UTF-8 trailing byte.");
+				return;
+			}
+
+			if ((event & 0xe0) == 0xc0) {
+				_utf8ExpectedSize = 2;
+			} else if ((event & 0xf8) == 0xe0) {
+				_utf8ExpectedSize = 3;
+			} else if ((event & 0xf8) == 0xf0) {
+				_utf8ExpectedSize = 4;
+			} else {
+				_notificationSystem->Notify(
+					"Invalid first UTF-8 byte.");
+				return;
+			}
+
+			_utf8Buffer += event;
+		} else {
+			if ((event & 0xc0) != 0x80) {
+				_notificationSystem->Notify(
+					"UTF-8 trailing byte expected.");
+				_utf8ExpectedSize = 0;
+				_utf8Buffer.Clear();
+				return;
+			}
+
+			_utf8Buffer += event;
+
+			if (_utf8ExpectedSize == _utf8Buffer.Length()) {
+				_draft += _utf8Buffer;
+				_utf8ExpectedSize = 0;
+				_utf8Buffer.Clear();
+			}
+		}
+
+		return;
 	}
 
 	_draft += event;
@@ -533,6 +589,12 @@ CowBuffer<String> Chat::MakeMultiline(String text, int limit)
 
 			if (position < 0) {
 				position = limit - 1;
+
+				while (position > 0 &&
+					(text.CStr()[position] & 0xc0) == 0x80)
+				{
+					--position;
+				}
 			}
 
 			if (position == 0) {
