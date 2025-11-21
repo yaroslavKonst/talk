@@ -12,11 +12,26 @@
 static const char *ipMessage = "Enter IP address: ";
 static const char *portMessage = "Enter port: ";
 
-LoginScreen::LoginScreen(ClientSession *session) : Screen(session)
+LoginScreen::LoginScreen(ClientSession *session, IniFile *configFile) :
+	Screen(session)
 {
 	_writingIp = true;
 	_writingPort = false;
 	_writingKey = false;
+
+	_ip = configFile->Get("connection", "ServerIP");
+	_port = configFile->Get("connection", "ServerPort");
+	_serverKeyHex = configFile->Get("connection", "ServerKey");
+
+	if (_ip.Length()) {
+		_writingIp = false;
+		_writingPort = true;
+	}
+
+	if (_writingPort && _port.Length()) {
+		_writingPort = false;
+		_writingKey = true;
+	}
 }
 
 void LoginScreen::Redraw()

@@ -3,6 +3,7 @@
 
 #include "../Audio/Audio.hpp"
 #include "../Crypto/Crypto.hpp"
+#include "../Common/IniFile.hpp"
 
 class VoiceProcessor
 {
@@ -26,6 +27,9 @@ public:
 	{
 		_voiceProcessor = processor;
 	}
+
+	void SetConfigFile(IniFile *configFile);
+	void StartSettings();
 
 	// Process microphone input.
 	void ProcessInput();
@@ -55,6 +59,14 @@ public:
 private:
 	void RedrawState(int rows, int columns);
 
+	bool _settingsMode;
+	void RedrawSettings(int rows, int columns);
+	void ProcessSettings(int event);
+
+	IniFile *_configFile;
+	void LoadConfigFile();
+	void UpdateConfigFile();
+
 	enum VoiceChatState
 	{
 		VoiceStateOff = 0,
@@ -80,6 +92,10 @@ private:
 
 	bool _silence;
 	bool _mute;
+
+	int _volume;
+	bool _applyFilter;
+	int _silenceLevel;
 };
 
 #endif

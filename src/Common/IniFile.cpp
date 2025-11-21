@@ -2,15 +2,21 @@
 
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <cstdio>
 
 #include "Exception.hpp"
+
+IniFile::IniFile()
+{
+	_data = nullptr;
+	_modified = false;
+}
 
 IniFile::IniFile(String path)
 {
 	_path = path;
 	_data = nullptr;
-
 	_modified = false;
 
 	Load();
@@ -18,10 +24,7 @@ IniFile::IniFile(String path)
 
 IniFile::~IniFile()
 {
-	if (_modified) {
-		Save();
-	}
-
+	Save();
 	Free();
 }
 
@@ -122,6 +125,24 @@ void IniFile::Clear()
 	_modified = true;
 }
 
+void IniFile::SetPath(String path)
+{
+	Save();
+	Free();
+	_path = path;
+	Load();
+}
+
+String IniFile::GetPath()
+{
+	return _path;
+}
+
+void IniFile::Write()
+{
+	Save();
+}
+
 void IniFile::Load()
 {
 	if (_modified) {
@@ -132,9 +153,17 @@ void IniFile::Load()
 
 	_modified = false;
 
+	_data = new Section;
+	_data->Next = nullptr;
+	_data->Keys = nullptr;
+
 	int fd = open(_path.CStr(), O_RDONLY);
 
 	if (fd == -1) {
+		if (errno == ENOENT) {
+			return;
+		}
+
 		THROW(String("Ini: Failed to open ") + _path + ".");
 	}
 
@@ -193,11 +222,8 @@ void IniFile::Load()
 		String *kvp = line.Split('=', false, kvpLen);
 
 		if (kvpLen < 2) {
-			printf(
-				"Ini: %s: error in line %d.\n",
-				_path.CStr(),
-				i);
-			continue;
+			THROW(String("Ini: ") + _path + ": error in line " +
+				ToString(i));
 		}
 
 		String key = kvp[0].Trim();
@@ -219,6 +245,14 @@ void IniFile::Load()
 
 void IniFile::Save()
 {
+	if (!_modified) {
+		return;
+	}
+
+	if (!_path.Length()) {
+		THROW("Path for ini file is not specified.");
+	}
+
 	String fileData;
 	bool lineWritten = false;
 
@@ -246,10 +280,14 @@ void IniFile::Save()
 			fileData += '\n';
 
 			lineWritten = true;
+
+			currentKey = currentKey->Next;
 		}
+
+		currentSection = currentSection->Next;
 	}
 
-	int fd = open(_path.CStr(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	int fd = open(_path.CStr(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
 
 	if (fd == -1) {
 		THROW(String("Ini: Failed to open ") + _path + " for writing.");
@@ -262,6 +300,8 @@ void IniFile::Save()
 	if (res != fileData.Length()) {
 		THROW(String("Ini: Failed to write ") + _path + ".");
 	}
+
+	_modified = false;
 }
 
 void IniFile::Free()

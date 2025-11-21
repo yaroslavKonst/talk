@@ -38,13 +38,7 @@ static void LowPassFilter(
 {
 	for (int i = 0; i < size; i++) {
 		if (data->bfSize == data->Size) {
-			int prevPos = data->Position - 1;
-
-			if (prevPos < 0) {
-				prevPos = data->Size - 1;
-			}
-
-			data->bf -= data->Buffer[prevPos];
+			data->bf -= data->Buffer[data->Position];
 			data->bfSize -= 1;
 		}
 
@@ -67,6 +61,13 @@ VoiceChat::VoiceChat()
 	_state = VoiceStateOff;
 	_silence = true;
 	_mute = false;
+
+	_volume = 100;
+	_applyFilter = true;
+	_silenceLevel = 3;
+
+	_configFile = nullptr;
+	_settingsMode = false;
 }
 
 VoiceChat::~VoiceChat()
@@ -74,14 +75,19 @@ VoiceChat::~VoiceChat()
 	Stop();
 }
 
+void VoiceChat::SetConfigFile(IniFile *configFile)
+{
+	_configFile = configFile;
+	LoadConfigFile();
+}
+
+void VoiceChat::StartSettings()
+{
+	_settingsMode = true;
+}
+
 void VoiceChat::ProcessInput()
 {
-	static LPFData *data = nullptr;
-
-	if (!data) {
-		data = new LPFData(5);
-	}
-
 	CowBuffer<int16_t> audioData = _audio.ReadRaw();
 
 	if (_state != VoiceStateActive) {
@@ -106,7 +112,9 @@ void VoiceChat::ProcessInput()
 		}
 	}
 
-	if (absMax < 1000) {
+	int silenceLevel = _silenceLevel * (65535 / 2 - 1) / 100;
+
+	if (absMax < silenceLevel) {
 		if (!_silence) {
 			_silence = true;
 			_voiceProcessor->VoiceRedrawRequested();
@@ -120,11 +128,6 @@ void VoiceChat::ProcessInput()
 		_voiceProcessor->VoiceRedrawRequested();
 	}
 
-	LowPassFilter(
-		audioData.Pointer(),
-		audioData.Size(),
-		data);
-
 	_voiceProcessor->SendVoiceFrame(EncryptSoundFrame(audioData));
 }
 
@@ -135,6 +138,10 @@ void VoiceChat::Redraw(int rows, int columns)
 	getyx(stdscr, tmpY, tmpX);
 	RedrawState(rows, columns);
 	move(tmpY, tmpX);
+
+	if (_settingsMode) {
+		RedrawSettings(rows, columns);
+	}
 
 	if (_state != VoiceStateAsk) {
 		return;
@@ -215,8 +222,14 @@ void VoiceChat::Redraw(int rows, int columns)
 
 bool VoiceChat::ProcessEvent(int event)
 {
+	bool settingsMode = _settingsMode;
+
+	if (_settingsMode) {
+		ProcessSettings(event);
+	}
+
 	if (_state == VoiceStateOff) {
-		return false;
+		return settingsMode;
 	}
 
 	if (_state == VoiceStateAsk) {
@@ -244,7 +257,7 @@ bool VoiceChat::ProcessEvent(int event)
 		}
 	}
 
-	return false;
+	return settingsMode;
 }
 
 bool VoiceChat::Active()
@@ -325,6 +338,25 @@ bool VoiceChat::ReceiveVoiceFrame(CowBuffer<uint8_t> frame)
 		return false;
 	}
 
+	if (_applyFilter) {
+		static LPFData *data = nullptr;
+
+		if (!data) {
+			data = new LPFData(5);
+		}
+
+		LowPassFilter(
+			audioData.Pointer(),
+			audioData.Size(),
+			data);
+	}
+
+	if (_volume != 100) {
+		for (unsigned int i = 0; i < audioData.Size(); i++) {
+			audioData[i] = audioData[i] * _volume / 100;
+		}
+	}
+
 	_audio.WriteRaw(audioData);
 	return true;
 }
@@ -388,6 +420,144 @@ void VoiceChat::RedrawState(int rows, int columns)
 
 	attrset(COLOR_PAIR(DEFAULT_TEXT));
 	addch('.');
+}
+
+void VoiceChat::RedrawSettings(int rows, int columns)
+{
+	for (int r = 0; r < rows - 1; r++) {
+		for (int c = 0; c < columns; c++) {
+			move(r, c);
+			addch(' ');
+		}
+	}
+
+	move(0, 0);
+	addstr("Exit: End");
+
+	move(rows / 2 - 4, columns / 4 - 3);
+	addstr("Volume");
+	move(rows / 2 - 2, columns / 4 - 1);
+	addstr("'q'");
+	move(rows / 2, columns / 4 - 1);
+	addstr(ToString(_volume).CStr());
+	move(rows / 2 + 2, columns / 4 - 1);
+	addstr("'a'");
+
+	move(rows / 2 - 4, columns / 2 - 6);
+	addstr("Silence level");
+	move(rows / 2 - 2, columns / 2 - 1);
+	addstr("'w'");
+	move(rows / 2, columns / 2 - 1);
+	addstr(ToString(_silenceLevel).CStr());
+	move(rows / 2 + 2, columns / 2 - 1);
+	addstr("'s'");
+
+	move(rows / 2 - 4, columns * 3 / 4 - 3);
+	addstr("Filter");
+	move(rows / 2 - 2, columns * 3 / 4 - 1);
+	addstr("'e'");
+	move(rows / 2, columns * 3 / 4 - 1);
+	addstr(_applyFilter ? "Yes" : "No");
+	move(rows / 2 + 2, columns * 3 / 4 - 1);
+	addstr("'d'");
+
+	move(1, 0);
+}
+
+void VoiceChat::ProcessSettings(int event)
+{
+	switch (event) {
+	case KEY_END:
+		_settingsMode = false;
+		UpdateConfigFile();
+		break;
+	case 'q':
+		++_volume;
+
+		if (_volume > 200) {
+			_volume = 200;
+		}
+
+		break;
+	case 'a':
+		--_volume;
+
+		if (_volume <= 0) {
+			_volume = 1;
+		}
+
+		break;
+	case 'w':
+		++_silenceLevel;
+
+		if (_silenceLevel > 100) {
+			_silenceLevel = 100;
+		}
+
+		break;
+	case 's':
+		--_silenceLevel;
+
+		if (_silenceLevel <= 0) {
+			_silenceLevel = 1;
+		}
+
+		break;
+	case 'e':
+		_applyFilter = true;
+		break;
+	case 'd':
+		_applyFilter = false;
+		break;
+	}
+}
+
+void VoiceChat::LoadConfigFile()
+{
+	String volumeStr = _configFile->Get("voice", "Volume");
+	String applyFilterStr = _configFile->Get("voice", "ApplyFilter");
+	String silenceLevelStr = _configFile->Get("voice", "SilenceLevel");
+
+	if (volumeStr.Length()) {
+		int volume = atoi(volumeStr.CStr());
+
+		if (volume > 0) {
+			_volume = volume;
+
+			if (_volume > 200) {
+				_volume = 200;
+			}
+		}
+
+	}
+
+	if (applyFilterStr.Length()) {
+		if (applyFilterStr == "Yes") {
+			_applyFilter = true;
+		} else if (applyFilterStr == "No") {
+			_applyFilter = false;
+		}
+	}
+
+	if (silenceLevelStr.Length()) {
+		int silenceLevel = atoi(silenceLevelStr.CStr());
+
+		if (silenceLevel > 0) {
+			_silenceLevel = silenceLevel;
+
+			if (_silenceLevel > 100) {
+				_silenceLevel = 100;
+			}
+		}
+	}
+}
+
+void VoiceChat::UpdateConfigFile()
+{
+	_configFile->Set("voice", "Volume", ToString(_volume));
+	_configFile->Set("voice", "ApplyFilter", _applyFilter ? "Yes" : "No");
+	_configFile->Set("voice", "SilenceLevel", ToString(_silenceLevel));
+	_configFile->Write();
 }
 
 CowBuffer<uint8_t> VoiceChat::EncryptSoundFrame(CowBuffer<int16_t> frame)

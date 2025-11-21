@@ -15,12 +15,15 @@
 #include "../Protocol/ControlSession.hpp"
 #include "../ServerCtl/SocketName.hpp"
 #include "../Common/UnixTime.hpp"
+#include "../Common/File.hpp"
 #include "../Common/Debug.hpp"
 #include "../Crypto/Crypto.hpp"
 
 Server::Server() : _configFile("talkd.conf")
 {
 	umask(077);
+
+	InitConfigFile();
 
 	_sessionFirst = nullptr;
 	_sessionLast = nullptr;
@@ -72,6 +75,15 @@ int Server::Run()
 	}
 
 	return 0;
+}
+
+void Server::InitConfigFile()
+{
+	if (!FileExists(_configFile.GetPath())) {
+		_configFile.Set("", "IPv4", "0.0.0.0");
+		_configFile.Set("", "Port", "6524");
+		_configFile.Write();
+	}
 }
 
 void Server::GetPassword()

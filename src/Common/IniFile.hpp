@@ -18,6 +18,7 @@ public:
 	void Clear();
 
 	void SetPath(String path);
+	String GetPath();
 	void Write();
 
 private:
@@ -43,8 +44,8 @@ private:
 	String _path;
 
 	void Load();
-
 	void Save();
+
 	void Free();
 };
 

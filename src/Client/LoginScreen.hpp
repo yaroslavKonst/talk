@@ -2,11 +2,12 @@
 #define _LOGIN_SCREEN_HPP
 
 #include "Screen.hpp"
+#include "../Common/IniFile.hpp"
 
 class LoginScreen : public Screen
 {
 public:
-	LoginScreen(ClientSession *session);
+	LoginScreen(ClientSession *session, IniFile *configFile);
 
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;

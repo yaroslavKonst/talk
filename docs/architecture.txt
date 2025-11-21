@@ -131,11 +131,21 @@ Contact book.
 /owner_key/contacts/peer_key
 Each file contains user name.
 
+Configuration
+-------------
+Server configuration.
+talkd.conf in ini format.
+IPv4
+Port
+
 Client configuration.
 /owner_key/talk.conf in ini format.
-[base]
-ProfileName
 [connection]
 ServerIP
 ServerPort
 ServerKey
+
+[voice]
+Volume
+ApplyFilter
+SilenceLevel

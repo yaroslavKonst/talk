@@ -37,6 +37,7 @@ CLIENT_MODULES=\
 	Protocol/ClientSession.o \
 	Common/UnixTime.o \
 	Common/MyString.o \
+	Common/IniFile.o \
 	Common/BinaryFile.o \
 	Common/File.o \
 	Message/MessageStorage.o \

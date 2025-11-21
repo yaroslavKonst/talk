@@ -5,6 +5,7 @@
 #include "NotificationSystem.hpp"
 #include "ChatList.hpp"
 #include "Screen.hpp"
+#include "../Common/IniFile.hpp"
 
 class WorkScreen :
 	public Screen,
@@ -58,6 +59,9 @@ private:
 	VoiceChat *_voiceChat;
 
 	void DrawHelp();
+
+	IniFile _configFile;
+	void InitConfigFile();
 };
 
 #endif

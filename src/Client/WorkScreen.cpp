@@ -6,11 +6,15 @@
 #include "TextColor.hpp"
 #include "../Protocol/ActiveSession.hpp"
 #include "../Common/UnixTime.hpp"
+#include "../Common/Hex.hpp"
+#include "../Common/File.hpp"
 
 WorkScreen::WorkScreen(ClientSession *session, VoiceChat *voiceChat) :
 	Screen(session),
 	_notificationSystem(this),
-	_chatList(session, &_notificationSystem)
+	_chatList(session, &_notificationSystem),
+	_configFile(String("storage/") +
+		DataToHex(session->PublicKey, KEY_SIZE) + "/talk.conf")
 {
 	_voiceChat = voiceChat;
 	_voiceChat->RegisterProcessor(this);
@@ -18,6 +22,9 @@ WorkScreen::WorkScreen(ClientSession *session, VoiceChat *voiceChat) :
 	_session->Processor = this;
 	_overlay = nullptr;
 	_activeChat = nullptr;
+
+	InitConfigFile();
+	_voiceChat->SetConfigFile(&_configFile);
 }
 
 WorkScreen::~WorkScreen()
@@ -132,6 +139,11 @@ Screen *WorkScreen::ProcessEvent(int event)
 
 	if (event == KEY_END) {
 		return nullptr;
+	}
+
+	if (event == 'n' - 'a' + 1) {
+		_voiceChat->StartSettings();
+		return this;
 	}
 
 	if (!_activeChat) {
@@ -329,7 +341,7 @@ void WorkScreen::Connect()
 		return;
 	}
 
-	_overlay = new LoginScreen(_session);
+	_overlay = new LoginScreen(_session, &_configFile);
 }
 
 void WorkScreen::ProcessChatListEvent(int event)
@@ -431,6 +443,8 @@ void WorkScreen::DrawHelp()
 		last = last->Add("Mute: Ctrl-B");
 	}
 
+	last = last->Add("Voice settings: Ctrl-N");
+
 	bool firstLine = true;
 	bool firstEntry = true;
 	int offset = 0;
@@ -442,7 +456,7 @@ void WorkScreen::DrawHelp()
 			if (value.Length() + 3 > _columns - offset) {
 				firstLine = false;
 				firstEntry = true;
-				offset = _columns - offset;
+				offset = 0;
 			}
 		}
 
@@ -468,4 +482,23 @@ void WorkScreen::DrawHelp()
 	}
 
 	delete first;
+}
+
+void WorkScreen::InitConfigFile()
+{
+	if (!FileExists(_configFile.GetPath())) {
+		CreateDirectory("storage");
+		CreateDirectory(
+			String("storage/") +
+			DataToHex(_session->PublicKey, KEY_SIZE));
+
+		_configFile.Set("connection", "ServerIP", "");
+		_configFile.Set("connection", "ServerPort", "6524");
+		_configFile.Set("connection", "ServerKey", "");
+
+		_configFile.Set("voice", "Volume", "100");
+		_configFile.Set("voice", "ApplyFilter", "Yes");
+		_configFile.Set("voice", "SilenceLevel", "3");
+		_configFile.Write();
+	}
 }

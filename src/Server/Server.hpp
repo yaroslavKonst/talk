@@ -27,6 +27,7 @@ private:
 	int _activeUsers;
 
 	IniFile _configFile;
+	void InitConfigFile();
 
 	uint8_t _privateKey[KEY_SIZE];
 	uint8_t _publicKey[KEY_SIZE];
