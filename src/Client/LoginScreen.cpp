@@ -39,7 +39,7 @@ void LoginScreen::Redraw()
 	ClearScreen();
 
 	move(0, 0);
-	addstr("Exit: End | Next: Enter | Remove/Previous: Backspace");
+	addstr("Exit: End | Next: Enter/Down | Previous: Up | Connect: Enter");
 
 	move(_rows / 2 - 10, 4);
 	addstr("Your public key:");
@@ -92,6 +92,30 @@ Screen *LoginScreen::ProcessEvent(int event)
 {
 	if (event == KEY_END) {
 		return nullptr;
+	}
+
+	if (event == KEY_UP) {
+		if (_writingPort) {
+			_writingPort = false;
+			_writingIp = true;
+		} else if (_writingKey) {
+			_writingKey = false;
+			_writingPort = true;
+		}
+
+		return this;
+	}
+
+	if (event == KEY_DOWN) {
+		if (_writingIp) {
+			_writingIp = false;
+			_writingPort = true;
+		} else if (_writingPort) {
+			_writingPort = false;
+			_writingKey = true;
+		}
+
+		return this;
 	}
 
 	if (event == KEY_ENTER || event == '\n') {
@@ -172,16 +196,12 @@ Screen *LoginScreen::ProcessEvent(int event)
 			_ip = _ip.Substring(0, _ip.Length() - 1);
 		} else if (_writingPort) {
 			if (_port.Length() == 0) {
-				_writingPort = false;
-				_writingIp = true;
 				return this;
 			}
 
 			_port = _port.Substring(0, _port.Length() - 1);
 		} else if (_writingKey) {
 			if (_serverKeyHex.Length() == 0) {
-				_writingKey = false;
-				_writingPort = true;
 				return this;
 			}
 
