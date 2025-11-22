@@ -49,9 +49,13 @@ CLIENT_MODULES=\
 
 CLIENT_LIBS = -lncursesw -lpulse-simple -pthread
 
-.PHONY: all
+.PHONY: all server client
 
-all: $(BUILD_DIR)/talkd $(BUILD_DIR)/talkdctl $(BUILD_DIR)/talk
+all: server client
+
+server: $(BUILD_DIR)/talkd $(BUILD_DIR)/talkdctl
+
+client: $(BUILD_DIR)/talk
 
 SERVER_MODULES_ABS := $(SERVER_MODULES:%=$(BUILD_DIR)/%)
 SERVERCTL_MODULES_ABS := $(SERVERCTL_MODULES:%=$(BUILD_DIR)/%)
