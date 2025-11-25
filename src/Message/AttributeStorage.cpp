@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "Message.hpp"
 #include "../Common/Hex.hpp"
 #include "../Common/BinaryFile.hpp"
 #include "../Common/File.hpp"
@@ -22,24 +23,22 @@ void AttributeStorage::SetAttribute(
 	CowBuffer<uint8_t> message,
 	uint32_t attribute)
 {
-	int64_t timestamp;
-	int32_t index;
+	Message::Header header;
+	bool res = Message::GetHeader(message, header);
+
+	if (!res) {
+		THROW("Invalid message header.");
+	}
+
 	const uint8_t *peerKey = nullptr;
-
-	memcpy(&timestamp, message.Pointer() + KEY_SIZE * 2, sizeof(timestamp));
-	memcpy(
-		&index,
-		message.Pointer() + KEY_SIZE * 2 + sizeof(timestamp),
-		sizeof(index));
-
 	bool incoming;
 
-	if (!crypto_verify32(_ownerKey, message.Pointer())) {
+	if (!crypto_verify32(_ownerKey, header.Source)) {
 		incoming = false;
-		peerKey = message.Pointer() + KEY_SIZE;
+		peerKey = header.Destination;
 	} else {
 		incoming = true;
-		peerKey = message.Pointer();
+		peerKey = header.Source;
 	}
 
 	String peerKeyHex = DataToHex(peerKey, KEY_SIZE);
@@ -54,7 +53,8 @@ void AttributeStorage::SetAttribute(
 	entryPath += String("/") + peerKeyHex;
 	CreateDirectory(entryPath);
 
-	entryPath += String("/") + ToHex(timestamp) + "_" + ToHex(index) +
+	entryPath += String("/") +
+		ToHex(header.Timestamp) + "_" + ToHex(header.Index) +
 		(incoming ? "_r" : "_s");
 
 	if (!attribute) {
@@ -75,24 +75,22 @@ void AttributeStorage::SetAttribute(
 
 uint32_t AttributeStorage::GetAttribute(CowBuffer<uint8_t> message)
 {
-	int64_t timestamp;
-	int32_t index;
+	Message::Header header;
+	bool res = Message::GetHeader(message, header);
+
+	if (!res) {
+		THROW("Invalid message header.");
+	}
+
 	const uint8_t *peerKey = nullptr;
-
-	memcpy(&timestamp, message.Pointer() + KEY_SIZE * 2, sizeof(timestamp));
-	memcpy(
-		&index,
-		message.Pointer() + KEY_SIZE * 2 + sizeof(timestamp),
-		sizeof(index));
-
 	bool incoming;
 
-	if (!crypto_verify32(_ownerKey, message.Pointer())) {
+	if (!crypto_verify32(_ownerKey, header.Source)) {
 		incoming = false;
-		peerKey = message.Pointer() + KEY_SIZE;
+		peerKey = header.Destination;
 	} else {
 		incoming = true;
-		peerKey = message.Pointer();
+		peerKey = header.Source;
 	}
 
 	String peerKeyHex = DataToHex(peerKey, KEY_SIZE);
@@ -103,7 +101,8 @@ uint32_t AttributeStorage::GetAttribute(CowBuffer<uint8_t> message)
 	entryPath += "/attributes";
 	entryPath += String("/") + peerKeyHex;
 
-	entryPath += String("/") + ToHex(timestamp) + "_" + ToHex(index) +
+	entryPath += String("/") +
+		ToHex(header.Timestamp) + "_" + ToHex(header.Index) +
 		(incoming ? "_r" : "_s");
 
 	if (!FileExists(entryPath)) {

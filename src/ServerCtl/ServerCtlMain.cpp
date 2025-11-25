@@ -8,6 +8,7 @@
 #include "../Common/Exception.hpp"
 #include "../Common/MyString.hpp"
 #include "../Common/Hex.hpp"
+#include "../Common/Version.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
 #include "SocketName.hpp"
@@ -320,6 +321,8 @@ static void PrintHelp()
 
 int main(int argc, char **argv)
 {
+	PrintVersionAndExit(argc, argv);
+
 	if (argc < 2) {
 		PrintHelp();
 		return 1;

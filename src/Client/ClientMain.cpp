@@ -1,9 +1,12 @@
 #include "Client.hpp"
 
 #include "../Common/Exception.hpp"
+#include "../Common/Version.hpp"
 
 int main(int argc, char **argv)
 {
+	PrintVersionAndExit(argc, argv);
+
 	try {
 		Client client;
 		return client.Run();

@@ -13,6 +13,7 @@ SERVER_MODULES =\
 	Common/IniFile.o \
 	Common/BinaryFile.o \
 	Common/File.o \
+	Common/Version.o \
 	Message/Message.o \
 	Message/MessageStorage.o \
 	Crypto/Crypto.o \
@@ -22,7 +23,8 @@ SERVERCTL_MODULES=\
 	ServerCtl/ServerCtlMain.o \
 	Protocol/Session.o \
 	Common/UnixTime.o \
-	Common/MyString.o
+	Common/MyString.o \
+	Common/Version.o
 
 CLIENT_MODULES=\
 	Client/Client.o \
@@ -45,6 +47,8 @@ CLIENT_MODULES=\
 	Common/IniFile.o \
 	Common/BinaryFile.o \
 	Common/File.o \
+	Common/Version.o \
+	Message/Message.o \
 	Message/MessageStorage.o \
 	Message/ContactStorage.o \
 	Message/AttributeStorage.o \

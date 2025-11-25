@@ -195,9 +195,9 @@ void WorkScreen::NotifyDelivery(void *userPointer, int32_t status)
 	Redraw();
 }
 
-void WorkScreen::DeliverMessage(CowBuffer<uint8_t> header)
+void WorkScreen::DeliverMessage(CowBuffer<uint8_t> message)
 {
-	_chatList.DeliverMessage(header);
+	_chatList.DeliverMessage(message);
 	Redraw();
 }
 

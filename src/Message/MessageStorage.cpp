@@ -1,5 +1,6 @@
 #include "MessageStorage.hpp"
 
+#include "Message.hpp"
 #include "../Common/Hex.hpp"
 #include "../Common/BinaryFile.hpp"
 #include "../Common/UnixTime.hpp"
@@ -465,24 +466,22 @@ bool MessageStorage::MessageExists(
 
 bool MessageStorage::AddMessage(CowBuffer<uint8_t> message)
 {
-	int64_t timestamp;
-	int32_t index;
+	Message::Header header;
+	bool res = Message::GetHeader(message, header);
+
+	if (!res) {
+		THROW("Invalid message header.");
+	}
+
 	const uint8_t *peerKey = nullptr;
-
-	memcpy(&timestamp, message.Pointer() + KEY_SIZE * 2, sizeof(timestamp));
-	memcpy(
-		&index,
-		message.Pointer() + KEY_SIZE * 2 + sizeof(timestamp),
-		sizeof(index));
-
 	bool incoming;
 
-	if (!crypto_verify32(_ownerKey, message.Pointer())) {
+	if (!crypto_verify32(_ownerKey, header.Source)) {
 		incoming = false;
-		peerKey = message.Pointer() + KEY_SIZE;
+		peerKey = header.Destination;
 	} else {
 		incoming = true;
-		peerKey = message.Pointer();
+		peerKey = header.Source;
 	}
 
 	String peerKeyHex = DataToHex(peerKey, KEY_SIZE);
@@ -499,7 +498,8 @@ bool MessageStorage::AddMessage(CowBuffer<uint8_t> message)
 	entryPath += incoming ? "/in" : "/out";
 	CreateDirectory(entryPath);
 
-	entryPath += String("/") + ToHex(timestamp) + "_" + ToHex(index);
+	entryPath += String("/") + ToHex(header.Timestamp) + "_" +
+		ToHex(header.Index);
 
 	if (FileExists(entryPath)) {
 		return false;
@@ -515,7 +515,7 @@ bool MessageStorage::AddMessage(CowBuffer<uint8_t> message)
 	MessageStorageIndex storageIndex(
 		String("storage/") + ownerKeyHex + "/storage/" +
 		peerKeyHex + "/index");
-	storageIndex.AddEntry(timestamp, index, incoming);
+	storageIndex.AddEntry(header.Timestamp, header.Index, incoming);
 
 	return true;
 }

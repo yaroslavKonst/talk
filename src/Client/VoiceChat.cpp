@@ -57,6 +57,7 @@ static void LowPassFilter(
 	}
 }
 
+// Voice chat.
 VoiceChat::VoiceChat()
 {
 	_state = VoiceStateOff;

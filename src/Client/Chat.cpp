@@ -5,6 +5,7 @@
 
 #include "TextColor.hpp"
 #include "../Common/UnixTime.hpp"
+#include "../Message/Message.hpp"
 
 MessageDescriptor::MessageDescriptor(AttributeStorage *attrStorage)
 {
@@ -255,28 +256,20 @@ void Chat::SwitchDown()
 
 void Chat::DeliverMessage(CowBuffer<uint8_t> message)
 {
-	const uint32_t headerSize = KEY_SIZE * 2 +
-		sizeof(int64_t) + sizeof(int32_t);
+	Message::Header header;
+	bool parseResult = Message::GetHeader(message, header);
 
-	if (message.Size() <= headerSize) {
+	if (!parseResult) {
 		_notificationSystem->Notify(
 			"Received message with corrupt header.");
 		return;
 	}
 
-	int64_t timestamp;
-	int32_t index;
-	memcpy(&timestamp, message.Pointer() + KEY_SIZE * 2, sizeof(timestamp));
-	memcpy(
-		&index,
-		message.Pointer() + KEY_SIZE * 2 + sizeof(timestamp),
-		sizeof(index));
-
 	bool duplicate = _messageStorage.MessageExists(
 		_peerKey,
-		timestamp,
-		index,
-		!crypto_verify32(_peerKey, message.Pointer()));
+		header.Timestamp,
+		header.Index,
+		!crypto_verify32(_peerKey, header.Source));
 
 	if (duplicate) {
 		return;
@@ -284,8 +277,8 @@ void Chat::DeliverMessage(CowBuffer<uint8_t> message)
 
 	_messageStorage.AddMessage(message);
 
-	if (*_latestReceiveTime < timestamp) {
-		*_latestReceiveTime = timestamp;
+	if (*_latestReceiveTime < header.Timestamp) {
+		*_latestReceiveTime = header.Timestamp;
 	}
 
 	MessageDescriptor *md = new MessageDescriptor(&_attributeStorage);
@@ -414,12 +407,14 @@ void Chat::RedrawMessageWindow()
 			return;
 		}
 
-		int64_t timestamp;
-		memcpy(
-			&timestamp,
-			last->Message.Pointer() + KEY_SIZE * 2,
-			sizeof(timestamp));
-		String timeStr = ctime(&timestamp);
+		Message::Header header;
+		int res = Message::GetHeader(last->Message, header);
+
+		if (!res) {
+			THROW("Invalid message header.");
+		}
+
+		String timeStr = ctime(&header.Timestamp);
 		timeStr = timeStr.Substring(0, timeStr.Length() - 1);
 
 		move(drawBase, _columns / 4 + 2);
@@ -460,7 +455,7 @@ void Chat::RedrawMessageWindow()
 		}
 
 		bool outgoing = !crypto_verify32(
-			last->Message.Pointer(),
+			header.Source,
 			_session->PublicKey);
 
 		move(drawBase, _columns / 4 + 2);
@@ -686,14 +681,15 @@ void Chat::LoadMessages(int count)
 
 	while (_loadedMessages < (int64_t)messages.Size()) {
 		if (!*last) {
-			int64_t timestamp;
-			memcpy(
-				&timestamp,
-				messages[index].Pointer() + KEY_SIZE * 2,
-				sizeof(timestamp));
+			Message::Header header;
+			bool res = Message::GetHeader(messages[index], header);
 
-			if (*_latestReceiveTime < timestamp) {
-				*_latestReceiveTime = timestamp;
+			if (!res) {
+				THROW("Invalid message header.");
+			}
+
+			if (*_latestReceiveTime < header.Timestamp) {
+				*_latestReceiveTime = header.Timestamp;
 			}
 
 			*last = new MessageDescriptor(&_attributeStorage);
@@ -739,16 +735,13 @@ CowBuffer<uint8_t> Chat::EncryptMessage(
 	int64_t timestamp,
 	int32_t index)
 {
-	CowBuffer<uint8_t> header(KEY_SIZE * 2 +
-		sizeof(int64_t) + sizeof(int32_t));
+	Message::Header header;
+	header.Source = senderKey;
+	header.Destination = receiverKey;
+	header.Timestamp = timestamp;
+	header.Index = index;
 
-	memcpy(header.Pointer(), senderKey, KEY_SIZE);
-	memcpy(header.Pointer() + KEY_SIZE, receiverKey, KEY_SIZE);
-	memcpy(header.Pointer() + KEY_SIZE * 2, &timestamp, sizeof(timestamp));
-	memcpy(
-		header.Pointer() + KEY_SIZE * 2 + sizeof(timestamp),
-		&index,
-		sizeof(index));
+	CowBuffer<uint8_t> headerBuffer = Message::BuildHeader(header);
 
 	EncryptedStream outES;
 	EncryptedStream inES;
@@ -764,44 +757,31 @@ CowBuffer<uint8_t> Chat::EncryptMessage(
 	InitNonce(outES.Nonce);
 
 	CowBuffer<uint8_t> textBuffer(text.Length());
-
 	memcpy(textBuffer.Pointer(), text.CStr(), text.Length());
 
 	const CowBuffer<uint8_t> encryptedMessage = Encrypt(
 		textBuffer,
 		outES,
-		header.Pointer(),
-		header.Size());
+		headerBuffer.Pointer(),
+		headerBuffer.Size());
 
-	CowBuffer<uint8_t> result(header.Size() + encryptedMessage.Size());
-
-	memcpy(result.Pointer(), header.Pointer(), header.Size());
-	memcpy(
-		result.Pointer() + header.Size(),
-		encryptedMessage.Pointer(),
-		encryptedMessage.Size());
-
-	return result;
+	return Message::BuildMessage(headerBuffer, encryptedMessage);
 }
 
 String Chat::DecryptMessage(const CowBuffer<uint8_t> message)
 {
-	uint32_t headerSize = KEY_SIZE * 2 + sizeof(int64_t) + sizeof(int32_t);
+	Message::Header header;
+	bool parseResult = Message::GetHeader(message, header);
 
-	if (message.Size() <= headerSize) {
+	if (!parseResult) {
 		return String();
 	}
 
-	const CowBuffer<uint8_t> header = message.Slice(0, headerSize);
 	const CowBuffer<uint8_t> encryptedMessage = message.Slice(
-		headerSize,
-		message.Size() - headerSize);
+		Message::HeaderSize,
+		message.Size() - Message::HeaderSize);
 
-	int64_t timestamp;
-
-	memcpy(&timestamp, header.Pointer() + KEY_SIZE * 2, sizeof(timestamp));
-
-	bool outgoing = !crypto_verify32(header.Pointer(), _session->PublicKey);
+	bool outgoing = !crypto_verify32(header.Source, _session->PublicKey);
 
 	EncryptedStream outES;
 	EncryptedStream inES;
@@ -810,7 +790,7 @@ String Chat::DecryptMessage(const CowBuffer<uint8_t> message)
 		_session->PrivateKey,
 		_session->PublicKey,
 		_peerKey,
-		timestamp,
+		header.Timestamp,
 		inES.Key,
 		outES.Key,
 		!outgoing);
@@ -820,8 +800,8 @@ String Chat::DecryptMessage(const CowBuffer<uint8_t> message)
 	const CowBuffer<uint8_t> decryptedMessage = Decrypt(
 		encryptedMessage,
 		inES,
-		header.Pointer(),
-		header.Size());
+		message.Pointer(),
+		Message::HeaderSize);
 
 	String result;
 

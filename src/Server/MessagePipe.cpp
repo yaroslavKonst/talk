@@ -1,5 +1,7 @@
 #include "MessagePipe.hpp"
 
+#include "../Common/Exception.hpp"
+#include "../Message/Message.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 #include "../ThirdParty/monocypher.h"
 
@@ -17,12 +19,17 @@ MessagePipe::~MessagePipe()
 
 void MessagePipe::SendMessage(const CowBuffer<uint8_t> message)
 {
-	const uint8_t *key = message.Pointer() + KEY_SIZE;
+	Message::Header header;
+	bool res = Message::GetHeader(message, header);
+
+	if (!res) {
+		THROW("Invalid message header.");
+	}
 
 	OnlineUser *user = _first;
 
 	while (user) {
-		if (!crypto_verify32(key, user->Key)) {
+		if (!crypto_verify32(header.Destination, user->Key)) {
 			user->Handler->SendMessage(message);
 			return;
 		}

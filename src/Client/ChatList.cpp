@@ -4,6 +4,7 @@
 
 #include "TextColor.hpp"
 #include "../Common/Hex.hpp"
+#include "../Message/Message.hpp"
 
 ChatList::ChatList(
 	ClientSession *session,
@@ -79,9 +80,8 @@ void ChatList::Redraw(int rows, int columns)
 		String name = _contactList.GetNameForPresentation(i);
 
 		bool hasUnread = _chatList[i]->HasUnread();
-		bool hasUnsent = _chatList[i]->HasUnsent();
 
-		if (hasUnread || hasUnsent) {
+		if (hasUnread) {
 			name = String("!") + name;
 		} else {
 			name = String(" ") + name;
@@ -93,7 +93,7 @@ void ChatList::Redraw(int rows, int columns)
 
 		int attrs = 0;
 
-		if (hasUnread || hasUnsent) {
+		if (hasUnread) {
 			attrs |= COLOR_PAIR(YELLOW_TEXT);
 		}
 
@@ -178,12 +178,19 @@ void ChatList::UpdateUserData(const uint8_t *key, String name)
 
 void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
 {
+	Message::Header header;
+	bool res = Message::GetHeader(message, header);
+
+	if (!res) {
+		THROW("Invalid message header.");
+	}
+
 	const uint8_t *peerKey;
 
-	if (!crypto_verify32(_session->PublicKey, message.Pointer())) {
-		peerKey = message.Pointer() + KEY_SIZE;
+	if (!crypto_verify32(_session->PublicKey, header.Source)) {
+		peerKey = header.Destination;
 	} else {
-		peerKey = message.Pointer();
+		peerKey = header.Source;
 	}
 
 	for (int i = 0; i < _chatCount; i++) {

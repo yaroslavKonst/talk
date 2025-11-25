@@ -210,9 +210,13 @@ bool ServerSession::ProcessTextMessage(const CowBuffer<uint8_t> plainText)
 			if (!Users->HasUser(header.Source)) {
 				response.Status =
 					SESSION_RESPONSE_ERROR_INVALID_USER;
-			}
-
-			if (!Users->HasUser(header.Destination)) {
+			} else if (!Users->HasUser(header.Destination)) {
+				response.Status =
+					SESSION_RESPONSE_ERROR_INVALID_USER;
+			} else if (crypto_verify32(
+				PeerPublicKey,
+				header.Source))
+			{
 				response.Status =
 					SESSION_RESPONSE_ERROR_INVALID_USER;
 			}

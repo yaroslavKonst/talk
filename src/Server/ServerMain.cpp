@@ -8,6 +8,7 @@
 #include "Server.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/File.hpp"
+#include "../Common/Version.hpp"
 
 static int OpenLog()
 {
@@ -104,6 +105,8 @@ static void Daemonize()
 
 int main(int argc, char **argv)
 {
+	PrintVersionAndExit(argc, argv);
+
 	try {
 		if (argc != 1) {
 			return 1;
