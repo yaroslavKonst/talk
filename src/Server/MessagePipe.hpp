@@ -6,10 +6,10 @@
 class SendMessageHandler
 {
 public:
-	virtual void SendMessage(CowBuffer<uint8_t> message) = 0;
+	virtual void SendMessage(const CowBuffer<uint8_t> message) = 0;
 
 	virtual bool InVoice() = 0;
-	virtual void SendVoiceFrame(CowBuffer<uint8_t> frame) = 0;
+	virtual void SendVoiceFrame(const CowBuffer<uint8_t> frame) = 0;
 	virtual void StartVoice(
 		const uint8_t *peerKey,
 		int64_t timestamp,
@@ -25,7 +25,7 @@ public:
 	MessagePipe();
 	~MessagePipe();
 
-	void SendMessage(CowBuffer<uint8_t> message);
+	void SendMessage(const CowBuffer<uint8_t> message);
 	SendMessageHandler *GetHandler(const uint8_t *key);
 
 	void Register(const uint8_t *key, SendMessageHandler *handler);

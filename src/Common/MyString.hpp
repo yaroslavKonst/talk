@@ -1,6 +1,8 @@
 #ifndef _MY_STRING_HPP
 #define _MY_STRING_HPP
 
+#include "CowBuffer.hpp"
+
 class String
 {
 public:
@@ -23,7 +25,7 @@ public:
 	bool operator==(const String &s) const;
 	bool operator<(const String &s) const;
 
-	String *Split(char delim, bool removeEmpty, int &partCount) const;
+	CowBuffer<String> Split(char delim, bool removeEmpty) const;
 	String Trim() const;
 	String Substring(int start, int length) const;
 	String Replace(char from, char to) const;

@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/random.h>
+#include <cstring>
 
 #include "../Common/UnixTime.hpp"
 #include "../Common/Exception.hpp"

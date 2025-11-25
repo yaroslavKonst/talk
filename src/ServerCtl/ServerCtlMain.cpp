@@ -47,9 +47,7 @@ static int OpenSocket()
 static CowBuffer<uint8_t> RequestStop()
 {
 	CowBuffer<uint8_t> result(sizeof(int32_t));
-
-	int32_t command = COMMAND_SHUTDOWN;
-	memcpy(result.Pointer(), &command, sizeof(command));
+	*result.SwitchType<int32_t>() = COMMAND_SHUTDOWN;
 
 	return result;
 }
@@ -57,9 +55,7 @@ static CowBuffer<uint8_t> RequestStop()
 static CowBuffer<uint8_t> RequestGetKey()
 {
 	CowBuffer<uint8_t> result(sizeof(int32_t));
-
-	int32_t command = COMMAND_GET_PUBLIC_KEY;
-	memcpy(result.Pointer(), &command, sizeof(command));
+	*result.SwitchType<int32_t>() = COMMAND_GET_PUBLIC_KEY;
 
 	return result;
 }
@@ -97,16 +93,16 @@ static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
 		SIGNATURE_PUBLIC_KEY_SIZE +
 		name.Length());
 
-	int32_t *command = (int32_t*)(resultBuffer.Pointer());
-	uint8_t *key = resultBuffer.Pointer() + sizeof(int32_t);
-	uint8_t *signature = resultBuffer.Pointer() +
-		sizeof(int32_t) + KEY_SIZE;
-	int32_t *nameLength = (int32_t*)(resultBuffer.Pointer() +
+	int32_t *command = resultBuffer.SwitchType<int32_t>();
+	uint8_t *key = resultBuffer.Pointer(sizeof(int32_t));
+	uint8_t *signature = resultBuffer.Pointer(
+		sizeof(int32_t) + KEY_SIZE);
+	int32_t *nameLength = resultBuffer.SwitchType<int32_t>(
 		sizeof(int32_t) + KEY_SIZE +
 		SIGNATURE_PUBLIC_KEY_SIZE);
-	uint8_t *nameBuffer = resultBuffer.Pointer() +
+	uint8_t *nameBuffer = resultBuffer.Pointer(
 		sizeof(int32_t) * 2 + KEY_SIZE +
-		SIGNATURE_PUBLIC_KEY_SIZE;
+		SIGNATURE_PUBLIC_KEY_SIZE);
 
 	*command = COMMAND_ADD_USER;
 	*nameLength = name.Length();
@@ -133,8 +129,8 @@ static CowBuffer<uint8_t> RequestRemoveUser(int argc, char **argv)
 
 	CowBuffer<uint8_t> resultBuffer(sizeof(int32_t) + KEY_SIZE);
 
-	int32_t *command = (int32_t*)(resultBuffer.Pointer());
-	uint8_t *key = resultBuffer.Pointer() + sizeof(int32_t);
+	int32_t *command = resultBuffer.SwitchType<int32_t>();
+	uint8_t *key = resultBuffer.Pointer(sizeof(int32_t));
 
 	*command = COMMAND_REMOVE_USER;
 	HexToData(keyHex, key);
@@ -145,9 +141,7 @@ static CowBuffer<uint8_t> RequestRemoveUser(int argc, char **argv)
 static CowBuffer<uint8_t> RequestListUsers()
 {
 	CowBuffer<uint8_t> result(sizeof(int32_t));
-
-	int32_t command = COMMAND_LIST_USERS;
-	memcpy(result.Pointer(), &command, sizeof(command));
+	*result.SwitchType<int32_t>() = COMMAND_LIST_USERS;
 
 	return result;
 }
@@ -198,7 +192,7 @@ static void PrintError(int32_t code)
 	}
 }
 
-static void ProcessGetKey(CowBuffer<uint8_t> response)
+static void ProcessGetKey(const CowBuffer<uint8_t> response)
 {
 	if (response.Size() != KEY_SIZE) {
 		printf("Invalid response length.\n");
@@ -210,10 +204,9 @@ static void ProcessGetKey(CowBuffer<uint8_t> response)
 	printf("%s\n", keyHex.CStr());
 }
 
-static void ProcessListUsers(CowBuffer<uint8_t> response)
+static void ProcessListUsers(const CowBuffer<uint8_t> response)
 {
 	const int32_t entrySize = KEY_SIZE + 55;
-
 	int32_t userCount;
 
 	if (response.Size() < sizeof(userCount)) {
@@ -221,20 +214,22 @@ static void ProcessListUsers(CowBuffer<uint8_t> response)
 		return;
 	}
 
-	memcpy(&userCount, response.Pointer(), sizeof(userCount));
+	userCount = *response.SwitchType<int32_t>();
 
 	for (int i = 0; i < userCount; i++) {
-		String name((const char*)response.Pointer() +
-			sizeof(userCount) + entrySize * i + KEY_SIZE);
+		String name(response.SwitchType<char>(
+			sizeof(userCount) + entrySize * i + KEY_SIZE));
 		String key = DataToHex(
-			response.Pointer() + sizeof(userCount) + entrySize * i,
+			response.Pointer(sizeof(userCount) + entrySize * i),
 			KEY_SIZE);
 
 		printf("%s\n%s\n\n", name.CStr(), key.CStr());
 	}
 }
 
-static int ProcessResponse(const char *command, CowBuffer<uint8_t> response)
+static int ProcessResponse(
+	const char *command,
+	CowBuffer<uint8_t> response)
 {
 	int32_t code;
 
@@ -243,7 +238,7 @@ static int ProcessResponse(const char *command, CowBuffer<uint8_t> response)
 		return 1;
 	}
 
-	memcpy(&code, response.Pointer(), sizeof(code));
+	code = *response.SwitchType<int32_t>();
 
 	if (code != OK) {
 		PrintError(code);
@@ -273,7 +268,7 @@ static int ProcessResponse(const char *command, CowBuffer<uint8_t> response)
 	return 0;
 }
 
-static CowBuffer<uint8_t> SendRequest(CowBuffer<uint8_t> command)
+static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
 {
 	Session session;
 	session.SetInputSizeLimit(1024 * 1024 * 1024);

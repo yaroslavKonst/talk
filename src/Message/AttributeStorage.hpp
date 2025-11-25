@@ -13,8 +13,8 @@ public:
 	AttributeStorage(const uint8_t *ownerKey);
 	~AttributeStorage();
 
-	void SetAttribute(CowBuffer<uint8_t> message, uint32_t attribute);
-	uint32_t GetAttribute(CowBuffer<uint8_t> message);
+	void SetAttribute(const CowBuffer<uint8_t> message, uint32_t attribute);
+	uint32_t GetAttribute(const CowBuffer<uint8_t> message);
 
 private:
 	const uint8_t *_ownerKey;

@@ -68,6 +68,7 @@ public:
 	void DeliverMessage(CowBuffer<uint8_t> message);
 
 	void MarkRead();
+	void MarkRead(int messageIndex);
 
 private:
 	ClientSession *_session;

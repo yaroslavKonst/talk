@@ -360,17 +360,12 @@ void WorkScreen::ProcessChatListEvent(int event)
 		_chatList.SwitchDown();
 	} else if (event == KEY_ENTER || event == '\n') {
 		_activeChat = _chatList.GetCurrentChat();
-
-		if (_activeChat) {
-			_activeChat->MarkRead();
-		}
 	}
 }
 
 void WorkScreen::ProcessChatScreenEvent(int event)
 {
 	if (event == '\e') {
-		_activeChat->MarkRead();
 		_activeChat = nullptr;
 	} else if (event == KEY_ENTER || event == '\n') {
 		_activeChat->StartTyping();

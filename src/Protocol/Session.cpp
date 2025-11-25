@@ -87,6 +87,10 @@ bool Session::Read()
 			return false;
 		}
 
+		if (!size) {
+			return false;
+		}
+
 		ExpectedInput = size;
 		Input = new CowBuffer<uint8_t>(size);
 		return true;

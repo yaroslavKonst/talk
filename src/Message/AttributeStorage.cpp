@@ -1,5 +1,7 @@
 #include "AttributeStorage.hpp"
 
+#include <cstring>
+
 #include "../Common/Hex.hpp"
 #include "../Common/BinaryFile.hpp"
 #include "../Common/File.hpp"

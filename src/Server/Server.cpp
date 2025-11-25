@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <signal.h>
 
 #include "../Protocol/ServerSession.hpp"
 #include "../Protocol/ControlSession.hpp"
@@ -19,6 +20,19 @@
 #include "../Common/Debug.hpp"
 #include "../Crypto/Crypto.hpp"
 
+static void DisableSigPipe()
+{
+	struct sigaction act;
+	memset(&act, 0, sizeof(act));
+	act.sa_handler = SIG_IGN;
+
+	int res = sigaction(SIGPIPE, &act, nullptr);
+
+	if (res == -1) {
+		THROW("Failed to ignore SIGPIPE signal.");
+	}
+}
+
 Server::Server() : _configFile("talkd.conf")
 {
 	umask(077);
@@ -26,20 +40,18 @@ Server::Server() : _configFile("talkd.conf")
 	InitConfigFile();
 
 	_sessionFirst = nullptr;
-	_sessionLast = nullptr;
 
 	_listeningSocket = -1;
 	_controlSocket = -1;
 
 	_activeUsers = 0;
+	_work = false;
 
 	GetPassword();
 }
 
 Server::~Server()
 {
-	_sessionLast = nullptr;
-
 	CloseSessions(_sessionFirst);
 	CloseSockets();
 	WipeKeys();
@@ -49,6 +61,7 @@ int Server::Run()
 {
 	_work = true;
 
+	DisableSigPipe();
 	OpenListeningSockets();
 
 	_activeUsers = 0;
@@ -122,7 +135,7 @@ void Server::GetPassword()
 	}
 
 	if (buffer.Length() == 0) {
-		THROW("Empty passwords are not allowed.");
+		THROW("Empty password is not allowed.");
 	}
 
 	GenerateKeys(buffer.CStr());
@@ -147,12 +160,6 @@ void Server::WipeKeys()
 void Server::OpenListeningSockets()
 {
 	// Listening socket.
-	_listeningSocket = socket(AF_INET, SOCK_STREAM, 0);
-
-	if (_listeningSocket == -1) {
-		THROW("Failed to create listening socket.");
-	}
-
 	uint16_t port = atoi(_configFile.Get("", "Port").CStr());
 
 	if (port == 0) {
@@ -168,6 +175,12 @@ void Server::OpenListeningSockets()
 
 	if (!res) {
 		THROW("Invalid IPv4 address.");
+	}
+
+	_listeningSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (_listeningSocket == -1) {
+		THROW("Failed to create listening socket.");
 	}
 
 	res = bind(_listeningSocket, (struct sockaddr*)&addr, sizeof(addr));
@@ -236,6 +249,10 @@ void Server::AcceptConnection()
 {
 	int fd = accept(_listeningSocket, nullptr, nullptr);
 
+	if (fd == -1) {
+		return;
+	}
+
 	++_activeUsers;
 
 	ServerSession *session = new ServerSession;
@@ -251,18 +268,17 @@ void Server::AcceptConnection()
 	session->VoiceState = ServerSession::VoiceStateInactive;
 	session->VoicePeer = nullptr;
 
-	if (!_sessionFirst) {
-		_sessionFirst = session;
-		_sessionLast = session;
-	} else {
-		_sessionLast->Next = session;
-		_sessionLast = session;
-	}
+	session->Next = _sessionFirst;
+	_sessionFirst = session;
 }
 
 void Server::AcceptControl()
 {
 	int fd = accept(_controlSocket, nullptr, nullptr);
+
+	if (fd == -1) {
+		return;
+	}
 
 	++_activeUsers;
 
@@ -273,13 +289,8 @@ void Server::AcceptControl()
 	session->Work = &_work;
 	session->PublicKey = _publicKey;
 
-	if (!_sessionFirst) {
-		_sessionFirst = session;
-		_sessionLast = session;
-	} else {
-		_sessionLast->Next = session;
-		_sessionLast = session;
-	}
+	session->Next = _sessionFirst;
+	_sessionFirst = session;
 }
 
 struct pollfd *Server::BuildPollFds()
@@ -316,7 +327,6 @@ struct pollfd *Server::BuildPollFds()
 void Server::ProcessPollFds(struct pollfd *fds, bool updateTime)
 {
 	Session **session = &_sessionFirst;
-	Session *previous = nullptr;
 
 	int index = 2;
 
@@ -347,12 +357,7 @@ void Server::ProcessPollFds(struct pollfd *fds, bool updateTime)
 
 			sessionToRm->Next = nullptr;
 			CloseSessions(sessionToRm);
-
-			if (sessionToRm == _sessionLast) {
-				_sessionLast = previous;
-			}
 		} else {
-			previous = *session;
 			session = &((*session)->Next);
 		}
 

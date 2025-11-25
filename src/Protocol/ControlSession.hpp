@@ -6,6 +6,8 @@
 
 struct ControlSession : public Session
 {
+	ControlSession();
+
 	UserDB *Users;
 	bool *Work;
 
@@ -14,12 +16,12 @@ struct ControlSession : public Session
 	bool Process() override;
 	bool TimePassed() override;
 
-	void SendResponse(int32_t value, CowBuffer<uint8_t> data);
+	void SendResponse(int32_t value, const CowBuffer<uint8_t> data);
 
 	void ProcessShutdownCommand();
 	void ProcessGetPublicKeyCommand();
-	void ProcessAddUserCommand(CowBuffer<uint8_t> message);
-	void ProcessRemoveUserCommand(CowBuffer<uint8_t> message);
+	void ProcessAddUserCommand(const CowBuffer<uint8_t> message);
+	void ProcessRemoveUserCommand(const CowBuffer<uint8_t> message);
 	void ProcessListUsersCommand();
 
 	void ProcessUnknownCommand();

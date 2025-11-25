@@ -15,7 +15,7 @@ MessagePipe::~MessagePipe()
 	FreeData();
 }
 
-void MessagePipe::SendMessage(CowBuffer<uint8_t> message)
+void MessagePipe::SendMessage(const CowBuffer<uint8_t> message)
 {
 	const uint8_t *key = message.Pointer() + KEY_SIZE;
 
@@ -58,6 +58,10 @@ void MessagePipe::Register(const uint8_t *key, SendMessageHandler *handler)
 
 void MessagePipe::Unregister(const uint8_t *key)
 {
+	if (!key) {
+		return;
+	}
+
 	OnlineUser **user = &_first;
 
 	while (*user) {

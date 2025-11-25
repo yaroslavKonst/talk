@@ -238,6 +238,8 @@ void Chat::SwitchUp()
 	if (_currentMessage < 0) {
 		_currentMessage = 0;
 	}
+
+	MarkRead(_currentMessage);
 }
 
 void Chat::SwitchDown()
@@ -247,6 +249,8 @@ void Chat::SwitchDown()
 	if (_currentMessage < 0) {
 		_currentMessage = 0;
 	}
+
+	MarkRead(_currentMessage);
 }
 
 void Chat::DeliverMessage(CowBuffer<uint8_t> message)
@@ -314,6 +318,25 @@ void Chat::MarkRead()
 		}
 
 		md = md->Next;
+	}
+}
+
+void Chat::MarkRead(int messageIndex)
+{
+	MessageDescriptor *last = _last;
+	int currentIndex = 0;
+
+	while (last) {
+		if (currentIndex == messageIndex) {
+			if (!last->Read) {
+				last->SetRead(true);
+			}
+
+			break;
+		}
+
+		last = last->Next;
+		++currentIndex;
 	}
 }
 
@@ -744,7 +767,7 @@ CowBuffer<uint8_t> Chat::EncryptMessage(
 
 	memcpy(textBuffer.Pointer(), text.CStr(), text.Length());
 
-	CowBuffer<uint8_t> encryptedMessage = Encrypt(
+	const CowBuffer<uint8_t> encryptedMessage = Encrypt(
 		textBuffer,
 		outES,
 		header.Pointer(),
@@ -761,7 +784,7 @@ CowBuffer<uint8_t> Chat::EncryptMessage(
 	return result;
 }
 
-String Chat::DecryptMessage(CowBuffer<uint8_t> message)
+String Chat::DecryptMessage(const CowBuffer<uint8_t> message)
 {
 	uint32_t headerSize = KEY_SIZE * 2 + sizeof(int64_t) + sizeof(int32_t);
 
@@ -769,8 +792,8 @@ String Chat::DecryptMessage(CowBuffer<uint8_t> message)
 		return String();
 	}
 
-	CowBuffer<uint8_t> header = message.Slice(0, headerSize);
-	CowBuffer<uint8_t> encryptedMessage = message.Slice(
+	const CowBuffer<uint8_t> header = message.Slice(0, headerSize);
+	const CowBuffer<uint8_t> encryptedMessage = message.Slice(
 		headerSize,
 		message.Size() - headerSize);
 
@@ -794,7 +817,7 @@ String Chat::DecryptMessage(CowBuffer<uint8_t> message)
 
 	memset(inES.Nonce, 0, NONCE_SIZE);
 
-	CowBuffer<uint8_t> decryptedMessage = Decrypt(
+	const CowBuffer<uint8_t> decryptedMessage = Decrypt(
 		encryptedMessage,
 		inES,
 		header.Pointer(),

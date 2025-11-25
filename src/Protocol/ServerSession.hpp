@@ -38,12 +38,12 @@ struct ServerSession : public Session, public SendMessageHandler
 
 	bool TimePassed() override;
 
-	bool ProcessKeepAlive(CowBuffer<uint8_t> plainText);
-	bool ProcessTextMessage(CowBuffer<uint8_t> plainText);
-	bool ProcessListUsers(CowBuffer<uint8_t> plainText);
-	bool ProcessGetMessages(CowBuffer<uint8_t> plainText);
+	bool ProcessKeepAlive(const CowBuffer<uint8_t> plainText);
+	bool ProcessTextMessage(const CowBuffer<uint8_t> plainText);
+	bool ProcessListUsers(const CowBuffer<uint8_t> plainText);
+	bool ProcessGetMessages(const CowBuffer<uint8_t> plainText);
 
-	void SendMessage(CowBuffer<uint8_t> message) override;
+	void SendMessage(const CowBuffer<uint8_t> message) override;
 
 	// Voice.
 	enum ServerSessionVoiceState
@@ -57,7 +57,7 @@ struct ServerSession : public Session, public SendMessageHandler
 	ServerSessionVoiceState VoiceState;
 	SendMessageHandler *VoicePeer;
 	bool InVoice() override;
-	void SendVoiceFrame(CowBuffer<uint8_t> frame) override;
+	void SendVoiceFrame(const CowBuffer<uint8_t> frame) override;
 	void StartVoice(
 		const uint8_t *peerKey,
 		int64_t timestamp,
@@ -66,10 +66,10 @@ struct ServerSession : public Session, public SendMessageHandler
 	void DeclineVoice() override;
 	void EndVoice() override;
 
-	bool ProcessVoiceInit(CowBuffer<uint8_t> plainText);
-	bool ProcessVoiceRequest(CowBuffer<uint8_t> plainText);
-	bool ProcessVoiceEnd(CowBuffer<uint8_t> plainText);
-	bool ProcessVoiceData(CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceInit(const CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceRequest(const CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceEnd(const CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceData(const CowBuffer<uint8_t> plainText);
 };
 
 #endif

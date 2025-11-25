@@ -1,6 +1,8 @@
 #ifndef _MESSAGE_STORAGE_HPP
 #define _MESSAGE_STORAGE_HPP
 
+#include <cstring>
+
 #include "../Common/BinaryFile.hpp"
 #include "../Common/CowBuffer.hpp"
 

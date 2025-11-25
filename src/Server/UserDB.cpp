@@ -5,7 +5,7 @@
 #include "../ThirdParty/monocypher.h"
 #include "../Common/Debug.hpp"
 
-UserDB::UserDB() : _userFile("talkd.users", false)
+UserDB::UserDB() : _userFile("talkd.users", true)
 {
 	_users = nullptr;
 	_freeIndices = nullptr;

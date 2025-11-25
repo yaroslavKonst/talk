@@ -6,11 +6,14 @@ SERVER_MODULES =\
 	Protocol/Session.o \
 	Protocol/ServerSession.o \
 	Protocol/ControlSession.o \
+	Protocol/ActiveSession.o \
+	Protocol/Handshake.o \
 	Common/UnixTime.o \
 	Common/MyString.o \
 	Common/IniFile.o \
 	Common/BinaryFile.o \
 	Common/File.o \
+	Message/Message.o \
 	Message/MessageStorage.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
@@ -35,6 +38,8 @@ CLIENT_MODULES=\
 	Client/ChatList.o \
 	Protocol/Session.o \
 	Protocol/ClientSession.o \
+	Protocol/ActiveSession.o \
+	Protocol/Handshake.o \
 	Common/UnixTime.o \
 	Common/MyString.o \
 	Common/IniFile.o \

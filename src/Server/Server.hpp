@@ -20,7 +20,6 @@ private:
 	MessagePipe _pipe;
 
 	Session *_sessionFirst;
-	Session *_sessionLast;
 
 	bool _work;
 

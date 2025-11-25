@@ -11,6 +11,8 @@ IniFile::IniFile()
 {
 	_data = nullptr;
 	_modified = false;
+
+	Load();
 }
 
 IniFile::IniFile(String path)
@@ -122,6 +124,11 @@ void IniFile::Set(String section, String key, String value)
 void IniFile::Clear()
 {
 	Free();
+
+	_data = new Section;
+	_data->Next = nullptr;
+	_data->Keys = nullptr;
+
 	_modified = true;
 }
 
@@ -157,6 +164,10 @@ void IniFile::Load()
 	_data->Next = nullptr;
 	_data->Keys = nullptr;
 
+	if (!_path.Length()) {
+		return;
+	}
+
 	int fd = open(_path.CStr(), O_RDONLY);
 
 	if (fd == -1) {
@@ -191,12 +202,11 @@ void IniFile::Load()
 	String fileData(fileBuffer);
 	delete[] fileBuffer;
 
-	int lineCount;
-	String *lines = fileData.Split('\n', true, lineCount);
+	CowBuffer<String> lines = fileData.Split('\n', true);
 
 	String currentSection;
 
-	for (int i = 0; i < lineCount; i++) {
+	for (unsigned int i = 0; i < lines.Size(); i++) {
 		String line = lines[i].Trim();
 
 		if (line.Length() == 0) {
@@ -218,10 +228,9 @@ void IniFile::Load()
 		}
 
 		// Key
-		int kvpLen;
-		String *kvp = line.Split('=', false, kvpLen);
+		CowBuffer<String> kvp = line.Split('=', false);
 
-		if (kvpLen < 2) {
+		if (kvp.Size() < 2) {
 			THROW(String("Ini: ") + _path + ": error in line " +
 				ToString(i));
 		}
@@ -229,16 +238,12 @@ void IniFile::Load()
 		String key = kvp[0].Trim();
 		String value;
 
-		for (int p = 1; p < kvpLen; p++) {
+		for (unsigned int p = 1; p < kvp.Size(); p++) {
 			value += kvp[p];
 		}
 
-		delete[] kvp;
-
 		Set(currentSection, key, value.Trim());
 	}
-
-	delete[] lines;
 
 	_modified = false;
 }

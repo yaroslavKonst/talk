@@ -1,6 +1,7 @@
 #include "VoiceChat.hpp"
 
 #include <cstdlib>
+#include <cstring>
 #include <curses.h>
 
 #include "../Common/Hex.hpp"
@@ -391,8 +392,8 @@ void VoiceChat::RedrawState(int rows, int columns)
 
 	switch (_state) {
 	case VoiceStateOff:
-		addstr("not connected");
-		break;
+		addstr("not connected.");
+		return;
 	case VoiceStateInit:
 		attrset(COLOR_PAIR(YELLOW_TEXT));
 		addstr("initializing connection");
@@ -408,32 +409,24 @@ void VoiceChat::RedrawState(int rows, int columns)
 	case VoiceStateActive:
 		attrset(COLOR_PAIR(GREEN_TEXT));
 		addstr("active");
-
-		if (_mute) {
-			attrset(COLOR_PAIR(RED_TEXT));
-			addstr(" (mute)");
-			attrset(COLOR_PAIR(GREEN_TEXT));
-		} else if (_silence) {
-			addstr(" (silence)");
-		}
 		break;
 	}
 
-	int y;
-	int x;
-
-	getyx(stdscr, y, x);
-
 	String name = _peerName;
 
-	if (name.Length() > columns - x - 5) {
-		name = name.Substring(0, columns - x - 5) + "...";
+	if (name.Length() > 30) {
+		name = name.Substring(0, 30) + "...";
 	}
 
-	if (_state != VoiceStateOff) {
-		addstr(" (");
-		addstr(name.CStr());
-		addch(')');
+	addstr((String(" (") + name + ")").CStr());
+
+	if (_state == VoiceStateActive) {
+		if (_mute) {
+			attrset(COLOR_PAIR(RED_TEXT));
+			addstr(" (mute)");
+		} else if (_silence) {
+			addstr(" (silence)");
+		}
 	}
 
 	attrset(COLOR_PAIR(DEFAULT_TEXT));

@@ -83,6 +83,7 @@ thus having the same timestamps.
 
 Commands from client to server.
   command (int32)
+|   keep alive    | timestamp |
 |  text message   | message |
 |   list users    |
 |  get messages   | timestamp |
@@ -91,6 +92,7 @@ Commands from client to server.
 |   voice data    | voice block |
 
 Response
+keep live    | command id | timestamp |
 text message | command id | status (int32) |
 list users   | command id | user count (int32) | key | name (55 bytes) |...
 get messages | no response

@@ -59,7 +59,8 @@ struct ClientSession : public Session
 	EncryptedStream OutES;
 
 	bool InitSession();
-	bool SendMessage(CowBuffer<uint8_t> message, void *userPointer);
+	bool SendMessage(const CowBuffer<uint8_t> message, void *userPointer);
+
 	struct SMUser
 	{
 		void *Pointer;
@@ -76,7 +77,7 @@ struct ClientSession : public Session
 	bool InitVoice(const uint8_t *key, int64_t timestamp);
 	bool ResponseVoiceRequest(bool accept);
 	bool EndVoice();
-	bool SendVoiceFrame(CowBuffer<uint8_t> frame);
+	bool SendVoiceFrame(const CowBuffer<uint8_t> frame);
 
 	bool Process() override;
 	bool ProcessInitialWaitForServer();
@@ -84,15 +85,15 @@ struct ClientSession : public Session
 
 	bool TimePassed() override;
 
-	bool ProcessKeepAlive(CowBuffer<uint8_t> plainText);
-	bool ProcessSendMessage(CowBuffer<uint8_t> plainText);
-	bool ProcessDeliverMessage(CowBuffer<uint8_t> plainText);
-	bool ProcessListUsers(CowBuffer<uint8_t> plainText);
+	bool ProcessKeepAlive(const CowBuffer<uint8_t> plainText);
+	bool ProcessSendMessage(const CowBuffer<uint8_t> plainText);
+	bool ProcessDeliverMessage(const CowBuffer<uint8_t> plainText);
+	bool ProcessListUsers(const CowBuffer<uint8_t> plainText);
 
-	bool ProcessVoiceInit(CowBuffer<uint8_t> plainText);
-	bool ProcessVoiceRequest(CowBuffer<uint8_t> plainText);
-	bool ProcessVoiceEnd(CowBuffer<uint8_t> plainText);
-	bool ProcessVoiceFrame(CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceInit(const CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceRequest(const CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceEnd(const CowBuffer<uint8_t> plainText);
+	bool ProcessVoiceFrame(const CowBuffer<uint8_t> plainText);
 };
 
 #endif

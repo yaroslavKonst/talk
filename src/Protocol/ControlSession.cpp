@@ -1,7 +1,14 @@
 #include "ControlSession.hpp"
 
+#include <cstring>
+
 #include "../ServerCtl/SocketName.hpp"
 #include "../Common/UnixTime.hpp"
+
+ControlSession::ControlSession()
+{
+	SetInputSizeLimit(1024 * 1024);
+}
 
 bool ControlSession::TimePassed()
 {
@@ -49,7 +56,7 @@ bool ControlSession::Process()
 	return true;
 }
 
-void ControlSession::SendResponse(int32_t code, CowBuffer<uint8_t> data)
+void ControlSession::SendResponse(int32_t code, const CowBuffer<uint8_t> data)
 {
 	CowBuffer<uint8_t> message(sizeof(code) + data.Size());
 	memcpy(message.Pointer(), &code, sizeof(code));
@@ -77,7 +84,7 @@ void ControlSession::ProcessGetPublicKeyCommand()
 	SendResponse(OK, message);
 }
 
-void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> message)
+void ControlSession::ProcessAddUserCommand(const CowBuffer<uint8_t> message)
 {
 	uint32_t minMessageLength =
 		sizeof(int32_t) +
@@ -132,7 +139,7 @@ void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> message)
 	SendResponse(OK, CowBuffer<uint8_t>());
 }
 
-void ControlSession::ProcessRemoveUserCommand(CowBuffer<uint8_t> message)
+void ControlSession::ProcessRemoveUserCommand(const CowBuffer<uint8_t> message)
 {
 	if (message.Size() != sizeof(int32_t) + KEY_SIZE) {
 		SendResponse(ERROR_INVALID_SIZE, CowBuffer<uint8_t>());

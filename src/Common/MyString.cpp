@@ -168,14 +168,13 @@ bool String::operator<(const String &s) const
 	return _data->Length < s._data->Length;
 }
 
-String *String::Split(char delim, bool removeEmpty, int &partCount) const
+CowBuffer<String> String::Split(char delim, bool removeEmpty) const
 {
 	if (_data->Length == 0) {
-		partCount = 1;
-		return new String[1];
+		return CowBuffer<String>();
 	}
 
-	partCount = 1;
+	int partCount = 1;
 
 	for (int i = 0; i < _data->Length; i++) {
 		if (_data->Data[i] == delim) {
@@ -188,7 +187,7 @@ String *String::Split(char delim, bool removeEmpty, int &partCount) const
 		}
 	}
 
-	String *result = new String[partCount];
+	CowBuffer<String> result(partCount);
 
 	int startIndex = 0;
 	int partIndex = 0;
@@ -205,17 +204,8 @@ String *String::Split(char delim, bool removeEmpty, int &partCount) const
 			}
 		} else {
 			int partLength = currIndex - startIndex;
-			char *buffer = new char[partLength + 1];
-
-			memcpy(
-				buffer,
-				_data->Data + startIndex,
-				partLength);
-			buffer[partLength] = 0;
-
-			result[partIndex] = String(buffer);
+			result[partIndex] = Substring(startIndex, partLength);
 			++partIndex;
-			delete[] buffer;
 		}
 
 		startIndex = currIndex + 1;
@@ -248,16 +238,7 @@ String String::Trim() const
 		--endIndex;
 	}
 
-	Data *data = new Data;
-	data->RefCount = 0;
-	data->Length = endIndex - startIndex + 1;
-	data->Reserved = data->Length + 1;
-	data->Data = new char[data->Reserved];
-
-	memcpy(data->Data, _data->Data + startIndex, data->Length);
-	data->Data[data->Length] = 0;
-
-	return String(data);
+	return Substring(startIndex, endIndex - startIndex + 1);
 }
 
 String String::Substring(int start, int length) const

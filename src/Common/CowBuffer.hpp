@@ -2,7 +2,6 @@
 #define _COW_BUFFER_HPP
 
 #include <cstdint>
-#include <cstring>
 
 template <typename T>
 class CowBuffer
@@ -12,15 +11,19 @@ public:
 	{
 		_data = new Data;
 		_data->RefCount = 1;
-		_data->Size = 0;
 		_data->Data = nullptr;
+
+		_size = 0;
+		_offset = 0;
 	}
 
 	CowBuffer(uint64_t size)
 	{
 		_data = new Data;
 		_data->RefCount = 1;
-		_data->Size = size;
+
+		_size = size;
+		_offset = 0;
 
 		if (size) {
 			_data->Data = new T[size];
@@ -32,6 +35,8 @@ public:
 	CowBuffer(const CowBuffer &cb)
 	{
 		_data = cb._data;
+		_size = cb._size;
+		_offset = cb._offset;
 		IncRef();
 	}
 
@@ -42,49 +47,53 @@ public:
 
 	CowBuffer &operator=(const CowBuffer &cb)
 	{
-		if (_data == cb._data) {
-			return *this;
+		if (_data != cb._data) {
+			DecRef();
+			_data = cb._data;
+			IncRef();
 		}
 
-		DecRef();
-		_data = cb._data;
-		IncRef();
+		_size = cb._size;
+		_offset = cb._offset;
 
 		return *this;
 	}
 
 	T operator[](uint64_t index) const
 	{
-		return _data->Data[index];
+		return _data->Data[index + _offset];
 	}
 
 	T &operator[](uint64_t index)
 	{
 		MakeExclusive();
-		return _data->Data[index];
+		return _data->Data[index + _offset];
 	}
 
-	T *Pointer()
+	T *Pointer(int offset = 0)
 	{
 		MakeExclusive();
-		return _data->Data;
+		return _data->Data + _offset + offset;
 	}
 
-	const T *Pointer() const
+	const T *Pointer(int offset = 0) const
 	{
-		return _data->Data;
+		return _data->Data + _offset + offset;
 	}
 
 	uint64_t Size() const
 	{
-		return _data->Size;
+		return _size;
 	}
 
 	void Resize(uint64_t size)
 	{
-		MakeExclusive();
+		if (_size >= size) {
+			_size = size;
+			return;
+		}
 
-		uint64_t copySize = size < _data->Size ? size : _data->Size;
+		MakeExclusive();
 
 		T *newBuffer = nullptr;
 
@@ -92,23 +101,52 @@ public:
 			newBuffer = new T[size];
 		}
 
-		if (copySize) {
-			CopyData(newBuffer, _data->Data, copySize);
+		if (_size && size) {
+			CopyData(newBuffer, _data->Data + _offset, _size);
 		}
 
-		if (_data->Size) {
+		if (_size || _offset) {
 			delete[] _data->Data;
 		}
 
-		_data->Size = size;
+		_size = size;
+		_offset = 0;
 		_data->Data = newBuffer;
 	}
 
 	CowBuffer Slice(uint64_t start, uint64_t length) const
 	{
-		CowBuffer result(length);
-		CopyData(result.Pointer(), Pointer() + start, length);
+		CowBuffer result = *this;
+		result._offset = _offset + start;
+		result._size = length;
 		return result;
+	}
+
+	CowBuffer Concat(const CowBuffer buffer) const
+	{
+		uint64_t size = _size + buffer._size;
+
+		CowBuffer result(size);
+
+		CopyData(result.Pointer(), Pointer(), _size);
+		CopyData(
+			result.Pointer() + _size,
+			buffer.Pointer(),
+			buffer.Size());
+
+		return result;
+	}
+
+	template <typename S>
+	const S *SwitchType(int offset = 0) const
+	{
+		return (S*)(Pointer() + offset);
+	}
+
+	template <typename S>
+	S *SwitchType(int offset = 0)
+	{
+		return (S*)(Pointer() + offset);
 	}
 
 private:
@@ -122,11 +160,12 @@ private:
 	struct Data
 	{
 		int RefCount;
-		uint64_t Size;
 		T *Data;
 	};
 
 	Data *_data;
+	uint64_t _offset;
+	uint64_t _size;
 
 	void IncRef()
 	{
@@ -138,8 +177,9 @@ private:
 		_data->RefCount -= 1;
 
 		if (_data->RefCount <= 0) {
-			if (_data->Size) {
+			if (_size || _offset) {
 				delete[] _data->Data;
+				_data->Data = nullptr;
 			}
 
 			delete _data;
@@ -155,14 +195,15 @@ private:
 
 		Data *data = new Data;
 		data->RefCount = 1;
-		data->Size = _data->Size;
 
-		if (data->Size) {
-			data->Data = new T[data->Size];
-			CopyData(data->Data, _data->Data, data->Size);
+		if (_size) {
+			data->Data = new T[_size];
+			CopyData(data->Data, _data->Data + _offset, _size);
 		} else {
 			data->Data = nullptr;
 		}
+
+		_offset = 0;
 
 		DecRef();
 		_data = data;

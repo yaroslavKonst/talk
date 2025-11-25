@@ -176,7 +176,7 @@ void ChatList::UpdateUserData(const uint8_t *key, String name)
 	}
 }
 
-void ChatList::DeliverMessage(CowBuffer<uint8_t> message)
+void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
 {
 	const uint8_t *peerKey;
 
