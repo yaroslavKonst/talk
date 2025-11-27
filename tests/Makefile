@@ -1,11 +1,11 @@
-TEST_LIST = UserDB.Test
+TEST_LIST = UserDB.Test Handshake.Test
 
 .PHONY: all clean
 
 all: $(TEST_LIST)
 
 clean:
-	rm $(TEST_LIST)
+	rm -f $(TEST_LIST)
 
 USERDB_MODULES =\
 	Server/UserDB.o \
@@ -18,3 +18,24 @@ USERDB_MODULES_ABS := $(USERDB_MODULES:%=$(BUILD_DIR)/%)
 
 UserDB.Test: UserDB.Test.cpp $(USERDB_MODULES_ABS)
 	$(CXX) $(STATIC_FLAG) -o $@ $< $(USERDB_MODULES_ABS)
+
+HANDSHAKE_MODULES =\
+	Server/UserDB.o \
+	Server/MessagePipe.o \
+	Protocol/Session.o \
+	Protocol/ServerSession.o \
+	Protocol/ActiveSession.o \
+	Protocol/Handshake.o \
+	Message/Message.o \
+	Message/MessageStorage.o \
+	Common/MyString.o \
+	Common/BinaryFile.o \
+	Common/File.o \
+	Common/UnixTime.o \
+	Crypto/Crypto.o \
+	ThirdParty/monocypher.o
+
+HANDSHAKE_MODULES_ABS := $(HANDSHAKE_MODULES:%=$(BUILD_DIR)/%)
+
+Handshake.Test: Handshake.Test.cpp $(HANDSHAKE_MODULES_ABS)
+	$(CXX) $(STATIC_FLAG) -o $@ $< $(HANDSHAKE_MODULES_ABS)
