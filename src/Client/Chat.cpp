@@ -218,7 +218,7 @@ void Chat::ProcessTyping(int event)
 			if (_utf8ExpectedSize == _utf8Buffer.Length()) {
 				_draft += _utf8Buffer;
 				_utf8ExpectedSize = 0;
-				_utf8Buffer.Clear();
+				_utf8Buffer.Wipe();
 			}
 		}
 
@@ -555,6 +555,26 @@ static bool IsSpace(char c)
 	return c == ' ' || c == '\n';
 }
 
+static bool IsUTF8Trailing(char c)
+{
+	return (c & 0xc0) == 0x80;
+}
+
+static int StrLenUTF8(const char *str)
+{
+	int length = 0;
+
+	while (*str) {
+		if (!IsUTF8Trailing(*str)) {
+			++length;
+		}
+
+		++str;
+	}
+
+	return length;
+}
+
 CowBuffer<String> Chat::MakeMultiline(String text, int limit)
 {
 	struct Line
@@ -582,36 +602,64 @@ CowBuffer<String> Chat::MakeMultiline(String text, int limit)
 			}
 		}
 
-		if (!hasNewLine && text.Length() < limit) {
+		if (!hasNewLine && StrLenUTF8(text.CStr()) < limit) {
 			line = text;
 			text.Clear();
 		} else {
 			int position = 0;
+			int charIndex = 0;
 
-			while (position < limit - 1) {
-				if (text.CStr()[position] == '\n') {
+			while (charIndex < limit - 1) {
+				char currentChar = text.CStr()[position];
+
+				if (currentChar == '\n') {
 					endWithNewLine = true;
 					break;
 				}
 
 				++position;
+
+				if (!IsUTF8Trailing(currentChar)) {
+					++charIndex;
+				}
 			}
 
 			while (position >= 0) {
-				if (IsSpace(text.CStr()[position])) {
+				char currentChar = text.CStr()[position];
+
+				if (IsSpace(currentChar)) {
 					break;
 				}
 
 				--position;
+
+				if (!IsUTF8Trailing(currentChar)) {
+					--charIndex;
+				}
 			}
 
 			if (position < 0) {
-				position = limit - 1;
+				charIndex = 0;
+				position = 0;
 
-				while (position > 0 &&
-					(text.CStr()[position] & 0xc0) == 0x80)
+				while (charIndex < limit - 1)
 				{
-					--position;
+					if (position >= text.Length() - 1) {
+						break;
+					}
+
+					char currentChar =
+						text.CStr()[position];
+
+					++position;
+
+					if (!IsUTF8Trailing(currentChar)) {
+						++charIndex;
+					}
+				}
+
+				while (IsUTF8Trailing(text.CStr()[position])) {
+					++position;
 				}
 			}
 
