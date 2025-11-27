@@ -7,6 +7,31 @@
 #include "../Common/UnixTime.hpp"
 #include "../Message/Message.hpp"
 
+static bool IsSpace(char c)
+{
+	return c == ' ' || c == '\n';
+}
+
+static bool IsUTF8Trailing(char c)
+{
+	return (c & 0xc0) == 0x80;
+}
+
+static int StrLenUTF8(const char *str)
+{
+	int length = 0;
+
+	while (*str) {
+		if (!IsUTF8Trailing(*str)) {
+			++length;
+		}
+
+		++str;
+	}
+
+	return length;
+}
+
 MessageDescriptor::MessageDescriptor(AttributeStorage *attrStorage)
 {
 	_attributeStorage = attrStorage;
@@ -141,9 +166,8 @@ void Chat::ProcessTyping(int event)
 
 	if (event == KEY_BACKSPACE || event == '\b') {
 		if (_draft.Length() > 1) {
-			while (_draft.Length() > 1 &&
-				(_draft.CStr()[_draft.Length() - 1] & 0xc0) ==
-				0x80)
+			while (_draft.Length() > 1 && IsUTF8Trailing(
+				_draft.CStr()[_draft.Length() - 1]))
 			{
 				_draft = _draft.Substring(
 					0,
@@ -159,7 +183,9 @@ void Chat::ProcessTyping(int event)
 	}
 
 	if (event == 's' - 'a' + 1) {
-		if (!_draft.Length()) {
+		String text = _draft + _draftSuffix;
+
+		if (!text.Length()) {
 			_notificationSystem->Notify(
 				"Empty messages are not allowed.");
 			return;
@@ -172,6 +198,61 @@ void Chat::ProcessTyping(int event)
 		}
 
 		SendMessage();
+		return;
+	}
+
+	if (event == KEY_LEFT) {
+		if (!_draft.Length()) {
+			return;
+		}
+
+		while (IsUTF8Trailing(_draft.CStr()[_draft.Length() - 1])) {
+			_draftSuffix =
+				_draft.Substring(_draft.Length() - 1, 1) +
+				_draftSuffix;
+			_draft = _draft.Substring(0, _draft.Length() - 1);
+		}
+
+		_draftSuffix =
+			_draft.Substring(_draft.Length() - 1, 1) +
+			_draftSuffix;
+		_draft = _draft.Substring(0, _draft.Length() - 1);
+		return;
+	}
+
+	if (event == KEY_RIGHT) {
+		if (!_draftSuffix.Length()) {
+			return;
+		}
+
+		_draft += _draftSuffix.CStr()[0];
+		_draftSuffix =
+			_draftSuffix.Substring(1, _draftSuffix.Length() - 1);
+
+		while (IsUTF8Trailing(_draftSuffix.CStr()[0])) {
+			_draft += _draftSuffix.CStr()[0];
+			_draftSuffix = _draftSuffix.Substring(
+				1,
+				_draftSuffix.Length() - 1);
+		}
+
+		return;
+	}
+
+	if (event == KEY_DC) {
+		if (!_draftSuffix.Length()) {
+			return;
+		}
+
+		_draftSuffix =
+			_draftSuffix.Substring(1, _draftSuffix.Length() - 1);
+
+		while (IsUTF8Trailing(_draftSuffix.CStr()[0])) {
+			_draftSuffix = _draftSuffix.Substring(
+				1,
+				_draftSuffix.Length() - 1);
+		}
+
 		return;
 	}
 
@@ -517,62 +598,65 @@ void Chat::RedrawTextWindow()
 {
 	move(_rows - 7, _columns / 4 + 1);
 
-	if (!_draft.Length()) {
+	String text = _draft + _draftSuffix;
+
+	if (!text.Length()) {
 		return;
 	}
+
+	int cursorPosition = StrLenUTF8(_draft.CStr());
 
 	CowBuffer<String> lines = MakeMultiline(
-		_draft,
+		text,
 		_columns - _columns / 4 - 1);
 
-	if (lines.Size() <= 5) {
-		for (uint32_t line = 0; line < lines.Size(); line++) {
-			move(_rows - 7 + line, _columns / 4 + 1);
-			addstr(lines[line].CStr());
+	int cursorLine = 0;
+	int cursorOffset = 0;
+
+	while (cursorPosition) {
+		int lineLength = StrLenUTF8(lines[cursorLine].CStr());
+
+		if (lineLength < cursorPosition) {
+			cursorPosition -= lineLength;
+			--cursorPosition;
+			++cursorLine;
+			continue;
 		}
 
-		return;
+		cursorOffset = cursorPosition;
+		cursorPosition = 0;
 	}
 
-	int position = _rows - 4;
+	int windowHeight = 5;
 
-	for (int line = lines.Size() - 2; line >= 0; line--) {
-		if (position < _rows - 7) {
-			break;
-		}
+	int startLine = cursorLine - windowHeight / 2;
+	int endLine = cursorLine + windowHeight / 2;
 
-		move(position, _columns / 4 + 1);
+	if (startLine < 0) {
+		endLine += -startLine;
+		startLine = 0;
+	}
+
+	if (endLine >= (int)lines.Size()) {
+		startLine -= endLine - (lines.Size() - 1);
+		endLine = lines.Size() - 1;
+	}
+
+	if (startLine < 0) {
+		startLine = 0;
+	}
+
+	int windowPos = _rows - 7;
+
+	for (int line = startLine; line <= endLine; line++) {
+		move(windowPos, _columns / 4 + 1);
 		addstr(lines[line].CStr());
-		--position;
+		++windowPos;
 	}
 
-	move(_rows - 3, _columns / 4 + 1);
-	addstr(lines[lines.Size() - 1].CStr());
-}
-
-static bool IsSpace(char c)
-{
-	return c == ' ' || c == '\n';
-}
-
-static bool IsUTF8Trailing(char c)
-{
-	return (c & 0xc0) == 0x80;
-}
-
-static int StrLenUTF8(const char *str)
-{
-	int length = 0;
-
-	while (*str) {
-		if (!IsUTF8Trailing(*str)) {
-			++length;
-		}
-
-		++str;
-	}
-
-	return length;
+	move(
+		_rows - 7 + cursorLine - startLine,
+		_columns / 4 + 1 + cursorOffset);
 }
 
 CowBuffer<String> Chat::MakeMultiline(String text, int limit)
@@ -868,7 +952,7 @@ void Chat::SendMessage()
 	_messageStorage.GetFreeTimestampIndex(_peerKey, timestamp, index);
 
 	CowBuffer<uint8_t> message = EncryptMessage(
-		_draft,
+		_draft + _draftSuffix,
 		_session->PublicKey,
 		_peerKey,
 		timestamp,
@@ -883,7 +967,7 @@ void Chat::SendMessage()
 	data->Sent = false;
 	data->SetSendFailure(false);
 	data->SendInProcess = true;
-	data->Text = _draft;
+	data->Text = _draft + _draftSuffix;
 
 	data->Next = _last;
 	_last = data;
@@ -891,6 +975,7 @@ void Chat::SendMessage()
 	++_loadedMessages;
 
 	_draft.Wipe();
+	_draftSuffix.Wipe();
 
 	bool res = _session->SendMessage(message, data);
 

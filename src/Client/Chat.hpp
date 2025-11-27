@@ -109,7 +109,9 @@ private:
 
 	int _utf8ExpectedSize;
 	String _utf8Buffer;
+
 	String _draft;
+	String _draftSuffix;
 
 	NotificationSystem *_notificationSystem;
 
