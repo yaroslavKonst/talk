@@ -6,6 +6,104 @@
 #include "../Message/MessageStorage.hpp"
 #include "../Message/AttributeStorage.hpp"
 
+struct MessageContents
+{
+	String Text;
+	CowBuffer<uint8_t> Attachment;
+
+	bool IsEmpty() const
+	{
+		return !Text.Length() && !Attachment.Size();
+	}
+
+	// Parser.
+	enum EntryType
+	{
+		EntryTypeText = 1,
+		EntryTypeData = 2
+	};
+
+	CowBuffer<uint8_t> Build() const
+	{
+		CowBuffer<uint8_t> text;
+		CowBuffer<uint8_t> data;
+
+		if (Text.Length()) {
+			text.Resize(sizeof(int32_t) * 2 + Text.Length());
+			*text.SwitchType<int32_t>() = EntryTypeText;
+			*text.SwitchType<int32_t>(sizeof(int32_t)) =
+				Text.Length();
+
+			memcpy(
+				text.Pointer(sizeof(int32_t) * 2),
+				Text.CStr(),
+				Text.Length());
+		}
+
+		if (Attachment.Size()) {
+			data.Resize(sizeof(int32_t) * 2 + Attachment.Size());
+			*data.SwitchType<int32_t>() = EntryTypeData;
+			*data.SwitchType<int32_t>(sizeof(int32_t)) =
+				Attachment.Size();
+
+			memcpy(
+				data.Pointer(sizeof(int32_t) * 2),
+				Attachment.Pointer(),
+				Attachment.Size());
+		}
+
+		return text.Concat(data);
+	}
+
+	void Parse(const CowBuffer<uint8_t> data)
+	{
+		if (!data.Size()) {
+			return;
+		}
+
+		unsigned int offset = 0;
+
+		while (offset < data.Size()) {
+			int type = ' ';
+
+			if (data.Size() - offset >= sizeof(int32_t)) {
+				type = *data.SwitchType<int32_t>(offset);
+			}
+
+			if (type == EntryTypeText) {
+				int size = *data.SwitchType<int32_t>(
+					offset + sizeof(int32_t));
+
+				offset += sizeof(int32_t) * 2;
+				Text.Clear();
+
+				for (int i = 0; i < size; i++) {
+					Text += data[offset];
+					++offset;
+				}
+			} else if (type == EntryTypeData) {
+				int size = *data.SwitchType<int32_t>(
+					offset + sizeof(int32_t));
+
+				offset += sizeof(int32_t) * 2;
+				Attachment.Resize(size);
+
+				for (int i = 0; i < size; i++) {
+					Attachment[i] = data[offset];
+					++offset;
+				}
+			} else {
+				Text.Clear();
+
+				while (offset < data.Size()) {
+					Text += data[offset];
+					++offset;
+				}
+			}
+		}
+	}
+};
+
 class MessageDescriptor
 {
 public:
@@ -20,7 +118,7 @@ public:
 	bool SendFailure;
 	bool SendInProcess;
 
-	String Text;
+	MessageContents DecryptedData;
 
 	void SetRead(bool value);
 	void SetSent(bool value);
@@ -70,6 +168,12 @@ public:
 	void MarkRead();
 	void MarkRead(int messageIndex);
 
+	bool HasAttachment();
+	CowBuffer<uint8_t> ExtractAttachment();
+
+	void AddAttachment(const CowBuffer<uint8_t> attachment);
+	void ClearAttachment();
+
 private:
 	ClientSession *_session;
 
@@ -98,12 +202,12 @@ private:
 	void UnloadMessages();
 
 	CowBuffer<uint8_t> EncryptMessage(
-		String text,
+		const MessageContents messageContents,
 		const uint8_t *senderKey,
 		const uint8_t *receiverKey,
 		int64_t timestamp,
 		int32_t index);
-	String DecryptMessage(CowBuffer<uint8_t> message);
+	MessageContents DecryptMessage(CowBuffer<uint8_t> message);
 
 	void SendMessage();
 
@@ -112,6 +216,7 @@ private:
 
 	String _draft;
 	String _draftSuffix;
+	CowBuffer<uint8_t> _draftAttachment;
 
 	NotificationSystem *_notificationSystem;
 

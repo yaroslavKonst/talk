@@ -185,7 +185,7 @@ void Chat::ProcessTyping(int event)
 	if (event == 's' - 'a' + 1) {
 		String text = _draft + _draftSuffix;
 
-		if (!text.Length()) {
+		if (!text.Length() && !_draftAttachment.Size()) {
 			_notificationSystem->Notify(
 				"Empty messages are not allowed.");
 			return;
@@ -370,7 +370,7 @@ void Chat::DeliverMessage(CowBuffer<uint8_t> message)
 	md->SetSendFailure(false);
 	md->SendInProcess = false;
 
-	md->Text = DecryptMessage(message);
+	md->DecryptedData = DecryptMessage(message);
 
 	md->Next = _last;
 	_last = md;
@@ -414,6 +414,50 @@ void Chat::MarkRead(int messageIndex)
 	}
 }
 
+bool Chat::HasAttachment()
+{
+	MessageDescriptor *last = _last;
+	int currentIndex = 0;
+
+	while (last) {
+		if (currentIndex == _currentMessage) {
+			return last->DecryptedData.Attachment.Size();
+		}
+
+		last = last->Next;
+		++currentIndex;
+	}
+
+	return false;
+}
+
+CowBuffer<uint8_t> Chat::ExtractAttachment()
+{
+	MessageDescriptor *last = _last;
+	int currentIndex = 0;
+
+	while (last) {
+		if (currentIndex == _currentMessage) {
+			return last->DecryptedData.Attachment;
+		}
+
+		last = last->Next;
+		++currentIndex;
+	}
+
+	return CowBuffer<uint8_t>();
+}
+
+void Chat::AddAttachment(const CowBuffer<uint8_t> attachment)
+{
+	_draftAttachment = attachment;
+}
+
+void Chat::ClearAttachment()
+{
+	_draftAttachment.Wipe();
+}
+
 void Chat::RedrawMessageWindow()
 {
 	int drawBase = _rows - 9;
@@ -454,12 +498,12 @@ void Chat::RedrawMessageWindow()
 
 		CowBuffer<String> lines(1);
 
-		if (last->Text.Length() == 0) {
+		if (last->DecryptedData.IsEmpty()) {
 			lines[0] = "Corrupt";
 			attrset(COLOR_PAIR(RED_TEXT));
-		} else {
+		} else if (last->DecryptedData.Text.Length()) {
 			lines = MakeMultiline(
-				last->Text,
+				last->DecryptedData.Text,
 				_columns - _columns / 4 - 4);
 		}
 
@@ -486,6 +530,37 @@ void Chat::RedrawMessageWindow()
 			move(4, _columns - 1);
 			addch('|');
 			return;
+		}
+
+		if (last->DecryptedData.Attachment.Size()) {
+			int attachSize = last->DecryptedData.Attachment.Size();
+			move(drawBase, _columns / 4 + 2);
+			attrset(COLOR_PAIR(YELLOW_TEXT));
+			addstr("Attachment ");
+
+			if (attachSize < 1024 * 10) {
+				addstr(ToString(attachSize).CStr());
+				addstr(" B");
+			} else if (attachSize < 1024 * 1024 * 10) {
+				addstr(ToString(attachSize / 1024).CStr());
+				addstr(" KB");
+			} else {
+				addstr(ToString(
+					attachSize / 1024 / 1024).CStr());
+				addstr(" MB");
+			}
+
+			addstr(". Ctrl-E to extract.");
+			attrset(COLOR_PAIR(DEFAULT_TEXT));
+			--drawBase;
+
+			if (drawBase <= drawLimit) {
+				move(3, _columns - 1);
+				addch(ACS_UARROW);
+				move(4, _columns - 1);
+				addch('|');
+				return;
+			}
 		}
 
 		Message::Header header;
@@ -596,6 +671,26 @@ void Chat::RedrawMessageWindow()
 
 void Chat::RedrawTextWindow()
 {
+	if (_draftAttachment.Size()) {
+		move(_rows - 3, _columns / 4 + 1);
+		attrset(COLOR_PAIR(YELLOW_TEXT));
+		addstr("Attachment ");
+
+		if (_draftAttachment.Size() < 1024 * 10) {
+			addstr(ToString(_draftAttachment.Size()).CStr());
+			addstr(" B");
+		} else if (_draftAttachment.Size() < 1024 * 1024 * 10) {
+			addstr(ToString(_draftAttachment.Size() / 1024).CStr());
+			addstr(" KB");
+		} else {
+			addstr(ToString(
+				_draftAttachment.Size() / 1024 / 1024).CStr());
+			addstr(" MB");
+		}
+
+		attrset(COLOR_PAIR(DEFAULT_TEXT));
+	}
+
 	move(_rows - 7, _columns / 4 + 1);
 
 	String text = _draft + _draftSuffix;
@@ -631,6 +726,10 @@ void Chat::RedrawTextWindow()
 
 	int startLine = cursorLine - windowHeight / 2;
 	int endLine = cursorLine + windowHeight / 2;
+
+	if (_draftAttachment.Size()) {
+		--endLine;
+	}
 
 	if (startLine < 0) {
 		endLine += -startLine;
@@ -836,7 +935,8 @@ void Chat::LoadMessages(int count)
 			(*last)->SendFailure = attrs & ATTRIBUTE_FAILURE;
 			(*last)->SendInProcess = false;
 
-			(*last)->Text = DecryptMessage((*last)->Message);
+			(*last)->DecryptedData =
+				DecryptMessage((*last)->Message);
 
 			++_loadedMessages;
 		}
@@ -855,13 +955,14 @@ void Chat::UnloadMessages()
 		MessageDescriptor *tmp = _last;
 		_last = _last->Next;
 
-		tmp->Text.Wipe();
+		tmp->DecryptedData.Text.Wipe();
+		tmp->DecryptedData.Attachment.Wipe();
 		delete tmp;
 	}
 }
 
 CowBuffer<uint8_t> Chat::EncryptMessage(
-	String text,
+	const MessageContents messageContents,
 	const uint8_t *senderKey,
 	const uint8_t *receiverKey,
 	int64_t timestamp,
@@ -888,8 +989,7 @@ CowBuffer<uint8_t> Chat::EncryptMessage(
 
 	InitNonce(outES.Nonce);
 
-	CowBuffer<uint8_t> textBuffer(text.Length());
-	memcpy(textBuffer.Pointer(), text.CStr(), text.Length());
+	CowBuffer<uint8_t> textBuffer = messageContents.Build();
 
 	const CowBuffer<uint8_t> encryptedMessage = Encrypt(
 		textBuffer,
@@ -900,13 +1000,13 @@ CowBuffer<uint8_t> Chat::EncryptMessage(
 	return Message::BuildMessage(headerBuffer, encryptedMessage);
 }
 
-String Chat::DecryptMessage(const CowBuffer<uint8_t> message)
+MessageContents Chat::DecryptMessage(const CowBuffer<uint8_t> message)
 {
 	Message::Header header;
 	bool parseResult = Message::GetHeader(message, header);
 
 	if (!parseResult) {
-		return String();
+		return MessageContents();
 	}
 
 	const CowBuffer<uint8_t> encryptedMessage = message.Slice(
@@ -935,24 +1035,24 @@ String Chat::DecryptMessage(const CowBuffer<uint8_t> message)
 		message.Pointer(),
 		Message::HeaderSize);
 
-	String result;
-
-	for (uint64_t i = 0; i < decryptedMessage.Size(); i++) {
-		result += decryptedMessage[i];
-	}
-
-	return result;
+	MessageContents contents;
+	contents.Parse(decryptedMessage);
+	return contents;
 }
 
 void Chat::SendMessage()
 {
+	MessageContents contents;
+	contents.Text = _draft + _draftSuffix;
+	contents.Attachment = _draftAttachment;
+
 	int64_t timestamp = GetUnixTime();
 	int32_t index;
 
 	_messageStorage.GetFreeTimestampIndex(_peerKey, timestamp, index);
 
 	CowBuffer<uint8_t> message = EncryptMessage(
-		_draft + _draftSuffix,
+		contents,
 		_session->PublicKey,
 		_peerKey,
 		timestamp,
@@ -967,7 +1067,7 @@ void Chat::SendMessage()
 	data->Sent = false;
 	data->SetSendFailure(false);
 	data->SendInProcess = true;
-	data->Text = _draft + _draftSuffix;
+	data->DecryptedData = contents;
 
 	data->Next = _last;
 	_last = data;
@@ -976,6 +1076,7 @@ void Chat::SendMessage()
 
 	_draft.Wipe();
 	_draftSuffix.Wipe();
+	_draftAttachment.Wipe();
 
 	bool res = _session->SendMessage(message, data);
 

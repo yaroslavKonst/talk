@@ -2,6 +2,7 @@
 #define _COW_BUFFER_HPP
 
 #include <cstdint>
+#include <cstring>
 
 template <typename T>
 class CowBuffer
@@ -57,6 +58,17 @@ public:
 		_offset = cb._offset;
 
 		return *this;
+	}
+
+	void Wipe()
+	{
+		if (_data->RefCount > 1 || !_size) {
+			Resize(0);
+			return;
+		}
+
+		memset(_data->Data + _offset, 0, _size * sizeof(T));
+		Resize(0);
 	}
 
 	T operator[](uint64_t index) const
@@ -128,11 +140,16 @@ public:
 
 		CowBuffer result(size);
 
-		CopyData(result.Pointer(), Pointer(), _size);
-		CopyData(
-			result.Pointer() + _size,
-			buffer.Pointer(),
-			buffer.Size());
+		if (_size) {
+			CopyData(result.Pointer(), Pointer(), _size);
+		}
+
+		if (buffer.Size()) {
+			CopyData(
+				result.Pointer() + _size,
+				buffer.Pointer(),
+				buffer.Size());
+		}
 
 		return result;
 	}

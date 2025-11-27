@@ -3,6 +3,7 @@
 #include <curses.h>
 
 #include "LoginScreen.hpp"
+#include "AttachmentScreen.hpp"
 #include "TextColor.hpp"
 #include "../Protocol/ActiveSession.hpp"
 #include "../Common/UnixTime.hpp"
@@ -109,6 +110,17 @@ void WorkScreen::Redraw()
 
 Screen *WorkScreen::ProcessEvent(int event)
 {
+	if (_overlay) {
+		Screen *overlay = _overlay->ProcessEvent(event);
+
+		if (!overlay) {
+			delete _overlay;
+			_overlay = nullptr;
+		}
+
+		return this;
+	}
+
 	bool hasNotification = _notificationSystem.ProcessEvent(event);
 
 	if (hasNotification) {
@@ -118,17 +130,6 @@ Screen *WorkScreen::ProcessEvent(int event)
 	bool voiceProcessed = _voiceChat->ProcessEvent(event);
 
 	if (voiceProcessed) {
-		return this;
-	}
-
-	if (_overlay) {
-		Screen *overlay = _overlay->ProcessEvent(event);
-
-		if (!overlay) {
-			delete _overlay;
-			_overlay = nullptr;
-		}
-
 		return this;
 	}
 
@@ -151,6 +152,12 @@ Screen *WorkScreen::ProcessEvent(int event)
 	} else if (!_activeChat->Typing()) {
 		ProcessChatScreenEvent(event);
 	} else {
+		if (event == 1) {
+			// Ctrl-A
+			_overlay = new AttachmentScreen(_activeChat, false);
+			return this;
+		}
+
 		_activeChat->ProcessTyping(event);
 	}
 
@@ -375,6 +382,15 @@ void WorkScreen::ProcessChatScreenEvent(int event)
 		_activeChat->SwitchDown();
 	} else if (event == 'v' - 'a' + 1) {
 		VoiceInit(_activeChat->GetPeerKey());
+	} else if (event == 'e' - 'a' + 1) {
+		// Ctrl-E
+		if (!_activeChat->HasAttachment()) {
+			_notificationSystem.Notify(
+				"Selected message does not have an "
+				"attachment.");
+		} else {
+			_overlay = new AttachmentScreen(_activeChat, true);
+		}
 	}
 }
 
@@ -430,6 +446,7 @@ void WorkScreen::DrawHelp()
 	} else {
 		last = last->Add("Back: Escape");
 		last = last->Add("Send: Ctrl-S");
+		last = last->Add("Attach: Ctrl-A");
 	}
 
 	if (_voiceChat->Active()) {

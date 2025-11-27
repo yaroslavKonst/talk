@@ -35,6 +35,7 @@ CLIENT_MODULES=\
 	Client/PasswordScreen.o \
 	Client/WorkScreen.o \
 	Client/LoginScreen.o \
+	Client/AttachmentScreen.o \
 	Client/NotificationSystem.o \
 	Client/Chat.o \
 	Client/ChatList.o \
