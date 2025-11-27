@@ -193,26 +193,99 @@ static void PrintError(int32_t code)
 	}
 }
 
-static void ProcessGetKey(const CowBuffer<uint8_t> response)
+static int ProcessShutdown(const CowBuffer<uint8_t> response)
 {
-	if (response.Size() != KEY_SIZE) {
-		printf("Invalid response length.\n");
-		return;
+	if (!response.Size()) {
+		return 0;
 	}
 
-	String keyHex = DataToHex(response.Pointer(), KEY_SIZE);
-
-	printf("%s\n", keyHex.CStr());
+	printf("%s command should not have response.\n", ShutdownCommand);
+	return 1;
 }
 
-static void ProcessListUsers(const CowBuffer<uint8_t> response)
+static int ProcessGetKey(const CowBuffer<uint8_t> response)
 {
+	int32_t code;
+
+	if (response.Size() != sizeof(code) + KEY_SIZE) {
+		printf("Invalid response length.\n");
+		return 1;
+	}
+
+	code = *response.SwitchType<int32_t>();
+
+	if (code != OK) {
+		PrintError(code);
+		return 1;
+	}
+
+	String keyHex = DataToHex(response.Pointer() + sizeof(code), KEY_SIZE);
+	printf("%s\n", keyHex.CStr());
+	return 0;
+}
+
+static int ProcessAddUser(const CowBuffer<uint8_t> response)
+{
+	int32_t code;
+
+	if (response.Size() != sizeof(code)) {
+		printf("Invalid response length.\n");
+		return 1;
+	}
+
+	code = *response.SwitchType<int32_t>();
+
+	if (code != OK) {
+		PrintError(code);
+		return 1;
+	}
+
+	return 0;
+}
+
+static int ProcessRemoveUser(const CowBuffer<uint8_t> response)
+{
+	int32_t code;
+
+	if (response.Size() != sizeof(code)) {
+		printf("Invalid response length.\n");
+		return 1;
+	}
+
+	code = *response.SwitchType<int32_t>();
+
+	if (code != OK) {
+		PrintError(code);
+		return 1;
+	}
+
+	return 0;
+}
+
+static int ProcessListUsers(CowBuffer<uint8_t> response)
+{
+	int32_t code;
+
+	if (response.Size() < sizeof(code)) {
+		printf("Response is too short.\n");
+		return 1;
+	}
+
+	code = *response.SwitchType<int32_t>();
+
+	if (code != OK) {
+		PrintError(code);
+		return 1;
+	}
+
+	response = response.Slice(sizeof(code), response.Size() - sizeof(code));
+
 	const int32_t entrySize = KEY_SIZE + 55;
 	int32_t userCount;
 
 	if (response.Size() < sizeof(userCount)) {
 		printf("Response does not contain user count.\n");
-		return;
+		return 1;
 	}
 
 	userCount = *response.SwitchType<int32_t>();
@@ -226,47 +299,28 @@ static void ProcessListUsers(const CowBuffer<uint8_t> response)
 
 		printf("%s\n%s\n\n", name.CStr(), key.CStr());
 	}
+
+	return 0;
 }
 
 static int ProcessResponse(
 	const char *command,
 	CowBuffer<uint8_t> response)
 {
-	int32_t code;
-
-	if (response.Size() < sizeof(code)) {
-		printf("Response size is too small to contain result code.\n");
-		return 1;
-	}
-
-	code = *response.SwitchType<int32_t>();
-
-	if (code != OK) {
-		PrintError(code);
-		return 1;
-	}
-
-	if (response.Size() <= sizeof(code)) {
-		return 0;
-	}
-
-	response = response.Slice(
-		sizeof(code),
-		response.Size() - sizeof(code));
-
 	if (!strcmp(command, ShutdownCommand)) {
-		printf("%s should not have response.\n", ShutdownCommand);
+		return ProcessShutdown(response);
 	} else if (!strcmp(command, GetKeyCommand)) {
-		ProcessGetKey(response);
+		return ProcessGetKey(response);
 	} else if (!strcmp(command, AddUserCommand)) {
-		printf("%s should not have response.\n", AddUserCommand);
+		return ProcessAddUser(response);
 	} else if (!strcmp(command, RemoveUserCommand)) {
-		printf("%s should not have response.\n", RemoveUserCommand);
+		return ProcessRemoveUser(response);
 	} else if (!strcmp(command, ListUsersCommand)) {
-		ProcessListUsers(response);
+		return ProcessListUsers(response);
 	}
 
-	return 0;
+	printf("Unknown command.\n");
+	return 100;
 }
 
 static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
@@ -321,26 +375,26 @@ static void PrintHelp()
 
 int main(int argc, char **argv)
 {
-	PrintVersionAndExit(argc, argv);
+	try {
+		PrintVersionAndExit(argc, argv);
 
-	if (argc < 2) {
-		PrintHelp();
-		return 1;
+		if (argc < 2) {
+			PrintHelp();
+			return 1;
+		}
+
+		CowBuffer<uint8_t> request = CreateRequest(argc, argv);
+
+		if (request.Size() == 0) {
+			printf("Failed to create request.\n");
+			return 1;
+		}
+
+		CowBuffer<uint8_t> response = SendRequest(request);
+		return ProcessResponse(argv[1], response);
+	} catch (Exception &ex) {
+		printf("%s\n", ex.What().CStr());
 	}
 
-	CowBuffer<uint8_t> request = CreateRequest(argc, argv);
-
-	if (request.Size() == 0) {
-		printf("Failed to create request.\n");
-		return 1;
-	}
-
-	CowBuffer<uint8_t> response = SendRequest(request);
-
-	if (response.Size() == 0) {
-		printf("No response from server.\n");
-		return 0;
-	}
-
-	return ProcessResponse(argv[1], response);
+	return 10;
 }
