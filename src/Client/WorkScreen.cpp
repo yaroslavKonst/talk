@@ -14,7 +14,7 @@ WorkScreen::WorkScreen(ClientSession *session, VoiceChat *voiceChat) :
 	Screen(session),
 	_notificationSystem(this),
 	_chatList(session, &_notificationSystem),
-	_configFile(String("storage/") +
+	_configFile("storage/" +
 		DataToHex(session->PublicKey, KEY_SIZE) + "/talk.conf")
 {
 	_voiceChat = voiceChat;
@@ -473,7 +473,7 @@ void WorkScreen::DrawHelp()
 
 		if (!firstEntry) {
 			if (firstLine) {
-				value = String(" | ") + value;
+				value = " | " + value;
 			} else {
 				value = value + " | ";
 			}
@@ -500,7 +500,7 @@ void WorkScreen::InitConfigFile()
 	if (!FileExists(_configFile.GetPath())) {
 		CreateDirectory("storage");
 		CreateDirectory(
-			String("storage/") +
+			"storage/" +
 			DataToHex(_session->PublicKey, KEY_SIZE));
 
 		_configFile.Set("connection", "ServerIP", "");

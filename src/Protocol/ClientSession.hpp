@@ -55,8 +55,13 @@ struct ClientSession : public Session
 	uint8_t PublicKey[KEY_SIZE];
 	uint8_t PrivateKey[KEY_SIZE];
 
-	EncryptedStream InES;
-	EncryptedStream OutES;
+	struct Stream
+	{
+		EncryptedStream InES;
+		EncryptedStream OutES;
+	};
+
+	Stream Streams[StreamCount];
 
 	bool InitSession();
 	bool SendMessage(const CowBuffer<uint8_t> message, void *userPointer);

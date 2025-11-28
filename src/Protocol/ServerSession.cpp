@@ -20,8 +20,10 @@ ServerSession::~ServerSession()
 		Pipe->Unregister(PeerPublicKey);
 	}
 
-	crypto_wipe(InES.Key, KEY_SIZE);
-	crypto_wipe(OutES.Key, KEY_SIZE);
+	for (int i = 0; i < StreamCount; i++) {
+		crypto_wipe(Streams[i].InES.Key, KEY_SIZE);
+		crypto_wipe(Streams[i].OutES.Key, KEY_SIZE);
+	}
 }
 
 bool ServerSession::Process()
@@ -66,6 +68,7 @@ bool ServerSession::ProcessFirstSyn()
 	}
 
 	if (!Users->HasUser(request.Key)) {
+		Ban->RecordFailure(IPv4);
 		return false;
 	}
 
@@ -80,6 +83,7 @@ bool ServerSession::ProcessFirstSyn()
 	int64_t currentTime = request.Timestamp;
 
 	if (currentTime <= prevTime) {
+		Ban->RecordFailure(IPv4);
 		return false;
 	}
 
@@ -89,6 +93,7 @@ bool ServerSession::ProcessFirstSyn()
 		request.Signature.Pointer());
 
 	if (!status) {
+		Ban->RecordFailure(IPv4);
 		return false;
 	}
 
@@ -96,16 +101,18 @@ bool ServerSession::ProcessFirstSyn()
 
 	State = ServerStateWaitSecondSyn;
 
-	GenerateSessionKeys(
-		PrivateKey,
-		PublicKey,
-		PeerPublicKey,
-		currentTime,
-		OutES.Key,
-		InES.Key);
+	for (int i = 0; i < StreamCount; i++) {
+		GenerateSessionKeys(
+			PrivateKey,
+			PublicKey,
+			PeerPublicKey,
+			currentTime + i,
+			Streams[i].OutES.Key,
+			Streams[i].InES.Key);
 
-	InitNonce(OutES.Nonce);
-	memset(InES.Nonce, 0, NONCE_SIZE);
+		InitNonce(Streams[i].OutES.Nonce);
+		memset(Streams[i].InES.Nonce, 0, NONCE_SIZE);
+	}
 
 	currentTime += 1;
 
@@ -113,15 +120,18 @@ bool ServerSession::ProcessFirstSyn()
 	response.Key = PublicKey;
 	response.Timestamp = currentTime;
 
-	Send(Encrypt(Handshake2::Build(response), OutES));
+	Send(Encrypt(Handshake2::Build(response), Streams[0].OutES), 0);
 
 	return true;
 }
 
 bool ServerSession::ProcessSecondSyn()
 {
-	CowBuffer<uint8_t> encryptedMessage = Receive();
-	CowBuffer<uint8_t> plainText = Decrypt(encryptedMessage, InES);
+	int stream;
+	CowBuffer<uint8_t> encryptedMessage = Receive(&stream);
+	CowBuffer<uint8_t> plainText = Decrypt(
+		encryptedMessage,
+		Streams[stream].InES);
 
 	Handshake3::Data request;
 	bool parseResult = Handshake3::Parse(plainText, request);
@@ -134,11 +144,13 @@ bool ServerSession::ProcessSecondSyn()
 	int64_t value = request.Timestamp;
 
 	if (value != reference) {
+		Ban->RecordFailure(IPv4);
 		return false;
 	}
 
 	State = ServerStateActiveSession;
-	SetInputSizeLimit(1024 * 1024 * 1024);
+	InputSizeLimit = 1024 * 1024 * 1024;
+	RestrictStreams = false;
 
 	Pipe->Register(PeerPublicKey, this);
 
@@ -147,8 +159,11 @@ bool ServerSession::ProcessSecondSyn()
 
 bool ServerSession::ProcessActiveSession()
 {
-	CowBuffer<uint8_t> encryptedMessage = Receive();
-	CowBuffer<uint8_t> plainText = Decrypt(encryptedMessage, InES);
+	int stream;
+	CowBuffer<uint8_t> encryptedMessage = Receive(&stream);
+	CowBuffer<uint8_t> plainText = Decrypt(
+		encryptedMessage,
+		Streams[stream].InES);
 
 	if (plainText.Size() < sizeof(int32_t)) {
 		return false;
@@ -186,7 +201,7 @@ bool ServerSession::ProcessKeepAlive(const CowBuffer<uint8_t> plainText)
 		return false;
 	}
 
-	Send(Encrypt(plainText, OutES));
+	Send(Encrypt(plainText, Streams[0].OutES), 0);
 	return true;
 }
 
@@ -239,7 +254,9 @@ bool ServerSession::ProcessTextMessage(const CowBuffer<uint8_t> plainText)
 		}
 	}
 
-	Send(Encrypt(CommandTextMessage::BuildResponse(response), OutES));
+	Send(Encrypt(
+		CommandTextMessage::BuildResponse(response),
+		Streams[2].OutES), 2);
 	return true;
 }
 
@@ -276,7 +293,9 @@ bool ServerSession::ProcessListUsers(const CowBuffer<uint8_t> plainText)
 		}
 	}
 
-	Send(Encrypt(CommandListUsers::BuildResponse(response), OutES));
+	Send(Encrypt(
+		CommandListUsers::BuildResponse(response),
+		Streams[2].OutES), 2);
 	return true;
 }
 
@@ -311,7 +330,9 @@ void ServerSession::SendMessage(const CowBuffer<uint8_t> message)
 	CommandDeliverMessage::Command command;
 	command.Message = message;
 
-	Send(Encrypt(CommandDeliverMessage::BuildCommand(command), OutES));
+	Send(Encrypt(
+		CommandDeliverMessage::BuildCommand(command),
+		Streams[2].OutES), 2);
 }
 
 bool ServerSession::InVoice()
@@ -325,7 +346,7 @@ void ServerSession::SendVoiceFrame(const CowBuffer<uint8_t> frame)
 		return;
 	}
 
-	Send(Encrypt(frame, OutES));
+	Send(Encrypt(frame, Streams[1].OutES), 1);
 }
 
 void ServerSession::StartVoice(
@@ -340,7 +361,9 @@ void ServerSession::StartVoice(
 	command.Key = peerKey;
 	command.Timestamp = timestamp;
 
-	Send(Encrypt(CommandVoiceRequest::BuildCommand(command), OutES));
+	Send(Encrypt(
+		CommandVoiceRequest::BuildCommand(command),
+		Streams[1].OutES), 1);
 }
 
 void ServerSession::AcceptVoice()
@@ -350,7 +373,9 @@ void ServerSession::AcceptVoice()
 
 	VoiceState = VoiceStateActive;
 
-	Send(Encrypt(CommandVoiceInit::BuildResponse(response), OutES));
+	Send(Encrypt(
+		CommandVoiceInit::BuildResponse(response),
+		Streams[1].OutES), 1);
 }
 
 void ServerSession::DeclineVoice()
@@ -361,7 +386,9 @@ void ServerSession::DeclineVoice()
 	VoiceState = VoiceStateInactive;
 	VoicePeer = nullptr;
 
-	Send(Encrypt(CommandVoiceInit::BuildResponse(response), OutES));
+	Send(Encrypt(
+		CommandVoiceInit::BuildResponse(response),
+		Streams[1].OutES), 1);
 }
 
 void ServerSession::EndVoice()
@@ -369,7 +396,7 @@ void ServerSession::EndVoice()
 	VoiceState = VoiceStateInactive;
 	VoicePeer = nullptr;
 
-	Send(Encrypt(CommandVoiceEnd::BuildCommand(), OutES));
+	Send(Encrypt(CommandVoiceEnd::BuildCommand(), Streams[1].OutES), 1);
 }
 
 bool ServerSession::ProcessVoiceInit(const CowBuffer<uint8_t> plainText)
@@ -385,13 +412,17 @@ bool ServerSession::ProcessVoiceInit(const CowBuffer<uint8_t> plainText)
 
 	if (InVoice()) {
 		response.Status = SESSION_RESPONSE_ERROR_YOU_IN_VOICE;
-		Send(Encrypt(CommandVoiceInit::BuildResponse(response), OutES));
+		Send(Encrypt(
+			CommandVoiceInit::BuildResponse(response),
+			Streams[1].OutES), 1);
 		return true;
 	}
 
 	if (!Users->HasUser(command.Key)) {
 		response.Status = SESSION_RESPONSE_ERROR_INVALID_USER;
-		Send(Encrypt(CommandVoiceInit::BuildResponse(response), OutES));
+		Send(Encrypt(
+			CommandVoiceInit::BuildResponse(response),
+			Streams[1].OutES), 1);
 		return true;
 	}
 
@@ -399,13 +430,17 @@ bool ServerSession::ProcessVoiceInit(const CowBuffer<uint8_t> plainText)
 
 	if (!handler) {
 		response.Status = SESSION_RESPONSE_ERROR_USER_OFFLINE;
-		Send(Encrypt(CommandVoiceInit::BuildResponse(response), OutES));
+		Send(Encrypt(
+			CommandVoiceInit::BuildResponse(response),
+			Streams[1].OutES), 1);
 		return true;
 	}
 
 	if (handler->InVoice()) {
 		response.Status = SESSION_RESPONSE_ERROR_USER_IN_VOICE;
-		Send(Encrypt(CommandVoiceInit::BuildResponse(response), OutES));
+		Send(Encrypt(
+			CommandVoiceInit::BuildResponse(response),
+			Streams[1].OutES), 1);
 		return true;
 	}
 
@@ -415,7 +450,9 @@ bool ServerSession::ProcessVoiceInit(const CowBuffer<uint8_t> plainText)
 	VoicePeer->StartVoice(PeerPublicKey, command.Timestamp, this);
 
 	response.Status = SESSION_RESPONSE_VOICE_RINGING;
-	Send(Encrypt(CommandVoiceInit::BuildResponse(response), OutES));
+	Send(Encrypt(
+		CommandVoiceInit::BuildResponse(response),
+		Streams[1].OutES), 1);
 	return true;
 }
 

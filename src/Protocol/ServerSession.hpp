@@ -4,6 +4,7 @@
 #include "Session.hpp"
 #include "../Server/UserDB.hpp"
 #include "../Server/MessagePipe.hpp"
+#include "../Server/FailBan.hpp"
 #include "../Crypto/Crypto.hpp"
 
 struct ServerSession : public Session, public SendMessageHandler
@@ -19,6 +20,8 @@ struct ServerSession : public Session, public SendMessageHandler
 
 	UserDB *Users;
 	MessagePipe *Pipe;
+	FailBan *Ban;
+	uint32_t IPv4;
 
 	ServerSessionState State;
 
@@ -28,8 +31,13 @@ struct ServerSession : public Session, public SendMessageHandler
 	const uint8_t *PublicKey;
 	const uint8_t *PrivateKey;
 
-	EncryptedStream InES;
-	EncryptedStream OutES;
+	struct Stream
+	{
+		EncryptedStream InES;
+		EncryptedStream OutES;
+	};
+
+	Stream Streams[StreamCount];
 
 	bool Process() override;
 	bool ProcessFirstSyn();

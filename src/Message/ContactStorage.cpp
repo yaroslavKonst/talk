@@ -24,13 +24,13 @@ ContactStorage::~ContactStorage()
 
 void ContactStorage::AddContact(const uint8_t *peerKey, String name)
 {
-	String path = String("storage");
+	String path = "storage";
 	CreateDirectory(path);
-	path += String("/") + DataToHex(_ownerKey, KEY_SIZE);
+	path += "/" + DataToHex(_ownerKey, KEY_SIZE);
 	CreateDirectory(path);
 	path += "/contacts";
 	CreateDirectory(path);
-	path += String("/") + DataToHex(peerKey, KEY_SIZE);
+	path += "/" + DataToHex(peerKey, KEY_SIZE);
 
 	if (FileExists(path)) {
 		UpdateContact(peerKey, name);
@@ -79,7 +79,7 @@ void ContactStorage::UpdateContact(const uint8_t *peerKey, String name)
 
 	_contactList[contactIndex]->Name = name;
 
-	String path = String("storage/") + DataToHex(_ownerKey, KEY_SIZE) +
+	String path = "storage/" + DataToHex(_ownerKey, KEY_SIZE) +
 		"/contacts/" + DataToHex(peerKey, KEY_SIZE);
 
 	BinaryFile file(path, false);
@@ -113,7 +113,7 @@ String ContactStorage::GetNameForPresentation(int index)
 
 void ContactStorage::LoadContacts()
 {
-	String path = String("storage/") + DataToHex(_ownerKey, KEY_SIZE) +
+	String path = "storage/" + DataToHex(_ownerKey, KEY_SIZE) +
 		"/contacts";
 
 	if (!FileExists(path)) {

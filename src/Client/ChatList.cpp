@@ -82,9 +82,9 @@ void ChatList::Redraw(int rows, int columns)
 		bool hasUnread = _chatList[i]->HasUnread();
 
 		if (hasUnread) {
-			name = String("!") + name;
+			name = "!" + name;
 		} else {
-			name = String(" ") + name;
+			name = " " + name;
 		}
 
 		if (name.Length() > colLimit) {

@@ -47,6 +47,8 @@ Server::Server() : _configFile("talkd.conf")
 	_activeUsers = 0;
 	_work = false;
 
+	LoadFailBan();
+
 	GetPassword();
 }
 
@@ -80,6 +82,12 @@ int Server::Run()
 		int64_t newTime = GetUnixTime();
 		bool updateTime = newTime - currentTime >= 10;
 
+		if (newTime - _failBan.GetCooldownTimestamp() >
+			_failBanCooldownInterval)
+		{
+			_failBan.Cooldown();
+		}
+
 		if (updateTime) {
 			currentTime = newTime;
 		}
@@ -93,10 +101,45 @@ int Server::Run()
 void Server::InitConfigFile()
 {
 	if (!FileExists(_configFile.GetPath())) {
-		_configFile.Set("", "IPv4", "0.0.0.0");
-		_configFile.Set("", "Port", "6524");
+		_configFile.Set("Network", "IPv4", "0.0.0.0");
+		_configFile.Set("Network", "Port", "6524");
+
+		_configFile.Set("FailBan", "Enabled", "No");
+		_configFile.Set("FailBan", "AllowedTries", "5");
+		_configFile.Set("FailBan", "CooldownInterval", "14400");
 		_configFile.Write();
 	}
+}
+
+void Server::LoadFailBan()
+{
+	String enabledValue = _configFile.Get("FailBan", "Enabled");
+	String triesValue = _configFile.Get("FailBan", "AllowedTries");
+	String intervalValue = _configFile.Get("FailBan", "CooldownInterval");
+
+	if (enabledValue == "Yes") {
+		_failBan.SetEnabled(true);
+	} else if (enabledValue == "No") {
+		_failBan.SetEnabled(false);
+	} else {
+		THROW("Invalid FailBan.Enabled value. Expected 'Yes' or 'No'.");
+	}
+
+	int tries = atoi(triesValue.CStr());
+
+	if (tries <= 0) {
+		THROW("FailBan.AllowedTries value must be positive integer.");
+	}
+
+	int64_t cooldownInterval = atoi(intervalValue.CStr());
+
+	if (cooldownInterval <= 0) {
+		THROW("FailBan.CooldownInterval value must be positive "
+			"integer.");
+	}
+
+	_failBan.SetTries(tries);
+	_failBanCooldownInterval = cooldownInterval;
 }
 
 void Server::GetPassword()
@@ -160,7 +203,7 @@ void Server::WipeKeys()
 void Server::OpenListeningSockets()
 {
 	// Listening socket.
-	uint16_t port = atoi(_configFile.Get("", "Port").CStr());
+	uint16_t port = atoi(_configFile.Get("Network", "Port").CStr());
 
 	if (port == 0) {
 		THROW("Invalid port number.");
@@ -170,7 +213,7 @@ void Server::OpenListeningSockets()
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(port);
 	int res = inet_aton(
-		_configFile.Get("", "IPv4").CStr(),
+		_configFile.Get("Network", "IPv4").CStr(),
 		&addr.sin_addr);
 
 	if (!res) {
@@ -247,9 +290,20 @@ void Server::CloseSessions(Session *sessions)
 
 void Server::AcceptConnection()
 {
-	int fd = accept(_listeningSocket, nullptr, nullptr);
+	struct sockaddr_in addr;
+	unsigned int addrSize = sizeof(addr);
+
+	int fd = accept(_listeningSocket, (struct sockaddr*)&addr, &addrSize);
 
 	if (fd == -1) {
+		return;
+	}
+
+	bool allowed = _failBan.IsAllowed(addr.sin_addr.s_addr);
+
+	if (!allowed) {
+		shutdown(fd, SHUT_RDWR);
+		close(fd);
 		return;
 	}
 
@@ -260,6 +314,8 @@ void Server::AcceptConnection()
 
 	session->Users = &_userDb;
 	session->Pipe = &_pipe;
+	session->Ban = &_failBan;
+	session->IPv4 = addr.sin_addr.s_addr;
 	session->State = ServerSession::ServerStateWaitFirstSyn;
 	session->SignatureKey = nullptr;
 	session->PeerPublicKey = nullptr;

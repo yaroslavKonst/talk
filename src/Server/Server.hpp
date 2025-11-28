@@ -3,6 +3,7 @@
 
 #include "UserDB.hpp"
 #include "MessagePipe.hpp"
+#include "FailBan.hpp"
 #include "../Common/IniFile.hpp"
 #include "../Protocol/Session.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
@@ -27,6 +28,10 @@ private:
 
 	IniFile _configFile;
 	void InitConfigFile();
+
+	FailBan _failBan;
+	int64_t _failBanCooldownInterval;
+	void LoadFailBan();
 
 	uint8_t _privateKey[KEY_SIZE];
 	uint8_t _publicKey[KEY_SIZE];

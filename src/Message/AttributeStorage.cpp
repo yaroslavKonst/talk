@@ -46,14 +46,14 @@ void AttributeStorage::SetAttribute(
 
 	String entryPath = "storage";
 	CreateDirectory(entryPath);
-	entryPath += String("/") + ownerKeyHex;
+	entryPath += "/" + ownerKeyHex;
 	CreateDirectory(entryPath);
 	entryPath += "/attributes";
 	CreateDirectory(entryPath);
-	entryPath += String("/") + peerKeyHex;
+	entryPath += "/" + peerKeyHex;
 	CreateDirectory(entryPath);
 
-	entryPath += String("/") +
+	entryPath += "/" +
 		ToHex(header.Timestamp) + "_" + ToHex(header.Index) +
 		(incoming ? "_r" : "_s");
 
@@ -97,11 +97,11 @@ uint32_t AttributeStorage::GetAttribute(CowBuffer<uint8_t> message)
 	String ownerKeyHex = DataToHex(_ownerKey, KEY_SIZE);
 
 	String entryPath = "storage";
-	entryPath += String("/") + ownerKeyHex;
+	entryPath += "/" + ownerKeyHex;
 	entryPath += "/attributes";
-	entryPath += String("/") + peerKeyHex;
+	entryPath += "/" + peerKeyHex;
 
-	entryPath += String("/") +
+	entryPath += "/" +
 		ToHex(header.Timestamp) + "_" + ToHex(header.Index) +
 		(incoming ? "_r" : "_s");
 

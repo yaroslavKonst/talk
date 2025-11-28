@@ -326,14 +326,14 @@ static int ProcessResponse(
 static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
 {
 	Session session;
-	session.SetInputSizeLimit(1024 * 1024 * 1024);
+	session.InputSizeLimit = 1024 * 1024 * 1024;
 	session.Socket = OpenSocket();
 
 	if (session.Socket == -1) {
 		return CowBuffer<uint8_t>();
 	}
 
-	session.Send(command);
+	session.Send(command, 0);
 
 	bool res;
 
@@ -346,13 +346,7 @@ static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
 		}
 	}
 
-	res = session.Read();
-
-	if (!res) {
-		return CowBuffer<uint8_t>();
-	}
-
-	while (session.Input) {
+	while (!session.CanReceive()) {
 		res = session.Read();
 
 		if (!res) {

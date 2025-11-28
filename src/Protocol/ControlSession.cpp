@@ -4,10 +4,12 @@
 
 #include "../ServerCtl/SocketName.hpp"
 #include "../Common/UnixTime.hpp"
+#include "../Common/Hex.hpp"
+#include "../Common/Log.hpp"
 
 ControlSession::ControlSession()
 {
-	SetInputSizeLimit(1024 * 1024);
+	InputSizeLimit = 1024 * 1024;
 }
 
 bool ControlSession::TimePassed()
@@ -68,11 +70,12 @@ void ControlSession::SendResponse(int32_t code, const CowBuffer<uint8_t> data)
 			data.Size());
 	}
 
-	Send(message);
+	Send(message, 0);
 }
 
 void ControlSession::ProcessShutdownCommand()
 {
+	Log("Received shutdown command.");
 	*Work = false;
 }
 
@@ -137,6 +140,9 @@ void ControlSession::ProcessAddUserCommand(const CowBuffer<uint8_t> message)
 	Users->AddUser(key, signature, GetUnixTime(), name);
 
 	SendResponse(OK, CowBuffer<uint8_t>());
+
+	Log("Added user " + name + " with key " +
+		DataToHex(key, KEY_SIZE) + ".");
 }
 
 void ControlSession::ProcessRemoveUserCommand(const CowBuffer<uint8_t> message)
@@ -158,6 +164,9 @@ void ControlSession::ProcessRemoveUserCommand(const CowBuffer<uint8_t> message)
 	Users->RemoveUser(key);
 
 	SendResponse(OK, CowBuffer<uint8_t>());
+
+	Log("Removed user with key " +
+		DataToHex(key, KEY_SIZE) + ".");
 }
 
 void ControlSession::ProcessListUsersCommand()

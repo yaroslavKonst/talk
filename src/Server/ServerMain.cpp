@@ -19,7 +19,7 @@ static int OpenLog()
 	String timeString = ctime(&timestamp);
 	timeString = timeString.Substring(0, timeString.Length() - 1);
 
-	String logName = String("logs/Log_") +
+	String logName = "logs/Log_" +
 		timeString.Replace(' ', '_').Replace(':', '-') + ".txt";
 
 	int logFd = open(logName.CStr(), O_WRONLY | O_CREAT, 0600);

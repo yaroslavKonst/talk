@@ -3,6 +3,7 @@ SERVER_MODULES =\
 	Server/ServerMain.o \
 	Server/UserDB.o \
 	Server/MessagePipe.o \
+	Server/FailBan.o \
 	Protocol/Session.o \
 	Protocol/ServerSession.o \
 	Protocol/ControlSession.o \

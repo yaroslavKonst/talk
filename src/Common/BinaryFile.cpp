@@ -13,7 +13,7 @@ BinaryFile::BinaryFile(String path, bool create)
 	}
 
 	if (_fd == -1) {
-		THROW(String("Failed to open file ") + path + ".");
+		THROW("Failed to open file " + path + ".");
 	}
 }
 

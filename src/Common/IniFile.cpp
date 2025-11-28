@@ -175,7 +175,7 @@ void IniFile::Load()
 			return;
 		}
 
-		THROW(String("Ini: Failed to open ") + _path + ".");
+		THROW("Ini: Failed to open " + _path + ".");
 	}
 
 	int fileSize = lseek(fd, 0, SEEK_END);
@@ -183,7 +183,7 @@ void IniFile::Load()
 
 	if (fileSize <= 0) {
 		close(fd);
-		THROW(String("Ini: Failed to get size of ") + _path + ".");
+		THROW("Ini: Failed to get size of " + _path + ".");
 	}
 
 	char *fileBuffer = new char[fileSize + 1];
@@ -192,7 +192,7 @@ void IniFile::Load()
 	if (readBytes != fileSize) {
 		close(fd);
 		delete[] fileBuffer;
-		THROW(String("Ini: Failed to read ") + _path + ".");
+		THROW("Ini: Failed to read " + _path + ".");
 	}
 
 	fileBuffer[fileSize] = 0;
@@ -231,7 +231,7 @@ void IniFile::Load()
 		CowBuffer<String> kvp = line.Split('=', false);
 
 		if (kvp.Size() < 2) {
-			THROW(String("Ini: ") + _path + ": error in line " +
+			THROW("Ini: " + _path + ": error in line " +
 				ToString(i));
 		}
 
@@ -295,7 +295,7 @@ void IniFile::Save()
 	int fd = open(_path.CStr(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
 
 	if (fd == -1) {
-		THROW(String("Ini: Failed to open ") + _path + " for writing.");
+		THROW("Ini: Failed to open " + _path + " for writing.");
 	}
 
 	int res = write(fd, fileData.CStr(), fileData.Length());
@@ -303,7 +303,7 @@ void IniFile::Save()
 	close(fd);
 
 	if (res != fileData.Length()) {
-		THROW(String("Ini: Failed to write ") + _path + ".");
+		THROW("Ini: Failed to write " + _path + ".");
 	}
 
 	_modified = false;

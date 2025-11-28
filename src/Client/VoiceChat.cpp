@@ -419,7 +419,7 @@ void VoiceChat::RedrawState(int rows, int columns)
 		name = name.Substring(0, 30) + "...";
 	}
 
-	addstr((String(" (") + name + ")").CStr());
+	addstr((" (" + name + ")").CStr());
 
 	if (_state == VoiceStateActive) {
 		if (_mute) {

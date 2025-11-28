@@ -437,7 +437,7 @@ void MessageStorage::GetFreeTimestampIndex(
 	String ownerKeyHex = DataToHex(_ownerKey, KEY_SIZE);
 	String timeString = ToHex(timestamp);
 
-	String prefix = String("storage/") + ownerKeyHex + "/storage/" +
+	String prefix = "storage/" + ownerKeyHex + "/storage/" +
 		peerKeyHex + "/out/";
 
 	String path = prefix + timeString + "_" + ToHex(index);
@@ -457,7 +457,7 @@ bool MessageStorage::MessageExists(
 	String peerKeyHex = DataToHex(peerKey, KEY_SIZE);
 	String ownerKeyHex = DataToHex(_ownerKey, KEY_SIZE);
 
-	String path = String("storage/") + ownerKeyHex + "/storage/" +
+	String path = "storage/" + ownerKeyHex + "/storage/" +
 		peerKeyHex + (incoming ? "/in/" : "/out/") +
 		ToHex(timestamp) + "_" + ToHex(index);
 
@@ -489,16 +489,16 @@ bool MessageStorage::AddMessage(CowBuffer<uint8_t> message)
 
 	String entryPath = "storage";
 	CreateDirectory(entryPath);
-	entryPath += String("/") + ownerKeyHex;
+	entryPath += "/" + ownerKeyHex;
 	CreateDirectory(entryPath);
 	entryPath += "/storage";
 	CreateDirectory(entryPath);
-	entryPath += String("/") + peerKeyHex;
+	entryPath += "/" + peerKeyHex;
 	CreateDirectory(entryPath);
 	entryPath += incoming ? "/in" : "/out";
 	CreateDirectory(entryPath);
 
-	entryPath += String("/") + ToHex(header.Timestamp) + "_" +
+	entryPath += "/" + ToHex(header.Timestamp) + "_" +
 		ToHex(header.Index);
 
 	if (FileExists(entryPath)) {
@@ -513,7 +513,7 @@ bool MessageStorage::AddMessage(CowBuffer<uint8_t> message)
 		0);
 
 	MessageStorageIndex storageIndex(
-		String("storage/") + ownerKeyHex + "/storage/" +
+		"storage/" + ownerKeyHex + "/storage/" +
 		peerKeyHex + "/index");
 	storageIndex.AddEntry(header.Timestamp, header.Index, incoming);
 
@@ -537,7 +537,7 @@ CowBuffer<CowBuffer<uint8_t>> MessageStorage::GetMessageRange(
 
 	int messageCount = 0;
 
-	String path = String("storage/") + ownerKeyHex + "/storage";
+	String path = "storage/" + ownerKeyHex + "/storage";
 
 	if (!FileExists(path)) {
 		return CowBuffer<CowBuffer<uint8_t>>();
@@ -609,7 +609,7 @@ CowBuffer<CowBuffer<uint8_t>> MessageStorage::GetMessageRange(
 
 	int messageCount = 0;
 
-	String path = String("storage/") + ownerKeyHex + "/storage/" +
+	String path = "storage/" + ownerKeyHex + "/storage/" +
 		peerKeyHex;
 
 	if (!FileExists(path)) {
@@ -694,7 +694,7 @@ CowBuffer<CowBuffer<uint8_t>> MessageStorage::GetLatestNMessages(
 
 	int messageCount = 0;
 
-	String path = String("storage/") + ownerKeyHex + "/storage/" +
+	String path = "storage/" + ownerKeyHex + "/storage/" +
 		peerKeyHex;
 
 	if (!FileExists(path)) {

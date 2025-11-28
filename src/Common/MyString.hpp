@@ -51,10 +51,15 @@ private:
 	void MakeExclusive();
 };
 
+inline String operator+(const char *str1, const String str2)
+{
+	return String(str1) + str2;
+}
+
 inline String ToString(int value)
 {
 	if (value == 0) {
-		return String("0");
+		return "0";
 	}
 
 	String res;

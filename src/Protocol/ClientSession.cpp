@@ -28,8 +28,11 @@ ClientSession::~ClientSession()
 	crypto_wipe(PeerPublicKey, KEY_SIZE);
 	crypto_wipe(PublicKey, KEY_SIZE);
 	crypto_wipe(PrivateKey, KEY_SIZE);
-	crypto_wipe(InES.Key, KEY_SIZE);
-	crypto_wipe(OutES.Key, KEY_SIZE);
+
+	for (int i = 0; i < StreamCount; i++) {
+		crypto_wipe(Streams[i].InES.Key, KEY_SIZE);
+		crypto_wipe(Streams[i].OutES.Key, KEY_SIZE);
+	}
 
 	while (SMUserPointersFirst) {
 		SMUser *tmp = SMUserPointersFirst;
@@ -51,7 +54,8 @@ bool ClientSession::InitSession()
 		return false;
 	}
 
-	SetInputSizeLimit(1024);
+	InputSizeLimit = 1024;
+	RestrictStreams = true;
 
 	int64_t currentTime = GetUnixTime();
 
@@ -59,21 +63,24 @@ bool ClientSession::InitSession()
 	request.Key = PublicKey;
 	request.Timestamp = currentTime;
 
-	Send(ApplyScrambler(Handshake1::Build(request, SignaturePrivateKey)));
+	Send(ApplyScrambler(Handshake1::Build(request, SignaturePrivateKey)),
+		0);
 
 	State = ClientStateInitialWaitForServer;
 
-	GenerateSessionKeys(
-		PrivateKey,
-		PublicKey,
-		PeerPublicKey,
-		currentTime,
-		InES.Key,
-		OutES.Key,
-		true);
+	for (int i = 0; i < StreamCount; i++) {
+		GenerateSessionKeys(
+			PrivateKey,
+			PublicKey,
+			PeerPublicKey,
+			currentTime + i,
+			Streams[i].InES.Key,
+			Streams[i].OutES.Key,
+			true);
 
-	InitNonce(OutES.Nonce);
-	memset(InES.Nonce, 0, NONCE_SIZE);
+		InitNonce(Streams[i].OutES.Nonce);
+		memset(Streams[i].InES.Nonce, 0, NONCE_SIZE);
+	}
 
 	TimeState = currentTime;
 
@@ -107,7 +114,9 @@ bool ClientSession::SendMessage(
 	CommandTextMessage::Command command;
 	command.Message = message;
 
-	Send(Encrypt(CommandTextMessage::BuildCommand(command), OutES));
+	Send(Encrypt(
+		CommandTextMessage::BuildCommand(command),
+		Streams[2].OutES), 2);
 	return true;
 }
 
@@ -132,7 +141,7 @@ bool ClientSession::RequestUserList()
 		return false;
 	}
 
-	Send(Encrypt(CommandListUsers::BuildCommand(), OutES));
+	Send(Encrypt(CommandListUsers::BuildCommand(), Streams[2].OutES), 2);
 	return true;
 }
 
@@ -145,7 +154,9 @@ bool ClientSession::RequestNewMessages(int64_t timestamp)
 	CommandGetMessages::Command command;
 	command.Timestamp = timestamp;
 
-	Send(Encrypt(CommandGetMessages::BuildCommand(command), OutES));
+	Send(Encrypt(
+		CommandGetMessages::BuildCommand(command),
+		Streams[2].OutES), 2);
 	return true;
 }
 
@@ -159,7 +170,9 @@ bool ClientSession::InitVoice(const uint8_t *key, int64_t timestamp)
 	command.Key = key;
 	command.Timestamp = timestamp;
 
-	Send(Encrypt(CommandVoiceInit::BuildCommand(command), OutES));
+	Send(Encrypt(
+		CommandVoiceInit::BuildCommand(command),
+		Streams[1].OutES), 1);
 	return true;
 }
 
@@ -177,7 +190,9 @@ bool ClientSession::ResponseVoiceRequest(bool accept)
 		response.Status = SESSION_RESPONSE_VOICE_DECLINE;
 	}
 
-	Send(Encrypt(CommandVoiceRequest::BuildResponse(response), OutES));
+	Send(Encrypt(
+		CommandVoiceRequest::BuildResponse(response),
+		Streams[1].OutES), 1);
 	return true;
 }
 
@@ -187,7 +202,7 @@ bool ClientSession::EndVoice()
 		return false;
 	}
 
-	Send(Encrypt(CommandVoiceEnd::BuildCommand(), OutES));
+	Send(Encrypt(CommandVoiceEnd::BuildCommand(), Streams[1].OutES), 1);
 	return true;
 }
 
@@ -200,7 +215,9 @@ bool ClientSession::SendVoiceFrame(const CowBuffer<uint8_t> frame)
 	CommandVoiceData::Command command;
 	command.VoiceData = frame;
 
-	Send(Encrypt(CommandVoiceData::BuildCommand(command), OutES));
+	Send(Encrypt(
+		CommandVoiceData::BuildCommand(command),
+		Streams[1].OutES), 1);
 	return true;
 }
 
@@ -236,14 +253,17 @@ bool ClientSession::TimePassed()
 	CommandKeepAlive::Command command;
 	command.Timestamp = TimeState;
 
-	Send(Encrypt(CommandKeepAlive::BuildCommand(command), OutES));
+	Send(Encrypt(
+		CommandKeepAlive::BuildCommand(command),
+		Streams[0].OutES), 0);
 	return true;
 }
 
 bool ClientSession::ProcessInitialWaitForServer()
 {
-	CowBuffer<uint8_t> cyphertext = Receive();
-	CowBuffer<uint8_t> message = Decrypt(cyphertext, InES);
+	int stream;
+	CowBuffer<uint8_t> cyphertext = Receive(&stream);
+	CowBuffer<uint8_t> message = Decrypt(cyphertext, Streams[stream].InES);
 
 	Handshake2::Data request;
 	bool parseResult = Handshake2::Parse(message, request);
@@ -267,12 +287,13 @@ bool ClientSession::ProcessInitialWaitForServer()
 	Handshake3::Data response;
 	response.Timestamp = value;
 
-	Send(Encrypt(Handshake3::Build(response), OutES));
+	Send(Encrypt(Handshake3::Build(response), Streams[0].OutES), 0);
 
 	State = ClientStateActiveSession;
 	TimeState = 0;
 
-	SetInputSizeLimit(1024 * 1024 * 1024);
+	InputSizeLimit = 1024 * 1024 * 1024;
+	RestrictStreams = false;
 
 	int64_t latestTimestamp = Processor->GetLatestReceiveTimestamp();
 	RequestNewMessages(latestTimestamp);
@@ -282,8 +303,11 @@ bool ClientSession::ProcessInitialWaitForServer()
 
 bool ClientSession::ProcessActiveSession()
 {
-	CowBuffer<uint8_t> encryptedMessage = Receive();
-	CowBuffer<uint8_t> plainText = Decrypt(encryptedMessage, InES);
+	int stream;
+	CowBuffer<uint8_t> encryptedMessage = Receive(&stream);
+	CowBuffer<uint8_t> plainText = Decrypt(
+		encryptedMessage,
+		Streams[stream].InES);
 
 	if (plainText.Size() < sizeof(int32_t)) {
 		return false;
