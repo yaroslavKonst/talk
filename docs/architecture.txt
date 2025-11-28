@@ -1,9 +1,27 @@
 Encryption system
 -----------------
 Low level protocol. It is used on top of TCP connection.
-| data block size (uint64_t) | data block |
+
+Data consist of blocks. Each block is transmitted as a
+sequene of segments and belongs to a stream.
+
+Data block structure.
+| stream id (byte) | data block size (uint64) | segment sequence |
+
+Segment sequence structure.
+| stream id (byte) | segment 1 size (uint32) | segment 1 data | ...
+	| stream id (byte) | segment n size (uint32) | segment n data |
+
+Segments of one stream can be sent between segments of
+another stream. So streams are used for channel multiplexing.
+
+Streams with lower id have higher priority than streams with
+higher id. Priority is taken into account when multiple streams
+have segments ready to be sent. In this case a ready stream
+with the highest priority is chosen.
 
 Encryption protocol. It works on top of low level protocol.
+Each stream has separate session keys.
 Encrypted block structure:
 | mac | nonce | message |
 
@@ -17,7 +35,8 @@ Signed block structure:
 Timestamps are 64-bit signed integers that contain number of
 seconds since the Epoch, 1970.01.01 00:00:00 UTC.
 
-Handshake occurs when client connects the server.
+Handshake occurs when client connects the server. It is done using
+the stream with id 0.
 During handshake client and server authenticate each other
 and establish encrypted connection.
 
