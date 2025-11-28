@@ -256,7 +256,7 @@ bool ServerSession::ProcessTextMessage(const CowBuffer<uint8_t> plainText)
 
 	Send(Encrypt(
 		CommandTextMessage::BuildResponse(response),
-		Streams[2].OutES), 2);
+		Streams[1].OutES), 1);
 	return true;
 }
 

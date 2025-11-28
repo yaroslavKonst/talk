@@ -141,7 +141,7 @@ bool ClientSession::RequestUserList()
 		return false;
 	}
 
-	Send(Encrypt(CommandListUsers::BuildCommand(), Streams[2].OutES), 2);
+	Send(Encrypt(CommandListUsers::BuildCommand(), Streams[1].OutES), 1);
 	return true;
 }
 
