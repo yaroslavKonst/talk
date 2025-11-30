@@ -23,6 +23,8 @@ SERVER_MODULES =\
 
 SERVERCTL_MODULES=\
 	ServerCtl/ServerCtlMain.o \
+	ServerCtl/RequestBuilder.o \
+	ServerCtl/ResponseProcessor.o \
 	Protocol/Session.o \
 	Common/UnixTime.o \
 	Common/MyString.o \

@@ -116,7 +116,7 @@ void Server::ReloadConfigFile()
 		OpenUserSocket();
 	} catch (Exception &ex) {
 		Log("Failed to reload config file.");
-		Log(ex.What());
+		Log(ex.Message());
 		return;
 	}
 

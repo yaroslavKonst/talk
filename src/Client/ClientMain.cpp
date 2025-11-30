@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 		return client.Run();
 	}
 	catch (Exception &ex) {
-		printf("%s\n", ex.What().CStr());
+		printf("%s\n", ex.Message().CStr());
 	}
 
 	return 100;

@@ -1,28 +1,15 @@
+#include <cstdint>
+#include <cstdio>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <arpa/inet.h>
-#include <cstring>
-#include <cstdio>
-
-#include "../Protocol/Session.hpp"
-#include "../Common/Exception.hpp"
-#include "../Common/MyString.hpp"
-#include "../Common/Hex.hpp"
-#include "../Common/Version.hpp"
-#include "../Crypto/CryptoDefinitions.hpp"
 
 #include "SocketName.hpp"
-
-static const char *ShutdownCommand = "shutdown";
-static const char *GetKeyCommand = "getkey";
-static const char *AddUserCommand = "adduser";
-static const char *RemoveUserCommand = "removeuser";
-static const char *ListUsersCommand = "listusers";
-static const char *ListBannedIPCommand = "listbannedip";
-static const char *BanIPCommand = "banip";
-static const char *UnbanIPCommand = "unbanip";
-static const char *ReloadCommand = "reload";
+#include "RequestBuilder.hpp"
+#include "ResponseProcessor.hpp"
+#include "../Protocol/Session.hpp"
+#include "../Common/Version.hpp"
+#include "../Common/Exception.hpp"
 
 static int OpenSocket()
 {
@@ -31,8 +18,7 @@ static int OpenSocket()
 	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
 	if (fd == -1) {
-		printf("Failed to create socket.\n");
-		return -1;
+		THROW("Failed to create socket.");
 	}
 
 	struct sockaddr_un addr;
@@ -43,394 +29,10 @@ static int OpenSocket()
 
 	if (res == -1) {
 		close(fd);
-		printf("Failed to connect to talkd.\n");
-		return -1;
+		THROW("Failed to connect to talkd.");
 	}
 
 	return fd;
-}
-
-static CowBuffer<uint8_t> RequestStop()
-{
-	CowBuffer<uint8_t> result(sizeof(int32_t));
-	*result.SwitchType<int32_t>() = COMMAND_SHUTDOWN;
-
-	return result;
-}
-
-static CowBuffer<uint8_t> RequestGetKey()
-{
-	CowBuffer<uint8_t> result(sizeof(int32_t));
-	*result.SwitchType<int32_t>() = COMMAND_GET_PUBLIC_KEY;
-
-	return result;
-}
-
-static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
-{
-	if (argc != 5) {
-		printf("Usage: %s name key signature\n", AddUserCommand);
-		return CowBuffer<uint8_t>();
-	}
-
-	String name(argv[2]);
-	String keyHex(argv[3]);
-	String signatureHex(argv[4]);
-
-	if (name.Length() == 0) {
-		printf("Name is empty.\n");
-		return CowBuffer<uint8_t>();
-	}
-
-	if (keyHex.Length() != KEY_SIZE * 2) {
-		printf("Key length is not equal to %d.\n", KEY_SIZE * 2);
-		return CowBuffer<uint8_t>();
-	}
-
-	if (signatureHex.Length() != SIGNATURE_PUBLIC_KEY_SIZE * 2) {
-		printf("Signature length is not equal to %d.\n",
-			SIGNATURE_PUBLIC_KEY_SIZE * 2);
-		return CowBuffer<uint8_t>();
-	}
-
-	CowBuffer<uint8_t> resultBuffer(
-		sizeof(int32_t) * 2 +
-		KEY_SIZE +
-		SIGNATURE_PUBLIC_KEY_SIZE +
-		name.Length());
-
-	int32_t *command = resultBuffer.SwitchType<int32_t>();
-	uint8_t *key = resultBuffer.Pointer(sizeof(int32_t));
-	uint8_t *signature = resultBuffer.Pointer(
-		sizeof(int32_t) + KEY_SIZE);
-	int32_t *nameLength = resultBuffer.SwitchType<int32_t>(
-		sizeof(int32_t) + KEY_SIZE +
-		SIGNATURE_PUBLIC_KEY_SIZE);
-	uint8_t *nameBuffer = resultBuffer.Pointer(
-		sizeof(int32_t) * 2 + KEY_SIZE +
-		SIGNATURE_PUBLIC_KEY_SIZE);
-
-	*command = COMMAND_ADD_USER;
-	*nameLength = name.Length();
-	memcpy(nameBuffer, name.CStr(), *nameLength);
-	HexToData(keyHex, key);
-	HexToData(signatureHex, signature);
-
-	return resultBuffer;
-}
-
-static CowBuffer<uint8_t> RequestRemoveUser(int argc, char **argv)
-{
-	if (argc != 3) {
-		printf("Usage: %s key\n", AddUserCommand);
-		return CowBuffer<uint8_t>();
-	}
-
-	String keyHex(argv[2]);
-
-	if (keyHex.Length() != KEY_SIZE * 2) {
-		printf("Key length is not equal to %d.\n", KEY_SIZE * 2);
-		return CowBuffer<uint8_t>();
-	}
-
-	CowBuffer<uint8_t> resultBuffer(sizeof(int32_t) + KEY_SIZE);
-
-	int32_t *command = resultBuffer.SwitchType<int32_t>();
-	uint8_t *key = resultBuffer.Pointer(sizeof(int32_t));
-
-	*command = COMMAND_REMOVE_USER;
-	HexToData(keyHex, key);
-
-	return resultBuffer;
-}
-
-static CowBuffer<uint8_t> RequestListUsers()
-{
-	CowBuffer<uint8_t> result(sizeof(int32_t));
-	*result.SwitchType<int32_t>() = COMMAND_LIST_USERS;
-
-	return result;
-}
-
-static CowBuffer<uint8_t> RequestListBannedIP()
-{
-	CowBuffer<uint8_t> result(sizeof(int32_t));
-	*result.SwitchType<int32_t>() = COMMAND_LIST_BANNED_IP;
-
-	return result;
-}
-
-static CowBuffer<uint8_t> RequestBanIP(int argc, char **argv)
-{
-	if (argc != 3) {
-		printf("Usage: %s IP\n", BanIPCommand);
-		return CowBuffer<uint8_t>();
-	}
-
-	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(uint32_t));
-	*result.SwitchType<int32_t>() = COMMAND_BAN_IP;
-
-	struct in_addr addr;
-
-	int res = inet_aton(argv[2], &addr);
-
-	if (!res) {
-		printf("Invalid IP address format.\n");
-		return CowBuffer<uint8_t>();
-	}
-
-	*result.SwitchType<uint32_t>(sizeof(int32_t)) = addr.s_addr;
-	return result;
-}
-
-static CowBuffer<uint8_t> RequestUnbanIP(int argc, char **argv)
-{
-	if (argc != 3) {
-		printf("Usage: %s IP\n", UnbanIPCommand);
-		return CowBuffer<uint8_t>();
-	}
-
-	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(uint32_t));
-	*result.SwitchType<int32_t>() = COMMAND_UNBAN_IP;
-
-	struct in_addr addr;
-
-	int res = inet_aton(argv[2], &addr);
-
-	if (!res) {
-		printf("Invalid IP address format.\n");
-		return CowBuffer<uint8_t>();
-	}
-
-	*result.SwitchType<uint32_t>(sizeof(int32_t)) = addr.s_addr;
-	return result;
-}
-
-static CowBuffer<uint8_t> RequestReload()
-{
-	CowBuffer<uint8_t> result(sizeof(int32_t));
-	*result.SwitchType<int32_t>() = COMMAND_RELOAD;
-
-	return result;
-}
-
-static CowBuffer<uint8_t> CreateRequest(int argc, char **argv)
-{
-	CowBuffer<uint8_t> request;
-
-	if (!strcmp(argv[1], ShutdownCommand)) {
-		request = RequestStop();
-	} else if (!strcmp(argv[1], GetKeyCommand)) {
-		request = RequestGetKey();
-	} else if (!strcmp(argv[1], AddUserCommand)) {
-		request = RequestAddUser(argc, argv);
-	} else if (!strcmp(argv[1], RemoveUserCommand)) {
-		request = RequestRemoveUser(argc, argv);
-	} else if (!strcmp(argv[1], ListUsersCommand)) {
-		request = RequestListUsers();
-	} else if (!strcmp(argv[1], ListBannedIPCommand)) {
-		request = RequestListBannedIP();
-	} else if (!strcmp(argv[1], BanIPCommand)) {
-		request = RequestBanIP(argc, argv);
-	} else if (!strcmp(argv[1], UnbanIPCommand)) {
-		request = RequestUnbanIP(argc, argv);
-	} else if (!strcmp(argv[1], ReloadCommand)) {
-		request = RequestReload();
-	}
-
-	return request;
-}
-
-static void PrintError(int32_t code)
-{
-	switch (code) {
-	case ERROR:
-		printf("Error.\n");
-		break;
-	case ERROR_UNKNOWN_COMMAND:
-		printf("Request is not supported by server.\n");
-		break;
-	case ERROR_TOO_SHORT:
-		printf("Request is too short.\n");
-		break;
-	case ERROR_INVALID_SIZE:
-		printf("Request has invalid size.\n");
-		break;
-	case ERROR_INVALID_USER:
-		printf("Requested user does not exist.\n");
-		break;
-	case ERROR_USER_EXISTS:
-		printf("User already exists.\n");
-		break;
-	case ERROR_INVALID_IP:
-		printf("Invalid IP address.\n");
-		break;
-	default:
-		printf("Unknown error code.\n");
-		break;
-	}
-}
-
-static int ProcessResultCode(const CowBuffer<uint8_t> response)
-{
-	int32_t code;
-
-	if (response.Size() != sizeof(code)) {
-		printf("Invalid response length.\n");
-		return 1;
-	}
-
-	code = *response.SwitchType<int32_t>();
-
-	if (code != OK) {
-		PrintError(code);
-		return 1;
-	}
-
-	return 0;
-}
-
-static int ProcessShutdown(const CowBuffer<uint8_t> response)
-{
-	if (!response.Size()) {
-		return 0;
-	}
-
-	printf("%s command should not have response.\n", ShutdownCommand);
-	return 1;
-}
-
-static int ProcessGetKey(const CowBuffer<uint8_t> response)
-{
-	int32_t code;
-
-	if (response.Size() != sizeof(code) + KEY_SIZE) {
-		printf("Invalid response length.\n");
-		return 1;
-	}
-
-	code = *response.SwitchType<int32_t>();
-
-	if (code != OK) {
-		PrintError(code);
-		return 1;
-	}
-
-	String keyHex = DataToHex(response.Pointer() + sizeof(code), KEY_SIZE);
-	printf("%s\n", keyHex.CStr());
-	return 0;
-}
-
-static int ProcessListUsers(CowBuffer<uint8_t> response)
-{
-	int32_t code;
-
-	if (response.Size() < sizeof(code)) {
-		printf("Response is too short.\n");
-		return 1;
-	}
-
-	code = *response.SwitchType<int32_t>();
-
-	if (code != OK) {
-		PrintError(code);
-		return 1;
-	}
-
-	response = response.Slice(sizeof(code), response.Size() - sizeof(code));
-
-	const int32_t entrySize = KEY_SIZE + 55;
-	int32_t userCount;
-
-	if (response.Size() < sizeof(userCount)) {
-		printf("Response does not contain user count.\n");
-		return 1;
-	}
-
-	userCount = *response.SwitchType<int32_t>();
-
-	for (int i = 0; i < userCount; i++) {
-		String name(response.SwitchType<char>(
-			sizeof(userCount) + entrySize * i + KEY_SIZE));
-		String key = DataToHex(
-			response.Pointer(sizeof(userCount) + entrySize * i),
-			KEY_SIZE);
-
-		printf("%s\n%s\n\n", name.CStr(), key.CStr());
-	}
-
-	return 0;
-}
-
-static int ProcessListBannedIP(CowBuffer<uint8_t> response)
-{
-	int32_t code;
-
-	if (response.Size() < sizeof(code)) {
-		printf("Response is too short.\n");
-		return 1;
-	}
-
-	code = *response.SwitchType<int32_t>();
-
-	if (code != OK) {
-		PrintError(code);
-		return 1;
-	}
-
-	response = response.Slice(sizeof(code), response.Size() - sizeof(code));
-
-	if (response.Size() % sizeof(uint32_t)) {
-		printf("Invalid response length.\n");
-		return 2;
-	}
-
-	char ipStr[INET_ADDRSTRLEN];
-
-	for (unsigned int i = 0; i < response.Size() / sizeof(uint32_t); i++) {
-		uint32_t ip = *response.SwitchType<uint32_t>(
-			i * sizeof(uint32_t));
-
-		struct in_addr addr;
-		addr.s_addr = ip;
-
-		if (!inet_ntop(AF_INET, &addr, ipStr, INET_ADDRSTRLEN)) {
-			printf("Failed to write IP string.\n");
-			return 3;
-		}
-
-		printf("%s\n", ipStr);
-	}
-
-	return 0;
-}
-
-static int ProcessResponse(
-	const char *command,
-	CowBuffer<uint8_t> response)
-{
-	if (!strcmp(command, ShutdownCommand)) {
-		return ProcessShutdown(response);
-	} else if (!strcmp(command, GetKeyCommand)) {
-		return ProcessGetKey(response);
-	} else if (!strcmp(command, AddUserCommand)) {
-		return ProcessResultCode(response);
-	} else if (!strcmp(command, RemoveUserCommand)) {
-		return ProcessResultCode(response);
-	} else if (!strcmp(command, ListUsersCommand)) {
-		return ProcessListUsers(response);
-	} else if (!strcmp(command, ListBannedIPCommand)) {
-		return ProcessListBannedIP(response);
-	} else if (!strcmp(command, BanIPCommand)) {
-		return ProcessResultCode(response);
-	} else if (!strcmp(command, UnbanIPCommand)) {
-		return ProcessResultCode(response);
-	} else if (!strcmp(command, ReloadCommand)) {
-		return ProcessResultCode(response);
-	}
-
-	printf("Unknown command.\n");
-	return 100;
 }
 
 static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
@@ -467,27 +69,19 @@ static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
 	return session.Receive();
 }
 
-static void PrintHelp()
-{
-	printf("Commands:\n");
-	printf("\t%s\n", ShutdownCommand);
-	printf("\t%s\n", GetKeyCommand);
-	printf("\t%s\n", AddUserCommand);
-	printf("\t%s\n", RemoveUserCommand);
-	printf("\t%s\n", ListUsersCommand);
-	printf("\t%s\n", ListBannedIPCommand);
-	printf("\t%s\n", BanIPCommand);
-	printf("\t%s\n", UnbanIPCommand);
-}
-
 int main(int argc, char **argv)
 {
 	try {
 		PrintVersionAndExit(argc, argv);
 
 		if (argc < 2) {
-			PrintHelp();
+			PrintShortHelp();
 			return 1;
+		}
+
+		if (!strcmp(argv[1], "--help")) {
+			PrintHelp();
+			return 0;
 		}
 
 		CowBuffer<uint8_t> request = CreateRequest(argc, argv);
@@ -498,9 +92,11 @@ int main(int argc, char **argv)
 		}
 
 		CowBuffer<uint8_t> response = SendRequest(request);
-		return ProcessResponse(argv[1], response);
+
+		int32_t commandId = *request.SwitchType<int32_t>();
+		return ProcessResponse(commandId, response);
 	} catch (Exception &ex) {
-		printf("%s\n", ex.What().CStr());
+		printf("%s\n", ex.Message().CStr());
 	}
 
 	return 10;
