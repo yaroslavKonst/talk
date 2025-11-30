@@ -130,7 +130,7 @@ bool FailBan::IsAllowed(uint32_t ipv4)
 	return !_enabled || !Find(ipv4);
 }
 
-void FailBan::Ban(uint32_t ipv4)
+bool FailBan::Ban(uint32_t ipv4)
 {
 	int index;
 
@@ -151,19 +151,21 @@ void FailBan::Ban(uint32_t ipv4)
 		entry->Index = index;
 		entry->Next = _freeIndices;
 		_freeIndices = entry;
-		return;
+		return false;
 	}
 
 	_file.Write<uint32_t>(&ipv4, 1, sizeof(uint32_t) * index);
 	Log(IpToString(ipv4) + " is banned.");
+
+	return true;
 }
 
-void FailBan::Unban(uint32_t ipv4)
+bool FailBan::Unban(uint32_t ipv4)
 {
 	Entry **entry = Find(ipv4);
 
 	if (!entry) {
-		return;
+		return false;
 	}
 
 	uint32_t zeroIP = 0;
@@ -181,6 +183,8 @@ void FailBan::Unban(uint32_t ipv4)
 	Remove(entry);
 
 	Log(IpToString(ipv4) + " is unbanned.");
+
+	return true;
 }
 
 CowBuffer<uint32_t> FailBan::ListBanned()

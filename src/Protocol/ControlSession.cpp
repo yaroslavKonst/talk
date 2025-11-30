@@ -223,8 +223,13 @@ void ControlSession::ProcessBanIP(const CowBuffer<uint8_t> message)
 	uint32_t ip = *message.SwitchType<uint32_t>(sizeof(int32_t));
 
 	Log("Received ban IP command.");
-	Ban->Ban(ip);
-	SendResponse(OK, CowBuffer<uint8_t>());
+	bool res = Ban->Ban(ip);
+
+	if (res) {
+		SendResponse(OK, CowBuffer<uint8_t>());
+	} else {
+		SendResponse(ERROR_INVALID_IP, CowBuffer<uint8_t>());
+	}
 }
 
 void ControlSession::ProcessUnbanIP(const CowBuffer<uint8_t> message)
@@ -237,8 +242,13 @@ void ControlSession::ProcessUnbanIP(const CowBuffer<uint8_t> message)
 	uint32_t ip = *message.SwitchType<uint32_t>(sizeof(int32_t));
 
 	Log("Received unban IP command.");
-	Ban->Unban(ip);
-	SendResponse(OK, CowBuffer<uint8_t>());
+	bool res = Ban->Unban(ip);
+
+	if (res) {
+		SendResponse(OK, CowBuffer<uint8_t>());
+	} else {
+		SendResponse(ERROR_INVALID_IP, CowBuffer<uint8_t>());
+	}
 }
 
 void ControlSession::ProcessReload()

@@ -20,8 +20,8 @@ public:
 	void Cooldown();
 
 	bool IsAllowed(uint32_t ipv4);
-	void Ban(uint32_t ipv4);
-	void Unban(uint32_t ipv4);
+	bool Ban(uint32_t ipv4);
+	bool Unban(uint32_t ipv4);
 
 	CowBuffer<uint32_t> ListBanned();
 
