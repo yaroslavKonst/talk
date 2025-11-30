@@ -7,7 +7,8 @@
 #include "../Common/Hex.hpp"
 #include "TextColor.hpp"
 
-// Filters
+// Filters.
+// LPF.
 struct LPFData
 {
 	int32_t Size;
@@ -359,16 +360,12 @@ bool VoiceChat::ReceiveVoiceFrame(CowBuffer<uint8_t> frame)
 	}
 
 	if (_applyFilter) {
-		static LPFData *data = nullptr;
-
-		if (!data) {
-			data = new LPFData(5);
-		}
+		static LPFData data(5);
 
 		LowPassFilter(
 			audioData.Pointer(),
 			audioData.Size(),
-			data);
+			&data);
 	}
 
 	if (_volume != 100) {

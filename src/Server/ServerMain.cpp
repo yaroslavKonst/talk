@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <unistd.h>
 #include <sys/wait.h>
@@ -108,12 +109,24 @@ int main(int argc, char **argv)
 	PrintVersionAndExit(argc, argv);
 
 	try {
-		if (argc != 1) {
+		bool daemonize = true;
+
+		if (argc == 2) {
+			if (!strcmp(argv[1], "--noD")) {
+				daemonize = false;
+			} else {
+				return 1;
+			}
+		} else if (argc != 1) {
 			return 1;
 		}
 
 		Server server;
-		Daemonize();
+
+		if (daemonize) {
+			Daemonize();
+		}
+
 		return server.Run();
 	}
 	catch (Exception &ex) {

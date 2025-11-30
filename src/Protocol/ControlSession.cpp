@@ -32,8 +32,7 @@ bool ControlSession::Process()
 		return true;
 	}
 
-	int32_t command;
-	memcpy(&command, message.Pointer(), sizeof(int32_t));
+	int32_t command = *message.SwitchType<int32_t>();
 
 	switch (command) {
 	case COMMAND_SHUTDOWN:
@@ -50,6 +49,16 @@ bool ControlSession::Process()
 		break;
 	case COMMAND_LIST_USERS:
 		ProcessListUsersCommand();
+		break;
+	case COMMAND_LIST_BANNED_IP:
+		ProcessListBannedIP();
+		break;
+	case COMMAND_BAN_IP:
+		ProcessBanIP(message);
+		break;
+	case COMMAND_UNBAN_IP:
+		ProcessUnbanIP(message);
+		break;
 	default:
 		ProcessUnknownCommand();
 		break;
@@ -60,17 +69,10 @@ bool ControlSession::Process()
 
 void ControlSession::SendResponse(int32_t code, const CowBuffer<uint8_t> data)
 {
-	CowBuffer<uint8_t> message(sizeof(code) + data.Size());
-	memcpy(message.Pointer(), &code, sizeof(code));
+	CowBuffer<uint8_t> message(sizeof(code));
+	*message.SwitchType<int32_t>() = code;
 
-	if (data.Size()) {
-		memcpy(
-			message.Pointer() + sizeof(code),
-			data.Pointer(),
-			data.Size());
-	}
-
-	Send(message, 0);
+	Send(message.Concat(data), 0);
 }
 
 void ControlSession::ProcessShutdownCommand()
@@ -196,6 +198,44 @@ void ControlSession::ProcessListUsersCommand()
 	}
 
 	SendResponse(OK, message);
+}
+
+void ControlSession::ProcessListBannedIP()
+{
+	CowBuffer<uint32_t> bannedIP = Ban->ListBanned();
+
+	CowBuffer<uint8_t> result(sizeof(uint32_t) * bannedIP.Size());
+	memcpy(result.Pointer(), bannedIP.Pointer(), result.Size());
+
+	SendResponse(OK, result);
+}
+
+void ControlSession::ProcessBanIP(const CowBuffer<uint8_t> message)
+{
+	if (message.Size() != sizeof(int32_t) + sizeof(uint32_t)) {
+		SendResponse(ERROR_INVALID_SIZE, CowBuffer<uint8_t>());
+		return;
+	}
+
+	uint32_t ip = *message.SwitchType<uint32_t>(sizeof(int32_t));
+
+	Log("Received ban IP command.");
+	Ban->Ban(ip);
+	SendResponse(OK, CowBuffer<uint8_t>());
+}
+
+void ControlSession::ProcessUnbanIP(const CowBuffer<uint8_t> message)
+{
+	if (message.Size() != sizeof(int32_t) + sizeof(uint32_t)) {
+		SendResponse(ERROR_INVALID_SIZE, CowBuffer<uint8_t>());
+		return;
+	}
+
+	uint32_t ip = *message.SwitchType<uint32_t>(sizeof(int32_t));
+
+	Log("Received unban IP command.");
+	Ban->Unban(ip);
+	SendResponse(OK, CowBuffer<uint8_t>());
 }
 
 void ControlSession::ProcessUnknownCommand()

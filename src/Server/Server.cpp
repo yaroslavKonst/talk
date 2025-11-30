@@ -10,28 +10,15 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 #include <sys/stat.h>
-#include <signal.h>
 
 #include "../Protocol/ServerSession.hpp"
 #include "../Protocol/ControlSession.hpp"
 #include "../ServerCtl/SocketName.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/File.hpp"
+#include "../Common/SignalHandling.hpp"
 #include "../Common/Debug.hpp"
 #include "../Crypto/Crypto.hpp"
-
-static void DisableSigPipe()
-{
-	struct sigaction act;
-	memset(&act, 0, sizeof(act));
-	act.sa_handler = SIG_IGN;
-
-	int res = sigaction(SIGPIPE, &act, nullptr);
-
-	if (res == -1) {
-		THROW("Failed to ignore SIGPIPE signal.");
-	}
-}
 
 Server::Server() : _configFile("talkd.conf")
 {
@@ -342,6 +329,7 @@ void Server::AcceptControl()
 	session->Socket = fd;
 
 	session->Users = &_userDb;
+	session->Ban = &_failBan;
 	session->Work = &_work;
 	session->PublicKey = _publicKey;
 

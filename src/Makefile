@@ -15,6 +15,7 @@ SERVER_MODULES =\
 	Common/BinaryFile.o \
 	Common/File.o \
 	Common/Version.o \
+	Common/SignalHandling.o \
 	Message/Message.o \
 	Message/MessageStorage.o \
 	Crypto/Crypto.o \
@@ -50,6 +51,7 @@ CLIENT_MODULES=\
 	Common/BinaryFile.o \
 	Common/File.o \
 	Common/Version.o \
+	Common/SignalHandling.o \
 	Message/Message.o \
 	Message/MessageStorage.o \
 	Message/ContactStorage.o \

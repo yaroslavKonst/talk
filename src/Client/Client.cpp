@@ -6,6 +6,7 @@
 
 #include "../Common/Exception.hpp"
 #include "../Common/UnixTime.hpp"
+#include "../Common/SignalHandling.hpp"
 
 Client::Client() : _ui(&_session)
 {
@@ -21,6 +22,8 @@ Client::~Client()
 
 int Client::Run()
 {
+	DisableSigPipe();
+
 	bool work = true;
 
 	struct pollfd *fds = new struct pollfd[3];

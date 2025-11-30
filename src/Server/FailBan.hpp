@@ -2,6 +2,7 @@
 #define _FAIL_BAN_HPP
 
 #include "../Common/BinaryFile.hpp"
+#include "../Common/CowBuffer.hpp"
 
 // All IPv4 addresses are stored and processed in network byte order.
 class FailBan
@@ -20,6 +21,9 @@ public:
 
 	bool IsAllowed(uint32_t ipv4);
 	void Ban(uint32_t ipv4);
+	void Unban(uint32_t ipv4);
+
+	CowBuffer<uint32_t> ListBanned();
 
 private:
 	struct Entry
@@ -55,8 +59,11 @@ private:
 	};
 
 	Entry *_db;
-	void Add(uint32_t ip, int index);
-	bool Contains(uint32_t ip);
+	bool Add(uint32_t ip, int index);
+	Entry **Find(uint32_t ip);
+	void Remove(Entry **entry);
+	int CountEntries(Entry *entry);
+	void FillArray(Entry *entry, uint32_t *array, int *index);
 
 	FreeIndex *_freeIndices;
 

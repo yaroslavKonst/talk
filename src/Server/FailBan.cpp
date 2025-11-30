@@ -127,7 +127,7 @@ void FailBan::Cooldown()
 
 bool FailBan::IsAllowed(uint32_t ipv4)
 {
-	return !_enabled || !Contains(ipv4);
+	return !_enabled || !Find(ipv4);
 }
 
 void FailBan::Ban(uint32_t ipv4)
@@ -142,21 +142,64 @@ void FailBan::Ban(uint32_t ipv4)
 		delete tmp;
 	} else {
 		index = _file.Size() / sizeof(uint32_t);
-		_file.Write<uint32_t>(&ipv4, 1, sizeof(uint32_t) * index);
 	}
 
-	Add(ipv4, index);
+	bool added = Add(ipv4, index);
 
+	if (!added) {
+		FreeIndex *entry = new FreeIndex;
+		entry->Index = index;
+		entry->Next = _freeIndices;
+		_freeIndices = entry;
+		return;
+	}
+
+	_file.Write<uint32_t>(&ipv4, 1, sizeof(uint32_t) * index);
 	Log(IpToString(ipv4) + " is banned.");
 }
 
-void FailBan::Add(uint32_t ip, int index)
+void FailBan::Unban(uint32_t ipv4)
+{
+	Entry **entry = Find(ipv4);
+
+	if (!entry) {
+		return;
+	}
+
+	uint32_t zeroIP = 0;
+	_file.Write<uint32_t>(
+		&zeroIP,
+		1,
+		sizeof(uint32_t) *
+		(*entry)->IndexInFile);
+
+	FreeIndex *idx = new FreeIndex;
+	idx->Index = (*entry)->IndexInFile;
+	idx->Next = _freeIndices;
+	_freeIndices = idx;
+
+	Remove(entry);
+
+	Log(IpToString(ipv4) + " is unbanned.");
+}
+
+CowBuffer<uint32_t> FailBan::ListBanned()
+{
+	int bannedCount = CountEntries(_db);
+	CowBuffer<uint32_t> result(bannedCount);
+
+	int index = 0;
+	FillArray(_db, result.Pointer(), &index);
+	return result;
+}
+
+bool FailBan::Add(uint32_t ip, int index)
 {
 	Entry **curr = &_db;
 
 	while (*curr) {
 		if (ip == (*curr)->IPv4) {
-			return;
+			return false;
 		}
 
 		if (ip < (*curr)->IPv4) {
@@ -169,25 +212,76 @@ void FailBan::Add(uint32_t ip, int index)
 	*curr = new Entry;
 	(*curr)->IPv4 = ip;
 	(*curr)->IndexInFile = index;
+
+	return true;
 }
 
-bool FailBan::Contains(uint32_t ip)
+FailBan::Entry **FailBan::Find(uint32_t ip)
 {
-	Entry *curr = _db;
+	Entry **curr = &_db;
 
-	while (curr) {
-		if (ip == curr->IPv4) {
-			return true;
+	while (*curr) {
+		if (ip == (*curr)->IPv4) {
+			return curr;
 		}
 
-		if (ip < curr->IPv4) {
-			curr = curr->Left;
+		if (ip < (*curr)->IPv4) {
+			curr = &((*curr)->Left);
 		} else {
-			curr = curr->Right;
+			curr = &((*curr)->Right);
 		}
 	}
 
-	return false;
+	return nullptr;
+}
+
+void FailBan::Remove(Entry **entry)
+{
+	if (!(*entry)->Left) {
+		Entry *tmp = *entry;
+		*entry = (*entry)->Right;
+		tmp->Left = nullptr;
+		tmp->Right = nullptr;
+		delete tmp;
+	} else if (!(*entry)->Right) {
+		Entry *tmp = *entry;
+		*entry = (*entry)->Left;
+		tmp->Left = nullptr;
+		tmp->Right = nullptr;
+		delete tmp;
+	} else {
+		Entry **lSubMax = &((*entry)->Left);
+
+		while ((*lSubMax)->Right) {
+			lSubMax = &((*lSubMax)->Right);
+		}
+
+		(*entry)->IPv4 = (*lSubMax)->IPv4;
+		(*entry)->IndexInFile = (*lSubMax)->IndexInFile;
+
+		Remove(lSubMax);
+	}
+}
+
+int FailBan::CountEntries(Entry *entry)
+{
+	if (!entry) {
+		return 0;
+	}
+
+	return 1 + CountEntries(entry->Left) + CountEntries(entry->Right);
+}
+
+void FailBan::FillArray(Entry *entry, uint32_t *array, int *index)
+{
+	if (!entry) {
+		return;
+	}
+
+	FillArray(entry->Left, array, index);
+	array[*index] = entry->IPv4;
+	*index += 1;
+	FillArray(entry->Right, array, index);
 }
 
 void FailBan::Load()

@@ -3,12 +3,14 @@
 
 #include "Session.hpp"
 #include "../Server/UserDB.hpp"
+#include "../Server/FailBan.hpp"
 
 struct ControlSession : public Session
 {
 	ControlSession();
 
 	UserDB *Users;
+	FailBan *Ban;
 	bool *Work;
 
 	const uint8_t *PublicKey;
@@ -23,6 +25,9 @@ struct ControlSession : public Session
 	void ProcessAddUserCommand(const CowBuffer<uint8_t> message);
 	void ProcessRemoveUserCommand(const CowBuffer<uint8_t> message);
 	void ProcessListUsersCommand();
+	void ProcessListBannedIP();
+	void ProcessBanIP(const CowBuffer<uint8_t> message);
+	void ProcessUnbanIP(const CowBuffer<uint8_t> message);
 
 	void ProcessUnknownCommand();
 };
