@@ -12,6 +12,7 @@ struct ControlSession : public Session
 	UserDB *Users;
 	FailBan *Ban;
 	bool *Work;
+	bool *Reload;
 
 	const uint8_t *PublicKey;
 
@@ -28,6 +29,7 @@ struct ControlSession : public Session
 	void ProcessListBannedIP();
 	void ProcessBanIP(const CowBuffer<uint8_t> message);
 	void ProcessUnbanIP(const CowBuffer<uint8_t> message);
+	void ProcessReload();
 
 	void ProcessUnknownCommand();
 };

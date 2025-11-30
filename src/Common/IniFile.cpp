@@ -150,6 +150,14 @@ void IniFile::Write()
 	Save();
 }
 
+void IniFile::Reload()
+{
+	_modified = false;
+
+	Free();
+	Load();
+}
+
 void IniFile::Load()
 {
 	if (_modified) {

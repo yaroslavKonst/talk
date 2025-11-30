@@ -21,6 +21,8 @@ public:
 	String GetPath();
 	void Write();
 
+	void Reload();
+
 private:
 	struct Key
 	{

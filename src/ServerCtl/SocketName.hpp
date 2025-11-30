@@ -21,5 +21,6 @@
 #define COMMAND_LIST_BANNED_IP 6
 #define COMMAND_BAN_IP 7
 #define COMMAND_UNBAN_IP 8
+#define COMMAND_RELOAD 9
 
 #endif

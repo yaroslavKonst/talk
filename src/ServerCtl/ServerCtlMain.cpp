@@ -22,6 +22,7 @@ static const char *ListUsersCommand = "listusers";
 static const char *ListBannedIPCommand = "listbannedip";
 static const char *BanIPCommand = "banip";
 static const char *UnbanIPCommand = "unbanip";
+static const char *ReloadCommand = "reload";
 
 static int OpenSocket()
 {
@@ -205,6 +206,14 @@ static CowBuffer<uint8_t> RequestUnbanIP(int argc, char **argv)
 	return result;
 }
 
+static CowBuffer<uint8_t> RequestReload()
+{
+	CowBuffer<uint8_t> result(sizeof(int32_t));
+	*result.SwitchType<int32_t>() = COMMAND_RELOAD;
+
+	return result;
+}
+
 static CowBuffer<uint8_t> CreateRequest(int argc, char **argv)
 {
 	CowBuffer<uint8_t> request;
@@ -225,6 +234,8 @@ static CowBuffer<uint8_t> CreateRequest(int argc, char **argv)
 		request = RequestBanIP(argc, argv);
 	} else if (!strcmp(argv[1], UnbanIPCommand)) {
 		request = RequestUnbanIP(argc, argv);
+	} else if (!strcmp(argv[1], ReloadCommand)) {
+		request = RequestReload();
 	}
 
 	return request;
@@ -413,6 +424,8 @@ static int ProcessResponse(
 	} else if (!strcmp(command, BanIPCommand)) {
 		return ProcessResultCode(response);
 	} else if (!strcmp(command, UnbanIPCommand)) {
+		return ProcessResultCode(response);
+	} else if (!strcmp(command, ReloadCommand)) {
 		return ProcessResultCode(response);
 	}
 

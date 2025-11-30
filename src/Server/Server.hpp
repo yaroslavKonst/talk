@@ -23,11 +23,13 @@ private:
 	Session *_sessionFirst;
 
 	bool _work;
+	bool _reload;
 
 	int _activeUsers;
 
 	IniFile _configFile;
 	void InitConfigFile();
+	void ReloadConfigFile();
 
 	FailBan _failBan;
 	int64_t _failBanCooldownInterval;
@@ -44,14 +46,18 @@ private:
 	void WipeKeys();
 
 	void OpenListeningSockets();
-	void CloseSockets();
+	void CloseListeningSockets();
+	void OpenUserSocket();
+	void OpenControlSocket();
+	void CloseUserSocket();
+	void CloseControlSocket();
 
 	void CloseSessions(Session *sessions);
 
 	void AcceptConnection();
 	void AcceptControl();
 
-	struct pollfd *BuildPollFds();
+	struct pollfd *BuildPollFds(int &fdCount);
 	void ProcessPollFds(struct pollfd *fds, bool updateTime);
 
 };

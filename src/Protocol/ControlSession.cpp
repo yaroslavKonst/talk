@@ -59,6 +59,9 @@ bool ControlSession::Process()
 	case COMMAND_UNBAN_IP:
 		ProcessUnbanIP(message);
 		break;
+	case COMMAND_RELOAD:
+		ProcessReload();
+		break;
 	default:
 		ProcessUnknownCommand();
 		break;
@@ -235,6 +238,13 @@ void ControlSession::ProcessUnbanIP(const CowBuffer<uint8_t> message)
 
 	Log("Received unban IP command.");
 	Ban->Unban(ip);
+	SendResponse(OK, CowBuffer<uint8_t>());
+}
+
+void ControlSession::ProcessReload()
+{
+	Log("Received reload command.");
+	*Reload = true;
 	SendResponse(OK, CowBuffer<uint8_t>());
 }
 

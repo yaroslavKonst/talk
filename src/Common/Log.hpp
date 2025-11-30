@@ -14,6 +14,7 @@ inline void Log(String message)
 	timeStr = timeStr.Substring(0, timeStr.Length() - 1);
 
 	printf("[%s]: %s\n", timeStr.CStr(), message.CStr());
+	fflush(stdout);
 }
 
 #endif

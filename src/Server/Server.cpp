@@ -17,6 +17,7 @@
 #include "../Common/UnixTime.hpp"
 #include "../Common/File.hpp"
 #include "../Common/SignalHandling.hpp"
+#include "../Common/Log.hpp"
 #include "../Common/Debug.hpp"
 #include "../Crypto/Crypto.hpp"
 
@@ -33,6 +34,7 @@ Server::Server() : _configFile("talkd.conf")
 
 	_activeUsers = 0;
 	_work = false;
+	_reload = false;
 
 	LoadFailBan();
 
@@ -42,7 +44,7 @@ Server::Server() : _configFile("talkd.conf")
 Server::~Server()
 {
 	CloseSessions(_sessionFirst);
-	CloseSockets();
+	CloseListeningSockets();
 	WipeKeys();
 }
 
@@ -58,9 +60,10 @@ int Server::Run()
 	int64_t currentTime = GetUnixTime();
 
 	while (_work) {
-		struct pollfd *fds = BuildPollFds();
+		int fdCount;
+		struct pollfd *fds = BuildPollFds(fdCount);
 
-		int res = poll(fds, _activeUsers + 2, 10000);
+		int res = poll(fds, fdCount, 10000);
 
 		if (res == -1) {
 			THROW("Error on poll.");
@@ -80,6 +83,11 @@ int Server::Run()
 		}
 
 		ProcessPollFds(fds, updateTime);
+
+		if (_reload) {
+			_reload = false;
+			ReloadConfigFile();
+		}
 	}
 
 	return 0;
@@ -96,6 +104,23 @@ void Server::InitConfigFile()
 		_configFile.Set("FailBan", "CooldownInterval", "14400");
 		_configFile.Write();
 	}
+}
+
+void Server::ReloadConfigFile()
+{
+	try {
+		_configFile.Reload();
+
+		LoadFailBan();
+		CloseUserSocket();
+		OpenUserSocket();
+	} catch (Exception &ex) {
+		Log("Failed to reload config file.");
+		Log(ex.What());
+		return;
+	}
+
+	Log("Reloaded config file.");
 }
 
 void Server::LoadFailBan()
@@ -189,7 +214,18 @@ void Server::WipeKeys()
 
 void Server::OpenListeningSockets()
 {
-	// Listening socket.
+	OpenUserSocket();
+	OpenControlSocket();
+}
+
+void Server::CloseListeningSockets()
+{
+	CloseUserSocket();
+	CloseControlSocket();
+}
+
+void Server::OpenUserSocket()
+{
 	uint16_t port = atoi(_configFile.Get("Network", "Port").CStr());
 
 	if (port == 0) {
@@ -216,51 +252,62 @@ void Server::OpenListeningSockets()
 	res = bind(_listeningSocket, (struct sockaddr*)&addr, sizeof(addr));
 
 	if (res == -1) {
+		CloseUserSocket();
 		THROW("Failed to bind listening socket.");
 	}
 
 	res = listen(_listeningSocket, 5);
 
 	if (res == -1) {
+		CloseUserSocket();
 		THROW("Failed to move socket to listening state.");
 	}
+}
 
-	// Control socket.
+void Server::OpenControlSocket()
+{
 	_controlSocket = socket(AF_UNIX, SOCK_STREAM, 0);
 
 	if (_controlSocket == -1) {
 		THROW("Failed to create control socket.");
 	}
 
-	struct sockaddr_un addr_un;
-	addr_un.sun_family = AF_UNIX;
+	struct sockaddr_un addr;
+	addr.sun_family = AF_UNIX;
 	strncpy(
-		addr_un.sun_path,
+		addr.sun_path,
 		TALKD_SOCKET_NAME,
-		sizeof(addr_un.sun_path) - 1);
+		sizeof(addr.sun_path) - 1);
 
-	res = bind(_controlSocket, (struct sockaddr*)&addr_un, sizeof(addr_un));
+	int res = bind(_controlSocket, (struct sockaddr*)&addr, sizeof(addr));
 
 	if (res == -1) {
+		CloseControlSocket();
 		THROW("Failed to bind control socket.");
 	}
 
 	res = listen(_controlSocket, 5);
 
 	if (res == -1) {
+		CloseControlSocket();
 		THROW("Failed to move control socket to listening state.");
 	}
 }
 
-void Server::CloseSockets()
+void Server::CloseUserSocket()
 {
 	if (_listeningSocket != -1) {
 		close(_listeningSocket);
+		_listeningSocket = -1;
 	}
+}
 
+void Server::CloseControlSocket()
+{
 	if (_controlSocket != -1) {
 		close(_controlSocket);
 		unlink(TALKD_SOCKET_NAME);
+		_controlSocket = -1;
 	}
 }
 
@@ -331,26 +378,37 @@ void Server::AcceptControl()
 	session->Users = &_userDb;
 	session->Ban = &_failBan;
 	session->Work = &_work;
+	session->Reload = &_reload;
 	session->PublicKey = _publicKey;
 
 	session->Next = _sessionFirst;
 	_sessionFirst = session;
 }
 
-struct pollfd *Server::BuildPollFds()
+struct pollfd *Server::BuildPollFds(int &fdCount)
 {
-	struct pollfd *fds = new struct pollfd[_activeUsers + 2];
+	int specialSocketCount =
+		(_listeningSocket != -1 ? 1 : 0) +
+		(_controlSocket != -1 ? 1 : 0);
 
-	// Listening socket.
-	fds[0].fd = _listeningSocket;
-	fds[0].events = POLLIN;
+	struct pollfd *fds = new struct pollfd[
+		_activeUsers + specialSocketCount];
 
-	fds[1].fd = _controlSocket;
-	fds[1].events = POLLIN;
+	int index = 0;
+
+	if (_listeningSocket != -1) {
+		fds[index].fd = _listeningSocket;
+		fds[index].events = POLLIN;
+		++index;
+	}
+
+	if (_controlSocket != -1) {
+		fds[index].fd = _controlSocket;
+		fds[index].events = POLLIN;
+		++index;
+	}
 
 	Session *session = _sessionFirst;
-
-	int index = 2;
 
 	while (session) {
 		fds[index].fd = session->Socket;
@@ -365,6 +423,8 @@ struct pollfd *Server::BuildPollFds()
 		session = session->Next;
 	}
 
+	fdCount = index;
+
 	return fds;
 }
 
@@ -372,7 +432,9 @@ void Server::ProcessPollFds(struct pollfd *fds, bool updateTime)
 {
 	Session **session = &_sessionFirst;
 
-	int index = 2;
+	int index =
+		(_listeningSocket != -1 ? 1 : 0) +
+		(_controlSocket != -1 ? 1 : 0);
 
 	while (*session)
 	{
@@ -408,12 +470,22 @@ void Server::ProcessPollFds(struct pollfd *fds, bool updateTime)
 		++index;
 	}
 
-	if (fds[0].revents & POLLIN) {
-		AcceptConnection();
+	index = 0;
+
+	if (_listeningSocket != -1) {
+		if (fds[index].revents & POLLIN) {
+			AcceptConnection();
+		}
+
+		++index;
 	}
 
-	if (fds[1].revents & POLLIN) {
-		AcceptControl();
+	if (_controlSocket != -1) {
+		if (fds[index].revents & POLLIN) {
+			AcceptControl();
+		}
+
+		++index;
 	}
 
 	delete[] fds;
