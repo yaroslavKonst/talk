@@ -21,6 +21,23 @@
 #include "../Common/Debug.hpp"
 #include "../Crypto/Crypto.hpp"
 
+static const char *RestrictedModeSetting = "RestrictedMode";
+static const char *RestrictedModeSettingValue = "No";
+
+static const char *NetworkSection = "Network";
+static const char *IPv4Setting = "IPv4";
+static const char *IPv4SettingValue = "0.0.0.0";
+static const char *PortSetting = "Port";
+static const char *PortSettingValue = "6524";
+
+static const char *FailBanSection = "FailBan";
+static const char *FailBanEnabledSetting = "Enabled";
+static const char *FailBanEnabledSettingValue = "No";
+static const char *FailBanTriesSetting = "AllowedTries";
+static const char *FailBanTriesSettingValue = "5";
+static const char *FailBanCooldownSetting = "CooldownInterval";
+static const char *FailBanCooldownSettingValue = "14400";
+
 Server::Server() : _configFile("talkd.conf")
 {
 	umask(077);
@@ -35,8 +52,9 @@ Server::Server() : _configFile("talkd.conf")
 	_activeUsers = 0;
 	_work = false;
 	_reload = false;
+	_restrictedMode = false;
 
-	LoadFailBan();
+	LoadConfig();
 
 	GetPassword();
 }
@@ -96,14 +114,35 @@ int Server::Run()
 void Server::InitConfigFile()
 {
 	if (!FileExists(_configFile.GetPath())) {
-		_configFile.Set("Network", "IPv4", "0.0.0.0");
-		_configFile.Set("Network", "Port", "6524");
+		_configFile.Set(
+			"",
+			RestrictedModeSetting,
+			RestrictedModeSettingValue);
 
-		_configFile.Set("FailBan", "Enabled", "No");
-		_configFile.Set("FailBan", "AllowedTries", "5");
-		_configFile.Set("FailBan", "CooldownInterval", "14400");
+		_configFile.Set(NetworkSection, IPv4Setting, IPv4SettingValue);
+		_configFile.Set(NetworkSection, PortSetting, PortSettingValue);
+
+		_configFile.Set(
+			FailBanSection,
+			FailBanEnabledSetting,
+			FailBanEnabledSettingValue);
+		_configFile.Set(
+			FailBanSection,
+			FailBanTriesSetting,
+			FailBanTriesSettingValue);
+		_configFile.Set(
+			FailBanSection,
+			FailBanCooldownSetting,
+			FailBanCooldownSettingValue);
+
 		_configFile.Write();
 	}
+}
+
+void Server::LoadConfig()
+{
+	LoadRestrictedMode();
+	LoadFailBan();
 }
 
 void Server::ReloadConfigFile()
@@ -111,7 +150,7 @@ void Server::ReloadConfigFile()
 	try {
 		_configFile.Reload();
 
-		LoadFailBan();
+		LoadConfig();
 		CloseUserSocket();
 		OpenUserSocket();
 	} catch (Exception &ex) {
@@ -125,9 +164,12 @@ void Server::ReloadConfigFile()
 
 void Server::LoadFailBan()
 {
-	String enabledValue = _configFile.Get("FailBan", "Enabled");
-	String triesValue = _configFile.Get("FailBan", "AllowedTries");
-	String intervalValue = _configFile.Get("FailBan", "CooldownInterval");
+	String enabledValue =
+		_configFile.Get(FailBanSection, FailBanEnabledSetting);
+	String triesValue =
+		_configFile.Get(FailBanSection, FailBanTriesSetting);
+	String intervalValue =
+		_configFile.Get(FailBanSection, FailBanCooldownSetting);
 
 	if (enabledValue == "Yes") {
 		_failBan.SetEnabled(true);
@@ -152,6 +194,21 @@ void Server::LoadFailBan()
 
 	_failBan.SetTries(tries);
 	_failBanCooldownInterval = cooldownInterval;
+}
+
+void Server::LoadRestrictedMode()
+{
+	String restrictedModeValue = _configFile.Get("", RestrictedModeSetting);
+
+	if (restrictedModeValue == "Yes") {
+		_restrictedMode = true;
+	} else if (restrictedModeValue == "No") {
+		_restrictedMode = false;
+	} else {
+		THROW("Invalid RestrictedMode value. "
+			"Expected 'Yes' or 'No'.");
+	}
+
 }
 
 void Server::GetPassword()
@@ -226,7 +283,8 @@ void Server::CloseListeningSockets()
 
 void Server::OpenUserSocket()
 {
-	uint16_t port = atoi(_configFile.Get("Network", "Port").CStr());
+	uint16_t port = atoi(
+		_configFile.Get(NetworkSection, PortSetting).CStr());
 
 	if (port == 0) {
 		THROW("Invalid port number.");
@@ -236,7 +294,7 @@ void Server::OpenUserSocket()
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(port);
 	int res = inet_aton(
-		_configFile.Get("Network", "IPv4").CStr(),
+		_configFile.Get(NetworkSection, IPv4Setting).CStr(),
 		&addr.sin_addr);
 
 	if (!res) {
@@ -350,6 +408,7 @@ void Server::AcceptConnection()
 	session->Pipe = &_pipe;
 	session->Ban = &_failBan;
 	session->IPv4 = addr.sin_addr.s_addr;
+	session->RestrictedMode = &_restrictedMode;
 	session->State = ServerSession::ServerStateWaitFirstSyn;
 	session->SignatureKey = nullptr;
 	session->PeerPublicKey = nullptr;

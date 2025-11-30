@@ -262,6 +262,10 @@ bool ServerSession::ProcessTextMessage(const CowBuffer<uint8_t> plainText)
 
 bool ServerSession::ProcessListUsers(const CowBuffer<uint8_t> plainText)
 {
+	if (*RestrictedMode) {
+		return true;
+	}
+
 	CommandListUsers::Response response;
 
 	CowBuffer<const uint8_t*> userKeys = Users->ListUsers();

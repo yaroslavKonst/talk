@@ -23,6 +23,8 @@ struct ServerSession : public Session, public SendMessageHandler
 	FailBan *Ban;
 	uint32_t IPv4;
 
+	const bool *RestrictedMode;
+
 	ServerSessionState State;
 
 	const uint8_t *SignatureKey;

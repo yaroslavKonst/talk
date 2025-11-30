@@ -29,11 +29,15 @@ private:
 
 	IniFile _configFile;
 	void InitConfigFile();
+	void LoadConfig();
 	void ReloadConfigFile();
 
 	FailBan _failBan;
 	int64_t _failBanCooldownInterval;
 	void LoadFailBan();
+
+	bool _restrictedMode;
+	void LoadRestrictedMode();
 
 	uint8_t _privateKey[KEY_SIZE];
 	uint8_t _publicKey[KEY_SIZE];
