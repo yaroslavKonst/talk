@@ -143,11 +143,12 @@ StreamReader::StreamReader()
 {
 	_expectedData = 0;
 	_expectedSlice = 0;
+	_expectedInt = 0;
 }
 
 bool StreamReader::Finalized()
 {
-	return !_expectedSlice;
+	return !_expectedSlice && !_expectedInt;
 }
 
 bool StreamReader::HasData()
@@ -163,46 +164,107 @@ CowBuffer<uint8_t> StreamReader::GetData()
 bool StreamReader::Process(int sockFd, uint64_t sizeLimit)
 {
 	if (!_expectedData) {
-		uint64_t dataSize;
-
-		int rb = LoopRead(sockFd, &dataSize, sizeof(dataSize));
-
-		if (rb != sizeof(dataSize)) {
-			return false;
-		}
-
-		if (!dataSize || dataSize > sizeLimit) {
-			return false;
-		}
-
-		_expectedData = dataSize;
-		_data = CowBuffer<uint8_t>(dataSize);
-
-		return true;
+		return ReadDataSize(sockFd, sizeLimit);
 	}
 
 	if (!_expectedSlice) {
-		uint32_t segmentSize;
+		return ReadSliceSize(sockFd);
+	}
 
-		int rb = LoopRead(sockFd, &segmentSize, sizeof(segmentSize));
+	return ReadSlice(sockFd);
+}
 
-		if (rb != sizeof(segmentSize)) {
-			return false;
-		}
+void StreamReader::Reset()
+{
+	_data = CowBuffer<uint8_t>();
+	_expectedData = 0;
+	_expectedSlice = 0;
+	_intBuffer = CowBuffer<uint8_t>();
+	_expectedInt = 0;
+	_queue.Clear();
+}
 
-		if (!segmentSize || segmentSize > 2048) {
-			return false;
-		}
+bool StreamReader::ReadDataSize(int sockFd, uint64_t sizeLimit)
+{
+	uint64_t dataSize;
 
-		_expectedSlice = segmentSize;
-
-		if (_expectedSlice > _expectedData) {
-			return false;
-		}
-
+	if (!_expectedInt) {
+		_intBuffer = CowBuffer<uint8_t>(sizeof(dataSize));
+		_expectedInt = sizeof(dataSize);
 		return true;
 	}
 
+	int rb = LoopRead(
+		sockFd,
+		_intBuffer.Pointer(_intBuffer.Size() - _expectedInt),
+		_expectedInt);
+
+	if (!rb) {
+		return false;
+	}
+
+	_expectedInt -= rb;
+
+	if (_expectedInt) {
+		return true;
+	}
+
+	dataSize = *_intBuffer.SwitchType<uint64_t>();
+	_intBuffer = CowBuffer<uint8_t>();
+
+	if (!dataSize || dataSize > sizeLimit) {
+		return false;
+	}
+
+	_expectedData = dataSize;
+	_data = CowBuffer<uint8_t>(dataSize);
+
+	return true;
+}
+
+bool StreamReader::ReadSliceSize(int sockFd)
+{
+	uint32_t sliceSize;
+
+	if (!_expectedInt) {
+		_intBuffer = CowBuffer<uint8_t>(sizeof(sliceSize));
+		_expectedInt = sizeof(sliceSize);
+		return true;
+	}
+
+	int rb = LoopRead(
+		sockFd,
+		_intBuffer.Pointer(_intBuffer.Size() - _expectedInt),
+		_expectedInt);
+
+	if (!rb) {
+		return false;
+	}
+
+	_expectedInt -= rb;
+
+	if (_expectedInt) {
+		return true;
+	}
+
+	sliceSize = *_intBuffer.SwitchType<uint32_t>();
+	_intBuffer = CowBuffer<uint8_t>();
+
+	if (!sliceSize || sliceSize > 2048) {
+		return false;
+	}
+
+	_expectedSlice = sliceSize;
+
+	if (_expectedSlice > _expectedData) {
+		return false;
+	}
+
+	return true;
+}
+
+bool StreamReader::ReadSlice(int sockFd)
+{
 	int rb = Read(
 		sockFd,
 		_data.Pointer(_data.Size() - _expectedData),
@@ -227,29 +289,22 @@ bool StreamReader::Process(int sockFd, uint64_t sizeLimit)
 	return true;
 }
 
-void StreamReader::Reset()
-{
-	_data = CowBuffer<uint8_t>();
-	_expectedData = 0;
-	_expectedSlice = 0;
-	_queue.Clear();
-}
-
 // StreamWriter.
 StreamWriter::StreamWriter()
 {
 	_remainingData = 0;
 	_remainingSlice = 0;
+	_remainingInt = 0;
 }
 
 bool StreamWriter::Finalized()
 {
-	return !_remainingSlice;
+	return !_remainingSlice && !_remainingInt;
 }
 
 bool StreamWriter::CanWrite()
 {
-	return _remainingData || !_queue.IsEmpty();
+	return _remainingData || !_queue.IsEmpty() || _remainingInt;
 }
 
 void StreamWriter::AddData(const CowBuffer<uint8_t> data)
@@ -259,55 +314,96 @@ void StreamWriter::AddData(const CowBuffer<uint8_t> data)
 
 bool StreamWriter::Process(int sockFd, uint8_t stream)
 {
+	if (_remainingInt) {
+		return WriteInt(sockFd);
+	}
+
 	if (!_remainingData) {
-		if (_queue.IsEmpty()) {
-			return true;
-		}
-
-		_data = _queue.Get();
-		_remainingData = _data.Size();
-
-		int wb = LoopWrite(sockFd, &stream, 1);
-
-		if (wb != 1) {
-			return false;
-		}
-
-		uint64_t dataSize = _data.Size();
-
-		wb = LoopWrite(sockFd, &dataSize, sizeof(dataSize));
-
-		if (wb != sizeof(dataSize)) {
-			return false;
-		}
-
-		return true;
+		return WriteDataSize(sockFd, stream);
 	}
 
 	if (!_remainingSlice) {
-		_remainingSlice = _remainingData;
+		return WriteSliceSize(sockFd, stream);
+	}
 
-		if (_remainingSlice > 2048) {
-			_remainingSlice = 2048;
-		}
+	return WriteSlice(sockFd);
+}
 
-		int wb = LoopWrite(sockFd, &stream, 1);
+void StreamWriter::Reset()
+{
+	_data = CowBuffer<uint8_t>();
+	_remainingData = 0;
+	_remainingSlice = 0;
+	_intBuffer = CowBuffer<uint8_t>();
+	_remainingInt = 0;
+	_queue.Clear();
+}
 
-		if (wb != 1) {
-			return false;
-		}
+bool StreamWriter::WriteInt(int sockFd)
+{
+	int wb = LoopWrite(
+		sockFd,
+		_intBuffer.Pointer(_intBuffer.Size() - _remainingInt),
+		_remainingInt);
 
-		uint32_t segmentSize = _remainingSlice;
+	if (!wb) {
+		return false;
+	}
 
-		wb = LoopWrite(sockFd, &segmentSize, sizeof(segmentSize));
+	_remainingInt -= wb;
 
-		if (wb != sizeof(segmentSize)) {
-			return false;
-		}
+	if (!_remainingInt) {
+		_intBuffer = CowBuffer<uint8_t>();
+	}
 
+	return true;
+}
+
+bool StreamWriter::WriteDataSize(int sockFd, uint8_t stream)
+{
+	if (_queue.IsEmpty()) {
 		return true;
 	}
 
+	_data = _queue.Get();
+	_remainingData = _data.Size();
+
+	int wb = LoopWrite(sockFd, &stream, 1);
+
+	if (wb != 1) {
+		return false;
+	}
+
+	_intBuffer = CowBuffer<uint8_t>(sizeof(uint64_t));
+	*_intBuffer.SwitchType<uint64_t>() = _remainingData;
+	_remainingInt = _intBuffer.Size();
+
+	return true;
+}
+
+bool StreamWriter::WriteSliceSize(int sockFd, uint8_t stream)
+{
+	_remainingSlice = _remainingData;
+
+	if (_remainingSlice > 2048) {
+		_remainingSlice = 2048;
+	}
+
+	int wb = LoopWrite(sockFd, &stream, 1);
+
+	if (wb != 1) {
+		return false;
+	}
+
+	_intBuffer = CowBuffer<uint8_t>(sizeof(uint32_t));
+	*_intBuffer.SwitchType<uint32_t>() = _remainingSlice;
+	_remainingInt = _intBuffer.Size();
+
+	return true;
+}
+
+bool StreamWriter::WriteSlice(int sockFd)
+{
 	int wb = Write(
 		sockFd,
 		_data.Pointer(_data.Size() - _remainingData),
@@ -326,14 +422,6 @@ bool StreamWriter::Process(int sockFd, uint8_t stream)
 	}
 
 	return true;
-}
-
-void StreamWriter::Reset()
-{
-	_data = CowBuffer<uint8_t>();
-	_remainingData = 0;
-	_remainingSlice = 0;
-	_queue.Clear();
 }
 
 // Session.

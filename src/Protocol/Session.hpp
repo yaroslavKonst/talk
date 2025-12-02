@@ -47,7 +47,14 @@ private:
 
 	uint64_t _expectedSlice;
 
+	CowBuffer<uint8_t> _intBuffer;
+	int _expectedInt;
+
 	BufferQueue _queue;
+
+	bool ReadDataSize(int sockFd, uint64_t sizeLimit);
+	bool ReadSliceSize(int sockFd);
+	bool ReadSlice(int sockFd);
 };
 
 class StreamWriter
@@ -70,7 +77,15 @@ private:
 
 	uint64_t _remainingSlice;
 
+	CowBuffer<uint8_t> _intBuffer;
+	int _remainingInt;
+
 	BufferQueue _queue;
+
+	bool WriteInt(int sockFd);
+	bool WriteDataSize(int sockFd, uint8_t stream);
+	bool WriteSliceSize(int sockFd, uint8_t stream);
+	bool WriteSlice(int sockFd);
 };
 
 struct Session

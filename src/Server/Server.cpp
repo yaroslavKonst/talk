@@ -399,6 +399,25 @@ void Server::AcceptConnection()
 		return;
 	}
 
+	int flags = fcntl(fd, F_GETFL);
+
+	if (flags == -1) {
+		Log("Error: Failed to get socket flags.");
+		shutdown(fd, SHUT_RDWR);
+		close(fd);
+		return;
+	}
+
+	flags = flags | O_NONBLOCK;
+	int res = fcntl(fd, F_SETFL, flags);
+
+	if (res == -1) {
+		Log("Error: Failed to set NONBLOCK flag on socket.");
+		shutdown(fd, SHUT_RDWR);
+		close(fd);
+		return;
+	}
+
 	++_activeUsers;
 
 	ServerSession *session = new ServerSession;
@@ -497,9 +516,12 @@ void Server::ProcessPollFds(struct pollfd *fds, bool updateTime)
 
 	while (*session)
 	{
-		bool endSession = false;
+		bool endSession =
+			(fds[index].revents & POLLERR) ||
+			(fds[index].revents & POLLHUP) ||
+			(fds[index].revents & POLLNVAL);
 
-		if (fds[index].revents & POLLOUT) {
+		if (!endSession && (fds[index].revents & POLLOUT)) {
 			endSession = !(*session)->Write();
 		}
 
