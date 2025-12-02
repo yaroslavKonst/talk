@@ -42,7 +42,7 @@ void PrintHelp()
 
 void PrintShortHelp()
 {
-	printf("Use --help to see command list.\n");
+	printf("Use --help to get command list.\n");
 }
 
 static CowBuffer<uint8_t> RequestShutdown()
