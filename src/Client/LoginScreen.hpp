@@ -28,6 +28,8 @@ private:
 	String _status;
 
 	ControlStorage *_controls;
+
+	bool MakeNonblocking(int fd);
 };
 
 #endif

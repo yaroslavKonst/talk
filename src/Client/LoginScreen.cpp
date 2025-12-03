@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -189,6 +190,15 @@ Screen *LoginScreen::ProcessEvent(int event)
 			return this;
 		}
 
+		bool nonblock = MakeNonblocking(_session->Socket);
+
+		if (!nonblock) {
+			close(_session->Socket);
+			_session->Socket = -1;
+			_status = "Failed to make socket nonblocking.";
+			return this;
+		}
+
 		bool initRes = _session->InitSession();
 
 		if (!initRes) {
@@ -252,4 +262,22 @@ Screen *LoginScreen::ProcessEvent(int event)
 	}
 
 	return this;
+}
+
+bool LoginScreen::MakeNonblocking(int fd)
+{
+	int flags = fcntl(fd, F_GETFL);
+
+	if (flags == -1) {
+		return false;
+	}
+
+	flags = flags | O_NONBLOCK;
+	int res = fcntl(fd, F_SETFL, flags);
+
+	if (res == -1) {
+		return false;
+	}
+
+	return true;
 }
