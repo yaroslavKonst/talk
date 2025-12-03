@@ -399,19 +399,9 @@ void Server::AcceptConnection()
 		return;
 	}
 
-	int flags = fcntl(fd, F_GETFL);
+	bool res = MakeNonblocking(fd);
 
-	if (flags == -1) {
-		Log("Error: Failed to get socket flags.");
-		shutdown(fd, SHUT_RDWR);
-		close(fd);
-		return;
-	}
-
-	flags = flags | O_NONBLOCK;
-	int res = fcntl(fd, F_SETFL, flags);
-
-	if (res == -1) {
+	if (!res) {
 		Log("Error: Failed to set NONBLOCK flag on socket.");
 		shutdown(fd, SHUT_RDWR);
 		close(fd);
@@ -461,6 +451,24 @@ void Server::AcceptControl()
 
 	session->Next = _sessionFirst;
 	_sessionFirst = session;
+}
+
+bool Server::MakeNonblocking(int fd)
+{
+	int flags = fcntl(fd, F_GETFL);
+
+	if (flags == -1) {
+		return false;
+	}
+
+	flags = flags | O_NONBLOCK;
+	int res = fcntl(fd, F_SETFL, flags);
+
+	if (res == -1) {
+		return false;
+	}
+
+	return true;
 }
 
 struct pollfd *Server::BuildPollFds(int &fdCount)
@@ -516,16 +524,15 @@ void Server::ProcessPollFds(struct pollfd *fds, bool updateTime)
 
 	while (*session)
 	{
-		bool endSession =
-			(fds[index].revents & POLLERR) ||
-			(fds[index].revents & POLLHUP) ||
-			(fds[index].revents & POLLNVAL);
+		bool endSession = (fds[index].revents & POLLNVAL);
 
 		if (!endSession && (fds[index].revents & POLLOUT)) {
 			endSession = !(*session)->Write();
 		}
 
-		if (!endSession && (fds[index].revents & POLLIN)) {
+		if (!endSession &&
+			(fds[index].revents & (POLLIN | POLLHUP | POLLERR)))
+		{
 			endSession = !(*session)->Read();
 		}
 

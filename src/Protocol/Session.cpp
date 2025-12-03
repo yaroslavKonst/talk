@@ -37,46 +37,6 @@ static int64_t Write(int fd, const void *buffer, int64_t size)
 	}
 }
 
-static int64_t LoopRead(int fd, void *buffer, int64_t size)
-{
-	int64_t readBytes = 0;
-
-	while (readBytes < size) {
-		int64_t rb = Read(
-			fd,
-			(char*)buffer + readBytes,
-			size - readBytes);
-
-		if (rb <= 0) {
-			return readBytes;
-		}
-
-		readBytes += rb;
-	}
-
-	return readBytes;
-}
-
-static int64_t LoopWrite(int fd, const void *buffer, int64_t size)
-{
-	int64_t writtenBytes = 0;
-
-	while (writtenBytes < size) {
-		int64_t wb = Write(
-			fd,
-			(const char*)buffer + writtenBytes,
-			size - writtenBytes);
-
-		if (wb <= 0) {
-			return writtenBytes;
-		}
-
-		writtenBytes += wb;
-	}
-
-	return writtenBytes;
-}
-
 // BufferQueue.
 BufferQueue::BufferQueue()
 {
@@ -194,12 +154,12 @@ bool StreamReader::ReadDataSize(int sockFd, uint64_t sizeLimit)
 		return true;
 	}
 
-	int rb = LoopRead(
+	int rb = Read(
 		sockFd,
 		_intBuffer.Pointer(_intBuffer.Size() - _expectedInt),
 		_expectedInt);
 
-	if (!rb) {
+	if (rb <= 0) {
 		return false;
 	}
 
@@ -232,12 +192,12 @@ bool StreamReader::ReadSliceSize(int sockFd)
 		return true;
 	}
 
-	int rb = LoopRead(
+	int rb = Read(
 		sockFd,
 		_intBuffer.Pointer(_intBuffer.Size() - _expectedInt),
 		_expectedInt);
 
-	if (!rb) {
+	if (rb <= 0) {
 		return false;
 	}
 
@@ -341,12 +301,12 @@ void StreamWriter::Reset()
 
 bool StreamWriter::WriteInt(int sockFd)
 {
-	int wb = LoopWrite(
+	int wb = Write(
 		sockFd,
 		_intBuffer.Pointer(_intBuffer.Size() - _remainingInt),
 		_remainingInt);
 
-	if (!wb) {
+	if (wb <= 0) {
 		return false;
 	}
 
@@ -368,7 +328,7 @@ bool StreamWriter::WriteDataSize(int sockFd, uint8_t stream)
 	_data = _queue.Get();
 	_remainingData = _data.Size();
 
-	int wb = LoopWrite(sockFd, &stream, 1);
+	int wb = Write(sockFd, &stream, 1);
 
 	if (wb != 1) {
 		return false;
@@ -389,7 +349,7 @@ bool StreamWriter::WriteSliceSize(int sockFd, uint8_t stream)
 		_remainingSlice = 2048;
 	}
 
-	int wb = LoopWrite(sockFd, &stream, 1);
+	int wb = Write(sockFd, &stream, 1);
 
 	if (wb != 1) {
 		return false;
@@ -459,7 +419,7 @@ bool Session::Read()
 
 	uint8_t stream;
 
-	int rb = LoopRead(Socket, &stream, 1);
+	int rb = ::Read(Socket, &stream, 1);
 
 	if (rb != 1) {
 		return false;

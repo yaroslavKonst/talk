@@ -61,6 +61,8 @@ private:
 	void AcceptConnection();
 	void AcceptControl();
 
+	bool MakeNonblocking(int fd);
+
 	struct pollfd *BuildPollFds(int &fdCount);
 	void ProcessPollFds(struct pollfd *fds, bool updateTime);
 
