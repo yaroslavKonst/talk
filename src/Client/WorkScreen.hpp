@@ -5,6 +5,7 @@
 #include "NotificationSystem.hpp"
 #include "ChatList.hpp"
 #include "Screen.hpp"
+#include "ControlStorage.hpp"
 #include "../Common/IniFile.hpp"
 
 class WorkScreen :
@@ -62,6 +63,8 @@ private:
 
 	IniFile _configFile;
 	void InitConfigFile();
+
+	ControlStorage _controls;
 };
 
 #endif

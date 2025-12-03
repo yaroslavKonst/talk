@@ -61,6 +61,8 @@ static void LowPassFilter(
 // Voice chat.
 VoiceChat::VoiceChat()
 {
+	_controls = nullptr;
+
 	_state = VoiceStateOff;
 	_silence = true;
 	_mute = false;
@@ -83,6 +85,11 @@ void VoiceChat::SetConfigFile(IniFile *configFile)
 {
 	_configFile = configFile;
 	LoadConfigFile();
+}
+
+void VoiceChat::SetControls(ControlStorage *controls)
+{
+	_controls = controls;
 }
 
 void VoiceChat::StartSettings()
@@ -169,7 +176,11 @@ void VoiceChat::Redraw(int rows, int columns)
 	}
 
 	String prompt = "Incomng call.";
-	String choice = "Press 'y' to answer, 'n' to decline call.";
+	String choice = "Press " +
+		_controls->VoiceAcceptName() +
+		" to answer, " +
+		_controls->VoiceDeclineName() +
+		" to decline call.";
 
 	int messageSize = choice.Length();
 
@@ -254,10 +265,10 @@ bool VoiceChat::ProcessEvent(int event)
 	}
 
 	if (_state == VoiceStateAsk) {
-		if (event == 'y') {
+		if (event == _controls->VoiceAcceptKey()) {
 			_state = VoiceStateActive;
 			_voiceProcessor->AnswerVoiceRequest(true);
-		} else if (event == 'n') {
+		} else if (event == _controls->VoiceDeclineKey()) {
 			_state = VoiceStateOff;
 			_voiceProcessor->AnswerVoiceRequest(false);
 		}
@@ -265,13 +276,13 @@ bool VoiceChat::ProcessEvent(int event)
 		return true;
 	}
 
-	if (event == 'v' - 'a' + 1) {
+	if (event == _controls->VoiceEndKey()) {
 		Stop();
 		_voiceProcessor->EndVoice();
 		return true;
 	}
 
-	if (event == 'b' - 'a' + 1) {
+	if (event == _controls->VoiceMuteKey()) {
 		if (_state == VoiceStateActive) {
 			_mute = !_mute;
 			return true;
@@ -431,6 +442,24 @@ void VoiceChat::RedrawState(int rows, int columns)
 	addch('.');
 }
 
+static void DrawSelector(
+	String name,
+	String value,
+	String upKey,
+	String downKey,
+	int y,
+	int x)
+{
+	move(y - 4, x - name.Length() / 2);
+	addstr(name.CStr());
+	move(y - 2, x - upKey.Length() / 2);
+	addstr(upKey.CStr());
+	move(y, x - value.Length() / 2);
+	addstr(value.CStr());
+	move(y + 2, x - downKey.Length() / 2);
+	addstr(downKey.CStr());
+}
+
 void VoiceChat::RedrawSettings(int rows, int columns)
 {
 	for (int r = 0; r < rows - 1; r++) {
@@ -441,83 +470,68 @@ void VoiceChat::RedrawSettings(int rows, int columns)
 	}
 
 	move(0, 0);
-	addstr("Exit: End");
+	addstr(("Exit: " + _controls->VoiceExitSettingsName()).CStr());
 
-	move(rows / 2 - 4, columns / 4 - 3);
-	addstr("Volume");
-	move(rows / 2 - 2, columns / 4 - 1);
-	addstr("'q'");
-	move(rows / 2, columns / 4 - 1);
-	addstr(ToString(_volume).CStr());
-	move(rows / 2 + 2, columns / 4 - 1);
-	addstr("'a'");
+	DrawSelector(
+		"Volume",
+		ToString(_volume),
+		_controls->VoiceVolumeIncName(),
+		_controls->VoiceVolumeDecName(),
+		rows / 2,
+		columns / 4);
 
-	move(rows / 2 - 4, columns / 2 - 6);
-	addstr("Silence level");
-	move(rows / 2 - 2, columns / 2 - 1);
-	addstr("'w'");
-	move(rows / 2, columns / 2 - 1);
-	addstr(ToString(_silenceLevel).CStr());
-	move(rows / 2 + 2, columns / 2 - 1);
-	addstr("'s'");
+	DrawSelector(
+		"Silence level",
+		ToString(_silenceLevel),
+		_controls->VoiceSilenceIncName(),
+		_controls->VoiceSilenceDecName(),
+		rows / 2,
+		columns / 2);
 
-	move(rows / 2 - 4, columns * 3 / 4 - 3);
-	addstr("Filter");
-	move(rows / 2 - 2, columns * 3 / 4 - 1);
-	addstr("'e'");
-	move(rows / 2, columns * 3 / 4 - 1);
-	addstr(_applyFilter ? "Yes" : "No");
-	move(rows / 2 + 2, columns * 3 / 4 - 1);
-	addstr("'d'");
+	DrawSelector(
+		"Filter",
+		_applyFilter ? "Yes" : "No",
+		_controls->VoiceFilterUpName(),
+		_controls->VoiceFilterDownName(),
+		rows / 2,
+		columns * 3 / 4);
 
 	move(1, 0);
 }
 
 void VoiceChat::ProcessSettings(int event)
 {
-	switch (event) {
-	case KEY_END:
+	if (event == _controls->VoiceExitSettingsKey()) {
 		_settingsMode = false;
 		UpdateConfigFile();
-		break;
-	case 'q':
+	} else if (event == _controls->VoiceVolumeIncKey()) {
 		++_volume;
 
 		if (_volume > 200) {
 			_volume = 200;
 		}
-
-		break;
-	case 'a':
+	} else if (event == _controls->VoiceVolumeDecKey()) {
 		--_volume;
 
 		if (_volume <= 0) {
 			_volume = 1;
 		}
-
-		break;
-	case 'w':
+	} else if (event == _controls->VoiceSilenceIncKey()) {
 		++_silenceLevel;
 
 		if (_silenceLevel > 100) {
 			_silenceLevel = 100;
 		}
-
-		break;
-	case 's':
+	} else if (event == _controls->VoiceSilenceDecKey()) {
 		--_silenceLevel;
 
 		if (_silenceLevel <= 0) {
 			_silenceLevel = 1;
 		}
-
-		break;
-	case 'e':
+	} else if (event == _controls->VoiceFilterUpKey()) {
 		_applyFilter = true;
-		break;
-	case 'd':
+	} else if (event == _controls->VoiceFilterDownKey()) {
 		_applyFilter = false;
-		break;
 	}
 }
 

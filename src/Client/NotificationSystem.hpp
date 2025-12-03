@@ -1,6 +1,7 @@
 #ifndef _NOTIFICATION_SYSTEM_HPP
 #define _NOTIFICATION_SYSTEM_HPP
 
+#include "ControlStorage.hpp"
 #include "../Common/MyString.hpp"
 
 class NotifyRedrawHandler
@@ -15,7 +16,9 @@ public:
 class NotificationSystem
 {
 public:
-	NotificationSystem(NotifyRedrawHandler *handler);
+	NotificationSystem(
+		NotifyRedrawHandler *handler,
+		ControlStorage *controls);
 	~NotificationSystem();
 
 	void Notify(String message);
@@ -34,6 +37,8 @@ private:
 	Notification *_last;
 
 	NotifyRedrawHandler *_handler;
+
+	ControlStorage *_controls;
 };
 
 #endif

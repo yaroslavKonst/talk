@@ -46,6 +46,12 @@ bool UI::ProcessEvent()
 		return true;
 	}
 
+	if (event == KEY_ENTER) {
+		event = '\n';
+	} else if (event == KEY_BACKSPACE) {
+		event = '\b';
+	}
+
 	Screen *newScreen = _screen->ProcessEvent(event);
 
 	if (newScreen) {
@@ -69,6 +75,10 @@ void UI::Disconnect()
 	}
 
 	_session->Disconnect();
+
+	if (_voiceChat.Active()) {
+		_voiceChat.Stop();
+	}
 
 	if (_screen) {
 		_screen->Redraw();

@@ -5,22 +5,33 @@
 #include <errno.h>
 #include <curses.h>
 
-AttachmentScreen::AttachmentScreen(Chat *chat, bool extract) : Screen(nullptr)
+AttachmentScreen::AttachmentScreen(
+	Chat *chat,
+	bool extract,
+	ControlStorage *controls) :
+	Screen(nullptr)
 {
 	_chat = chat;
 	_extract = extract;
+	_controls = controls;
 }
 
 void AttachmentScreen::Redraw()
 {
 	ClearScreen();
 
-	move(0, 0);
-	addstr("Exit: End | Proceed: Enter");
+	String helpString =
+		"Exit: " + _controls->AttachBackName() +
+		" | Proceed: " +
+		_controls->AttachProceedName();
 
 	if (!_extract) {
-		addstr(" | Remove attachment: Delete");
+		helpString += " | Remove attachment: " +
+			_controls->AttachClearName();
 	}
+
+	move(0, 0);
+	addstr(helpString.CStr());
 
 	if (_status.Length()) {
 		move(_rows / 2 + 2, _columns / 2 - _status.Length() / 2);
@@ -41,11 +52,11 @@ void AttachmentScreen::Redraw()
 
 Screen *AttachmentScreen::ProcessEvent(int event)
 {
-	if (event == KEY_END) {
+	if (event == _controls->AttachBackKey()) {
 		return nullptr;
 	}
 
-	if (event == KEY_ENTER || event == '\n') {
+	if (event == _controls->AttachProceedKey()) {
 		// Proceed.
 		_status = "Processing...";
 		Redraw();
@@ -65,7 +76,7 @@ Screen *AttachmentScreen::ProcessEvent(int event)
 		return this;
 	}
 
-	if (event == KEY_DC) {
+	if (event == _controls->AttachClearKey()) {
 		if (!_extract) {
 			_chat->ClearAttachment();
 			return nullptr;
@@ -74,7 +85,7 @@ Screen *AttachmentScreen::ProcessEvent(int event)
 		return this;
 	}
 
-	if (event == KEY_BACKSPACE || event == '\b') {
+	if (event == '\b') {
 		if (!_path.Length()) {
 			return this;
 		}

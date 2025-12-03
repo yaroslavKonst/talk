@@ -1,6 +1,7 @@
 #ifndef _VOICE_CHAT_HPP
 #define _VOICE_CHAT_HPP
 
+#include "ControlStorage.hpp"
 #include "../Audio/Audio.hpp"
 #include "../Crypto/Crypto.hpp"
 #include "../Common/IniFile.hpp"
@@ -29,6 +30,7 @@ public:
 	}
 
 	void SetConfigFile(IniFile *configFile);
+	void SetControls(ControlStorage *controls);
 	void StartSettings();
 
 	// Process microphone input.
@@ -97,6 +99,8 @@ private:
 	int _volume;
 	bool _applyFilter;
 	int _silenceLevel;
+
+	ControlStorage *_controls;
 };
 
 #endif

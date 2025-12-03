@@ -8,13 +8,15 @@
 
 ChatList::ChatList(
 	ClientSession *session,
-	NotificationSystem *notificationSystem) :
+	NotificationSystem *notificationSystem,
+	ControlStorage *controls) :
 	_contactList(session->PublicKey)
 {
 	_latestReceiveTime = 0;
 
 	_session = session;
 	_notificationSystem = notificationSystem;
+	_controls = controls;
 
 	_chatCount = _contactList.GetContactCount();
 	_chatList = nullptr;
@@ -28,7 +30,8 @@ ChatList::ChatList(
 				_session,
 				_contactList.GetContactKey(i),
 				_notificationSystem,
-				&_latestReceiveTime);
+				&_latestReceiveTime,
+				_controls);
 			_chatList[i]->SetPeerName(
 				_contactList.GetNameForPresentation(i));
 		}
@@ -166,7 +169,8 @@ void ChatList::UpdateUserData(const uint8_t *key, String name)
 			_session,
 			_contactList.GetContactKey(_chatCount - 1),
 			_notificationSystem,
-			&_latestReceiveTime);
+			&_latestReceiveTime,
+			_controls);
 		_chatList[_chatCount - 1]->SetPeerName(
 			_contactList.GetNameForPresentation(_chatCount - 1));
 	} else {

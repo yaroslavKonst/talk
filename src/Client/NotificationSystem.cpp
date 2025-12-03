@@ -4,12 +4,15 @@
 
 #include "TextColor.hpp"
 
-NotificationSystem::NotificationSystem(NotifyRedrawHandler *handler)
+NotificationSystem::NotificationSystem(
+	NotifyRedrawHandler *handler,
+	ControlStorage *controls)
 {
 	_first = nullptr;
 	_last = nullptr;
 
 	_handler = handler;
+	_controls = controls;
 }
 
 NotificationSystem::~NotificationSystem()
@@ -109,7 +112,9 @@ void NotificationSystem::Redraw()
 	addstr(_first->Message.CStr());
 
 	move(baseY + 5, columns / 2 - 10);
-	addstr("Press enter to close.");
+	addstr(("Press " +
+		_controls->NotificationConfirmName() +
+		" to close.").CStr());
 }
 
 bool NotificationSystem::ProcessEvent(int event)
@@ -118,7 +123,7 @@ bool NotificationSystem::ProcessEvent(int event)
 		return false;
 	}
 
-	if (event == KEY_ENTER || event == '\n') {
+	if (event == _controls->NotificationConfirmKey()) {
 		Notification *tmp = _first;
 		_first = _first->Next;
 		delete tmp;

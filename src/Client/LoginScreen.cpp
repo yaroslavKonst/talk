@@ -13,12 +13,17 @@
 static const char *ipMessage = "Enter IP address: ";
 static const char *portMessage = "Enter port: ";
 
-LoginScreen::LoginScreen(ClientSession *session, IniFile *configFile) :
+LoginScreen::LoginScreen(
+	ClientSession *session,
+	IniFile *configFile,
+	ControlStorage *controls) :
 	Screen(session)
 {
 	_writingIp = true;
 	_writingPort = false;
 	_writingKey = false;
+
+	_controls = controls;
 
 	_ip = configFile->Get("connection", "ServerIP");
 	_port = configFile->Get("connection", "ServerPort");
@@ -39,8 +44,15 @@ void LoginScreen::Redraw()
 {
 	ClearScreen();
 
+	String helpString =
+		"Exit: " + _controls->LoginBackName() +
+		" | Next: " + _controls->LoginDownName() + "/" +
+		_controls->LoginConnectName() +
+		" | Previous: " + _controls->LoginUpName() +
+		" | Connect: " + _controls->LoginConnectName();
+
 	move(0, 0);
-	addstr("Exit: End | Next: Enter/Down | Previous: Up | Connect: Enter");
+	addstr(helpString.CStr());
 
 	move(_rows / 2 - 10, 4);
 	addstr("Your public key:");
@@ -91,11 +103,11 @@ void LoginScreen::Redraw()
 
 Screen *LoginScreen::ProcessEvent(int event)
 {
-	if (event == KEY_END) {
+	if (event == _controls->LoginBackKey()) {
 		return nullptr;
 	}
 
-	if (event == KEY_UP) {
+	if (event == _controls->LoginUpKey()) {
 		if (_writingPort) {
 			_writingPort = false;
 			_writingIp = true;
@@ -107,7 +119,7 @@ Screen *LoginScreen::ProcessEvent(int event)
 		return this;
 	}
 
-	if (event == KEY_DOWN) {
+	if (event == _controls->LoginDownKey()) {
 		if (_writingIp) {
 			_writingIp = false;
 			_writingPort = true;
@@ -119,7 +131,7 @@ Screen *LoginScreen::ProcessEvent(int event)
 		return this;
 	}
 
-	if (event == KEY_ENTER || event == '\n') {
+	if (event == _controls->LoginConnectKey()) {
 		if (_writingIp) {
 			_writingIp = false;
 			_writingPort = true;
@@ -188,7 +200,7 @@ Screen *LoginScreen::ProcessEvent(int event)
 		return nullptr;
 	}
 
-	if (event == KEY_BACKSPACE || event == '\b') {
+	if (event == '\b') {
 		if (_writingIp) {
 			if (_ip.Length() == 0) {
 				return this;

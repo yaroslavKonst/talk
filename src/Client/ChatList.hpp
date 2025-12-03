@@ -10,7 +10,8 @@ class ChatList
 public:
 	ChatList(
 		ClientSession *session,
-		NotificationSystem *notificationSystem);
+		NotificationSystem *notificationSystem,
+		ControlStorage *controls);
 	~ChatList();
 
 	void Redraw(int rows, int columns);
@@ -46,6 +47,8 @@ private:
 	NotificationSystem *_notificationSystem;
 
 	int64_t _latestReceiveTime;
+
+	ControlStorage *_controls;
 };
 
 #endif

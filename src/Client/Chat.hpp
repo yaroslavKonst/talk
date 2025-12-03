@@ -2,6 +2,7 @@
 #define _CHAT_HPP
 
 #include "NotificationSystem.hpp"
+#include "ControlStorage.hpp"
 #include "../Protocol/ClientSession.hpp"
 #include "../Message/MessageStorage.hpp"
 #include "../Message/AttributeStorage.hpp"
@@ -137,7 +138,8 @@ public:
 		ClientSession *session,
 		const uint8_t *peerKey,
 		NotificationSystem *notificationSystem,
-		int64_t *latestReceiveTime);
+		int64_t *latestReceiveTime,
+		ControlStorage *controls);
 	~Chat();
 
 	const uint8_t *GetPeerKey()
@@ -221,6 +223,8 @@ private:
 	NotificationSystem *_notificationSystem;
 
 	int64_t *_latestReceiveTime;
+
+	ControlStorage *_controls;
 };
 
 #endif

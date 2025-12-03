@@ -12,10 +12,11 @@
 
 WorkScreen::WorkScreen(ClientSession *session, VoiceChat *voiceChat) :
 	Screen(session),
-	_notificationSystem(this),
-	_chatList(session, &_notificationSystem),
+	_notificationSystem(this, &_controls),
+	_chatList(session, &_notificationSystem, &_controls),
 	_configFile("storage/" +
-		DataToHex(session->PublicKey, KEY_SIZE) + "/talk.conf")
+		DataToHex(session->PublicKey, KEY_SIZE) + "/talk.conf"),
+	_controls(session->PublicKey)
 {
 	_voiceChat = voiceChat;
 	_voiceChat->RegisterProcessor(this);
@@ -26,6 +27,7 @@ WorkScreen::WorkScreen(ClientSession *session, VoiceChat *voiceChat) :
 
 	InitConfigFile();
 	_voiceChat->SetConfigFile(&_configFile);
+	_voiceChat->SetControls(&_controls);
 }
 
 WorkScreen::~WorkScreen()
@@ -52,12 +54,17 @@ void WorkScreen::Redraw()
 	move(1, 0);
 	addstr("Connection status: ");
 
-	if (_session->Connected()) {
-		attrset(COLOR_PAIR(GREEN_TEXT));
-		addstr("connected");
-	} else {
+	if (_session->State == ClientSession::ClientStateUnconnected) {
 		attrset(COLOR_PAIR(YELLOW_TEXT));
 		addstr("not connected");
+	} else if (_session->State ==
+		ClientSession::ClientStateInitialWaitForServer)
+	{
+		attrset(COLOR_PAIR(YELLOW_TEXT));
+		addstr("handshake in progress");
+	} else {
+		attrset(COLOR_PAIR(GREEN_TEXT));
+		addstr("connected");
 	}
 
 	attrset(COLOR_PAIR(DEFAULT_TEXT));
@@ -133,16 +140,16 @@ Screen *WorkScreen::ProcessEvent(int event)
 		return this;
 	}
 
-	if (event == KEY_HOME) {
+	if (event == _controls.WorkConnectKey()) {
 		Connect();
 		return this;
 	}
 
-	if (event == KEY_END) {
+	if (event == _controls.WorkExitKey()) {
 		return nullptr;
 	}
 
-	if (event == 'n' - 'a' + 1) {
+	if (event == _controls.VoiceEnterSettingsKey()) {
 		_voiceChat->StartSettings();
 		return this;
 	}
@@ -152,9 +159,11 @@ Screen *WorkScreen::ProcessEvent(int event)
 	} else if (!_activeChat->Typing()) {
 		ProcessChatScreenEvent(event);
 	} else {
-		if (event == 1) {
-			// Ctrl-A
-			_overlay = new AttachmentScreen(_activeChat, false);
+		if (event == _controls.WorkTypeAttachKey()) {
+			_overlay = new AttachmentScreen(
+				_activeChat,
+				false,
+				&_controls);
 			return this;
 		}
 
@@ -348,48 +357,49 @@ void WorkScreen::Connect()
 		return;
 	}
 
-	_overlay = new LoginScreen(_session, &_configFile);
+	_overlay = new LoginScreen(_session, &_configFile, &_controls);
 }
 
 void WorkScreen::ProcessChatListEvent(int event)
 {
-	if (event == 'u' - 'a' + 1) {
-		// Ctrl-U.
+	if (event == _controls.WorkListUpdateKey()) {
 		bool res = _session->RequestUserList();
 
 		if (!res) {
 			_notificationSystem.Notify(
 				"Failed to request user list.");
 		}
-	} else if (event == KEY_UP) {
+	} else if (event == _controls.WorkListUpKey()) {
 		_chatList.SwitchUp();
-	} else if (event == KEY_DOWN) {
+	} else if (event == _controls.WorkListDownKey()) {
 		_chatList.SwitchDown();
-	} else if (event == KEY_ENTER || event == '\n') {
+	} else if (event == _controls.WorkListSelectKey()) {
 		_activeChat = _chatList.GetCurrentChat();
 	}
 }
 
 void WorkScreen::ProcessChatScreenEvent(int event)
 {
-	if (event == '\e') {
+	if (event == _controls.WorkChatBackKey()) {
 		_activeChat = nullptr;
-	} else if (event == KEY_ENTER || event == '\n') {
+	} else if (event == _controls.WorkChatTypeKey()) {
 		_activeChat->StartTyping();
-	} else if (event == KEY_UP) {
+	} else if (event == _controls.WorkChatUpKey()) {
 		_activeChat->SwitchUp();
-	} else if (event == KEY_DOWN) {
+	} else if (event == _controls.WorkChatDownKey()) {
 		_activeChat->SwitchDown();
-	} else if (event == 'v' - 'a' + 1) {
+	} else if (event == _controls.VoiceStartKey()) {
 		VoiceInit(_activeChat->GetPeerKey());
-	} else if (event == 'e' - 'a' + 1) {
-		// Ctrl-E
+	} else if (event == _controls.WorkChatExtractKey()) {
 		if (!_activeChat->HasAttachment()) {
 			_notificationSystem.Notify(
 				"Selected message does not have an "
 				"attachment.");
 		} else {
-			_overlay = new AttachmentScreen(_activeChat, true);
+			_overlay = new AttachmentScreen(
+				_activeChat,
+				true,
+				&_controls);
 		}
 	}
 }
@@ -424,37 +434,43 @@ void WorkScreen::DrawHelp()
 	Item *first = nullptr;
 	Item *last = nullptr;
 
-	first = new Item("Exit: End");
+	first = new Item("Exit: " + _controls.WorkExitName());
 	last = first;
 
 	if (!_session->Connected()) {
-		last = last->Add("Connect: Home");
+		last = last->Add("Connect: " + _controls.WorkConnectName());
 	}
 
 	if (!_activeChat) {
-		last = last->Add("Select: Enter");
-		last = last->Add("Scroll: Up/Down");
-		last = last->Add("Update: Ctrl-U");
+		last = last->Add("Select: " + _controls.WorkListSelectName());
+		last = last->Add("Scroll: " +
+			_controls.WorkListUpName() + "/" +
+			_controls.WorkListDownName());
+		last = last->Add("Update: " + _controls.WorkListUpdateName());
 	} else if (!_activeChat->Typing()) {
-		last = last->Add("Type: Enter");
-		last = last->Add("Scroll: Up/Down");
-		last = last->Add("Back: Escape");
+		last = last->Add("Type: " + _controls.WorkChatTypeName());
+		last = last->Add("Scroll: " +
+			_controls.WorkChatUpName() + "/" +
+			_controls.WorkChatDownName());
+		last = last->Add("Back: " + _controls.WorkChatBackName());
 
 		if (!_voiceChat->Active()) {
-			last = last->Add("Voice: Ctrl-V");
+			last = last->Add("Voice: " +
+				_controls.VoiceStartName());
 		}
 	} else {
-		last = last->Add("Back: Escape");
-		last = last->Add("Send: Ctrl-S");
-		last = last->Add("Attach: Ctrl-A");
+		last = last->Add("Back: " + _controls.WorkTypeBackName());
+		last = last->Add("Send: " + _controls.WorkTypeSendName());
+		last = last->Add("Attach: " + _controls.WorkTypeAttachName());
 	}
 
 	if (_voiceChat->Active()) {
-		last = last->Add("End voice: Ctrl-V");
-		last = last->Add("Mute: Ctrl-B");
+		last = last->Add("End voice: " + _controls.VoiceEndName());
+		last = last->Add("Mute: " + _controls.VoiceMuteName());
 	}
 
-	last = last->Add("Voice settings: Ctrl-N");
+	last = last->Add("Voice settings: " +
+		_controls.VoiceEnterSettingsName());
 
 	bool firstLine = true;
 	bool firstEntry = true;

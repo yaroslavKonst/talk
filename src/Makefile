@@ -43,6 +43,7 @@ CLIENT_MODULES=\
 	Client/NotificationSystem.o \
 	Client/Chat.o \
 	Client/ChatList.o \
+	Client/ControlStorage.o \
 	Protocol/Session.o \
 	Protocol/ClientSession.o \
 	Protocol/ActiveSession.o \

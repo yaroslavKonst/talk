@@ -39,7 +39,7 @@ Screen *PasswordScreen::ProcessEvent(int event)
 		return nullptr;
 	}
 
-	if (event == KEY_ENTER || event == '\n') {
+	if (event == '\n') {
 		if (_password.Length() == 0) {
 			_status = "Password must not be empty.";
 			return this;

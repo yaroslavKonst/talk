@@ -79,13 +79,15 @@ Chat::Chat(
 	ClientSession *session,
 	const uint8_t *peerKey,
 	NotificationSystem *notificationSystem,
-	int64_t *latestReceiveTime) :
+	int64_t *latestReceiveTime,
+	ControlStorage *controls) :
 	_messageStorage(session->PublicKey),
 	_attributeStorage(session->PublicKey)
 {
 	_session = session;
 	_notificationSystem = notificationSystem;
 	_latestReceiveTime = latestReceiveTime;
+	_controls = controls;
 
 	_typing = false;
 	_utf8ExpectedSize = 0;
@@ -159,30 +161,12 @@ void Chat::StartTyping()
 
 void Chat::ProcessTyping(int event)
 {
-	if (event == '\e') {
+	if (event == _controls->WorkChatBackKey()) {
 		_typing = false;
 		return;
 	}
 
-	if (event == KEY_BACKSPACE || event == '\b') {
-		if (_draft.Length() > 1) {
-			while (_draft.Length() > 1 && IsUTF8Trailing(
-				_draft.CStr()[_draft.Length() - 1]))
-			{
-				_draft = _draft.Substring(
-					0,
-					_draft.Length() - 1);
-			}
-
-			_draft = _draft.Substring(0, _draft.Length() - 1);
-		} else if (_draft.Length() == 1) {
-			_draft.Clear();
-		}
-
-		return;
-	}
-
-	if (event == 's' - 'a' + 1) {
+	if (event == _controls->WorkTypeSendKey()) {
 		String text = _draft + _draftSuffix;
 
 		if (!text.Length() && !_draftAttachment.Size()) {
@@ -201,7 +185,25 @@ void Chat::ProcessTyping(int event)
 		return;
 	}
 
-	if (event == KEY_LEFT) {
+	if (event == '\b') {
+		if (_draft.Length() > 1) {
+			while (_draft.Length() > 1 && IsUTF8Trailing(
+				_draft.CStr()[_draft.Length() - 1]))
+			{
+				_draft = _draft.Substring(
+					0,
+					_draft.Length() - 1);
+			}
+
+			_draft = _draft.Substring(0, _draft.Length() - 1);
+		} else if (_draft.Length() == 1) {
+			_draft.Clear();
+		}
+
+		return;
+	}
+
+	if (event == _controls->WorkCursorLeftKey()) {
 		if (!_draft.Length()) {
 			return;
 		}
@@ -220,7 +222,7 @@ void Chat::ProcessTyping(int event)
 		return;
 	}
 
-	if (event == KEY_RIGHT) {
+	if (event == _controls->WorkCursorRightKey()) {
 		if (!_draftSuffix.Length()) {
 			return;
 		}
@@ -254,10 +256,6 @@ void Chat::ProcessTyping(int event)
 		}
 
 		return;
-	}
-
-	if (event == KEY_ENTER) {
-		event = '\n';
 	}
 
 	if (event != '\n' && (event > 0xff || event < ' ')) {
@@ -550,7 +548,9 @@ void Chat::RedrawMessageWindow()
 				addstr(" MB");
 			}
 
-			addstr(". Ctrl-E to extract.");
+			addstr((". " +
+				_controls->WorkChatExtractName() +
+				" to extract.").CStr());
 			attrset(COLOR_PAIR(DEFAULT_TEXT));
 			--drawBase;
 
