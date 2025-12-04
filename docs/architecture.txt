@@ -20,6 +20,17 @@ higher id. Priority is taken into account when multiple streams
 have segments ready to be sent. In this case a ready stream
 with the highest priority is chosen.
 
+Encryption can be integrated into streams. In this case data blocks
+have the following structure.
+Data block structure.
+| stream id (byte) | data block size (uint64) | nonce | segment sequence |
+
+Segment sequence structure.
+| stream id (byte) | segment 1 size (uint32) | MAC 1 | segment 1 data | ...
+	| stream id (byte) | segment n size (uint32) | MAC n | segment n data |
+
+Segment data is encrypted, data and segment size fields are signed.
+
 Encryption protocol. It works on top of low level protocol.
 Each stream has separate session keys.
 Encrypted block structure:
