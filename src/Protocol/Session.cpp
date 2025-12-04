@@ -104,6 +104,7 @@ StreamReader::StreamReader()
 	_expectedData = 0;
 	_expectedSlice = 0;
 	_expectedInt = 0;
+	_inES = nullptr;
 }
 
 bool StreamReader::Finalized()
@@ -138,6 +139,7 @@ void StreamReader::Reset()
 {
 	_data = CowBuffer<uint8_t>();
 	_expectedData = 0;
+	_slice = CowBuffer<uint8_t>();
 	_expectedSlice = 0;
 	_intBuffer = CowBuffer<uint8_t>();
 	_expectedInt = 0;
@@ -149,8 +151,14 @@ bool StreamReader::ReadDataSize(int sockFd, uint64_t sizeLimit)
 	uint64_t dataSize;
 
 	if (!_expectedInt) {
-		_intBuffer = CowBuffer<uint8_t>(sizeof(dataSize));
-		_expectedInt = sizeof(dataSize);
+		if (!_inES) {
+			_intBuffer = CowBuffer<uint8_t>(sizeof(dataSize));
+		} else {
+			_intBuffer = CowBuffer<uint8_t>(
+				sizeof(dataSize) + NONCE_SIZE);
+		}
+
+		_expectedInt = _intBuffer.Size();
 		return true;
 	}
 
@@ -170,6 +178,17 @@ bool StreamReader::ReadDataSize(int sockFd, uint64_t sizeLimit)
 	}
 
 	dataSize = *_intBuffer.SwitchType<uint64_t>();
+
+	if (_inES) {
+		bool success = _eStream.Init(
+			_inES,
+			_intBuffer.Pointer(sizeof(dataSize)));
+
+		if (!success) {
+			return false;
+		}
+	}
+
 	_intBuffer = CowBuffer<uint8_t>();
 
 	if (!dataSize || dataSize > sizeLimit) {
@@ -188,7 +207,7 @@ bool StreamReader::ReadSliceSize(int sockFd)
 
 	if (!_expectedInt) {
 		_intBuffer = CowBuffer<uint8_t>(sizeof(sliceSize));
-		_expectedInt = sizeof(sliceSize);
+		_expectedInt = _intBuffer.Size();
 		return true;
 	}
 
@@ -215,10 +234,7 @@ bool StreamReader::ReadSliceSize(int sockFd)
 	}
 
 	_expectedSlice = sliceSize;
-
-	if (_expectedSlice > _expectedData) {
-		return false;
-	}
+	_slice = CowBuffer<uint8_t>(_expectedSlice);
 
 	return true;
 }
@@ -227,7 +243,7 @@ bool StreamReader::ReadSlice(int sockFd)
 {
 	int rb = Read(
 		sockFd,
-		_data.Pointer(_data.Size() - _expectedData),
+		_slice.Pointer(_slice.Size() - _expectedSlice),
 		_expectedSlice);
 
 	if (rb <= 0) {
@@ -235,11 +251,51 @@ bool StreamReader::ReadSlice(int sockFd)
 	}
 
 	_expectedSlice -= rb;
-	_expectedData -= rb;
 
-	if (!_expectedData && _expectedSlice) {
+	if (_expectedSlice) {
+		return true;
+	}
+
+	bool result;
+
+	if (_inES) {
+		result = DecryptSlice();
+	} else {
+		result = AppendSlice(_slice);
+	}
+
+	_slice = CowBuffer<uint8_t>();
+
+	return result;
+}
+
+bool StreamReader::DecryptSlice()
+{
+	CowBuffer<uint8_t> mdBuffer(sizeof(uint64_t) + sizeof(uint32_t));
+	*mdBuffer.SwitchType<uint64_t>() = _data.Size();
+	*mdBuffer.SwitchType<uint32_t>(sizeof(uint64_t)) = _slice.Size();
+
+	CowBuffer<uint8_t> plaintext = _eStream.Decrypt(_slice, mdBuffer);
+
+	if (!plaintext.Size()) {
 		return false;
 	}
+
+	return AppendSlice(plaintext);
+}
+
+bool StreamReader::AppendSlice(const CowBuffer<uint8_t> slice)
+{
+	if (slice.Size() > _expectedData) {
+		return false;
+	}
+
+	memcpy(
+		_data.Pointer(_data.Size() - _expectedData),
+		slice.Pointer(),
+		slice.Size());
+
+	_expectedData -= slice.Size();
 
 	if (!_expectedData) {
 		_queue.Put(_data);
@@ -255,6 +311,8 @@ StreamWriter::StreamWriter()
 	_remainingData = 0;
 	_remainingSlice = 0;
 	_remainingInt = 0;
+	_outES = nullptr;
+	_encrypt = false;
 }
 
 bool StreamWriter::Finalized()
@@ -264,12 +322,14 @@ bool StreamWriter::Finalized()
 
 bool StreamWriter::CanWrite()
 {
-	return _remainingData || !_queue.IsEmpty() || _remainingInt;
+	return _remainingData || _remainingSlice ||
+		!_queue.IsEmpty() || _remainingInt;
 }
 
-void StreamWriter::AddData(const CowBuffer<uint8_t> data)
+void StreamWriter::AddData(const CowBuffer<uint8_t> data, bool encrypt)
 {
 	_queue.Put(data);
+	_encrypt = encrypt;
 }
 
 bool StreamWriter::Process(int sockFd, uint8_t stream)
@@ -278,7 +338,7 @@ bool StreamWriter::Process(int sockFd, uint8_t stream)
 		return WriteInt(sockFd);
 	}
 
-	if (!_remainingData) {
+	if (!_remainingData && !_remainingSlice) {
 		return WriteDataSize(sockFd, stream);
 	}
 
@@ -293,6 +353,7 @@ void StreamWriter::Reset()
 {
 	_data = CowBuffer<uint8_t>();
 	_remainingData = 0;
+	_slice = CowBuffer<uint8_t>();
 	_remainingSlice = 0;
 	_intBuffer = CowBuffer<uint8_t>();
 	_remainingInt = 0;
@@ -334,7 +395,17 @@ bool StreamWriter::WriteDataSize(int sockFd, uint8_t stream)
 		return false;
 	}
 
-	_intBuffer = CowBuffer<uint8_t>(sizeof(uint64_t));
+	if (!_encrypt) {
+		_intBuffer = CowBuffer<uint8_t>(sizeof(uint64_t));
+	} else {
+		_intBuffer = CowBuffer<uint8_t>(sizeof(uint64_t) + NONCE_SIZE);
+		_eStream.Init(_outES);
+		memcpy(
+			_intBuffer.Pointer(sizeof(uint64_t)),
+			_outES->Nonce,
+			NONCE_SIZE);
+	}
+
 	*_intBuffer.SwitchType<uint64_t>() = _remainingData;
 	_remainingInt = _intBuffer.Size();
 
@@ -345,8 +416,38 @@ bool StreamWriter::WriteSliceSize(int sockFd, uint8_t stream)
 {
 	_remainingSlice = _remainingData;
 
+	if (_encrypt) {
+		_remainingSlice += 1 + MAC_SIZE;
+	}
+
 	if (_remainingSlice > 2048) {
 		_remainingSlice = 2048;
+	}
+
+	if (_encrypt) {
+		CowBuffer<uint8_t> mdBuffer(
+			sizeof(uint64_t) + sizeof(uint32_t));
+		*mdBuffer.SwitchType<uint64_t>() = _data.Size();
+		*mdBuffer.SwitchType<uint32_t>(sizeof(uint64_t)) =
+			_remainingSlice;
+
+		_slice = _eStream.Encrypt(
+			_data.Slice(
+				_data.Size() - _remainingData,
+				_remainingSlice - 1 - MAC_SIZE),
+			mdBuffer);
+
+		_remainingData -= _remainingSlice - 1 - MAC_SIZE;
+	} else {
+		_slice = _data.Slice(
+			_data.Size() - _remainingData,
+			_remainingSlice);
+
+		_remainingData -= _remainingSlice;
+	}
+
+	if (!_remainingData) {
+		_data = CowBuffer<uint8_t>();
 	}
 
 	int wb = Write(sockFd, &stream, 1);
@@ -366,19 +467,17 @@ bool StreamWriter::WriteSlice(int sockFd)
 {
 	int wb = Write(
 		sockFd,
-		_data.Pointer(_data.Size() - _remainingData),
+		_slice.Pointer(_slice.Size() - _remainingSlice),
 		_remainingSlice);
 
 	if (wb <= 0) {
 		return false;
 	}
 
-	_remainingData -= wb;
 	_remainingSlice -= wb;
 
-	if (!_remainingData) {
-		_remainingSlice = 0;
-		_data = CowBuffer<uint8_t>();
+	if (!_remainingSlice) {
+		_slice = CowBuffer<uint8_t>();
 	}
 
 	return true;
@@ -498,7 +597,7 @@ CowBuffer<uint8_t> Session::Receive(int *stream)
 	THROW("No data can be received.");
 }
 
-void Session::Send(CowBuffer<uint8_t> data, int stream)
+void Session::Send(CowBuffer<uint8_t> data, int stream, bool encrypt)
 {
 	if (stream >= StreamCount) {
 		THROW("Invalid stream index.");
@@ -508,7 +607,7 @@ void Session::Send(CowBuffer<uint8_t> data, int stream)
 		THROW("Transmitted data cannot be empty.");
 	}
 
-	OutputStreams[stream].AddData(data);
+	OutputStreams[stream].AddData(data, encrypt);
 }
 
 bool Session::Process()

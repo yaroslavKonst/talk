@@ -28,7 +28,9 @@ SERVERCTL_MODULES=\
 	Protocol/Session.o \
 	Common/UnixTime.o \
 	Common/MyString.o \
-	Common/Version.o
+	Common/Version.o \
+	Crypto/Crypto.o \
+	ThirdParty/monocypher.o
 
 CLIENT_MODULES=\
 	Client/Client.o \

@@ -45,7 +45,7 @@ static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
 		return CowBuffer<uint8_t>();
 	}
 
-	session.Send(command, 0);
+	session.Send(command, 0, false);
 
 	bool res;
 

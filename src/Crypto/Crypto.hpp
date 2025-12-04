@@ -70,4 +70,34 @@ void GetSalt(String file, uint8_t salt[SALT_SIZE]);
 CowBuffer<uint8_t> ApplyScrambler(CowBuffer<uint8_t> data);
 CowBuffer<uint8_t> RemoveScrambler(CowBuffer<uint8_t> data);
 
+class CryptoStreamReader
+{
+public:
+	~CryptoStreamReader();
+
+	bool Init(EncryptedStream *ES, const uint8_t nonce[NONCE_SIZE]);
+
+	CowBuffer<uint8_t> Decrypt(
+		const CowBuffer<uint8_t> cyphertext,
+		const CowBuffer<uint8_t> add);
+
+private:
+	crypto_aead_ctx _ctx;
+};
+
+class CryptoStreamWriter
+{
+public:
+	~CryptoStreamWriter();
+
+	void Init(EncryptedStream *ES);
+
+	CowBuffer<uint8_t> Encrypt(
+		const CowBuffer<uint8_t> plaintext,
+		const CowBuffer<uint8_t> add);
+
+private:
+	crypto_aead_ctx _ctx;
+};
+
 #endif

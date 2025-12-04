@@ -2,6 +2,7 @@
 #define _SESSION_HPP
 
 #include "../Common/CowBuffer.hpp"
+#include "../Crypto/Crypto.hpp"
 
 class BufferQueue
 {
@@ -32,6 +33,11 @@ class StreamReader
 public:
 	StreamReader();
 
+	void SetES(EncryptedStream *ES)
+	{
+		_inES = ES;
+	}
+
 	bool Finalized();
 
 	bool HasData();
@@ -45,6 +51,7 @@ private:
 	CowBuffer<uint8_t> _data;
 	uint64_t _expectedData;
 
+	CowBuffer<uint8_t> _slice;
 	uint64_t _expectedSlice;
 
 	CowBuffer<uint8_t> _intBuffer;
@@ -55,6 +62,11 @@ private:
 	bool ReadDataSize(int sockFd, uint64_t sizeLimit);
 	bool ReadSliceSize(int sockFd);
 	bool ReadSlice(int sockFd);
+	bool DecryptSlice();
+	bool AppendSlice(const CowBuffer<uint8_t> slice);
+
+	CryptoStreamReader _eStream;
+	EncryptedStream *_inES;
 };
 
 class StreamWriter
@@ -62,10 +74,15 @@ class StreamWriter
 public:
 	StreamWriter();
 
+	void SetES(EncryptedStream *ES)
+	{
+		_outES = ES;
+	}
+
 	bool Finalized();
 
 	bool CanWrite();
-	void AddData(const CowBuffer<uint8_t> data);
+	void AddData(const CowBuffer<uint8_t> data, bool encrypt);
 
 	bool Process(int sockFd, uint8_t stream);
 
@@ -75,6 +92,7 @@ private:
 	CowBuffer<uint8_t> _data;
 	uint64_t _remainingData;
 
+	CowBuffer<uint8_t> _slice;
 	uint64_t _remainingSlice;
 
 	CowBuffer<uint8_t> _intBuffer;
@@ -86,6 +104,10 @@ private:
 	bool WriteDataSize(int sockFd, uint8_t stream);
 	bool WriteSliceSize(int sockFd, uint8_t stream);
 	bool WriteSlice(int sockFd);
+
+	CryptoStreamWriter _eStream;
+	EncryptedStream *_outES;
+	bool _encrypt;
 };
 
 struct Session
@@ -116,7 +138,7 @@ struct Session
 	bool CanReceive();
 
 	CowBuffer<uint8_t> Receive(int *stream = nullptr);
-	void Send(CowBuffer<uint8_t> data, int stream);
+	void Send(CowBuffer<uint8_t> data, int stream, bool encrypt);
 
 	virtual bool Process();
 	virtual bool TimePassed();

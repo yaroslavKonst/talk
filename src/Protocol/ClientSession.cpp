@@ -64,7 +64,7 @@ bool ClientSession::InitSession()
 	request.Timestamp = currentTime;
 
 	Send(ApplyScrambler(Handshake1::Build(request, SignaturePrivateKey)),
-		0);
+		0, false);
 
 	State = ClientStateInitialWaitForServer;
 
@@ -80,6 +80,9 @@ bool ClientSession::InitSession()
 
 		InitNonce(Streams[i].OutES.Nonce);
 		memset(Streams[i].InES.Nonce, 0, NONCE_SIZE);
+
+		OutputStreams[i].SetES(&Streams[i].OutES);
+		InputStreams[i].SetES(&Streams[i].InES);
 	}
 
 	TimeState = currentTime;
@@ -91,7 +94,7 @@ bool ClientSession::SendMessage(
 	const CowBuffer<uint8_t> message,
 	void *userPointer)
 {
-	if (!Connected()) {
+	if (!ConnectedActive()) {
 		return false;
 	}
 
@@ -114,9 +117,7 @@ bool ClientSession::SendMessage(
 	CommandTextMessage::Command command;
 	command.Message = message;
 
-	Send(Encrypt(
-		CommandTextMessage::BuildCommand(command),
-		Streams[2].OutES), 2);
+	Send(CommandTextMessage::BuildCommand(command), 2, true);
 	return true;
 }
 
@@ -137,32 +138,30 @@ void ClientSession::ResetAllSent()
 
 bool ClientSession::RequestUserList()
 {
-	if (!Connected()) {
+	if (!ConnectedActive()) {
 		return false;
 	}
 
-	Send(Encrypt(CommandListUsers::BuildCommand(), Streams[1].OutES), 1);
+	Send(CommandListUsers::BuildCommand(), 1, true);
 	return true;
 }
 
 bool ClientSession::RequestNewMessages(int64_t timestamp)
 {
-	if (!Connected()) {
+	if (!ConnectedActive()) {
 		return false;
 	}
 
 	CommandGetMessages::Command command;
 	command.Timestamp = timestamp;
 
-	Send(Encrypt(
-		CommandGetMessages::BuildCommand(command),
-		Streams[2].OutES), 2);
+	Send(CommandGetMessages::BuildCommand(command), 2, true);
 	return true;
 }
 
 bool ClientSession::InitVoice(const uint8_t *key, int64_t timestamp)
 {
-	if (!Connected()) {
+	if (!ConnectedActive()) {
 		return false;
 	}
 
@@ -170,15 +169,13 @@ bool ClientSession::InitVoice(const uint8_t *key, int64_t timestamp)
 	command.Key = key;
 	command.Timestamp = timestamp;
 
-	Send(Encrypt(
-		CommandVoiceInit::BuildCommand(command),
-		Streams[1].OutES), 1);
+	Send(CommandVoiceInit::BuildCommand(command), 1, true);
 	return true;
 }
 
 bool ClientSession::ResponseVoiceRequest(bool accept)
 {
-	if (!Connected()) {
+	if (!ConnectedActive()) {
 		return false;
 	}
 
@@ -190,34 +187,30 @@ bool ClientSession::ResponseVoiceRequest(bool accept)
 		response.Status = SESSION_RESPONSE_VOICE_DECLINE;
 	}
 
-	Send(Encrypt(
-		CommandVoiceRequest::BuildResponse(response),
-		Streams[1].OutES), 1);
+	Send(CommandVoiceRequest::BuildResponse(response), 1, true);
 	return true;
 }
 
 bool ClientSession::EndVoice()
 {
-	if (!Connected()) {
+	if (!ConnectedActive()) {
 		return false;
 	}
 
-	Send(Encrypt(CommandVoiceEnd::BuildCommand(), Streams[1].OutES), 1);
+	Send(CommandVoiceEnd::BuildCommand(), 1, true);
 	return true;
 }
 
 bool ClientSession::SendVoiceFrame(const CowBuffer<uint8_t> frame)
 {
-	if (!Connected()) {
+	if (!ConnectedActive()) {
 		return false;
 	}
 
 	CommandVoiceData::Command command;
 	command.VoiceData = frame;
 
-	Send(Encrypt(
-		CommandVoiceData::BuildCommand(command),
-		Streams[1].OutES), 1);
+	Send(CommandVoiceData::BuildCommand(command), 1, true);
 	return true;
 }
 
@@ -253,17 +246,13 @@ bool ClientSession::TimePassed()
 	CommandKeepAlive::Command command;
 	command.Timestamp = TimeState;
 
-	Send(Encrypt(
-		CommandKeepAlive::BuildCommand(command),
-		Streams[0].OutES), 0);
+	Send(CommandKeepAlive::BuildCommand(command), 0, true);
 	return true;
 }
 
 bool ClientSession::ProcessInitialWaitForServer()
 {
-	int stream;
-	CowBuffer<uint8_t> cyphertext = Receive(&stream);
-	CowBuffer<uint8_t> message = Decrypt(cyphertext, Streams[stream].InES);
+	CowBuffer<uint8_t> message = Receive();
 
 	Handshake2::Data request;
 	bool parseResult = Handshake2::Parse(message, request);
@@ -287,7 +276,7 @@ bool ClientSession::ProcessInitialWaitForServer()
 	Handshake3::Data response;
 	response.Timestamp = value;
 
-	Send(Encrypt(Handshake3::Build(response), Streams[0].OutES), 0);
+	Send(Handshake3::Build(response), 0, true);
 
 	State = ClientStateActiveSession;
 	TimeState = 0;
@@ -303,11 +292,7 @@ bool ClientSession::ProcessInitialWaitForServer()
 
 bool ClientSession::ProcessActiveSession()
 {
-	int stream;
-	CowBuffer<uint8_t> encryptedMessage = Receive(&stream);
-	CowBuffer<uint8_t> plainText = Decrypt(
-		encryptedMessage,
-		Streams[stream].InES);
+	CowBuffer<uint8_t> plainText = Receive();
 
 	if (plainText.Size() < sizeof(int32_t)) {
 		return false;

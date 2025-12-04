@@ -8,13 +8,23 @@
 #include "../Common/UnixTime.hpp"
 #include "../Common/Exception.hpp"
 
+static uint8_t Gen(uint8_t val)
+{
+	if (val == 0) {
+		++val;
+	}
+
+	uint8_t bit = ((val >> 6) ^ (val >> 5) ^ (val >> 4) ^ val) & 1;
+	return (val >> 1) | (bit << 7);
+}
+
 static void Scramble(uint8_t *buffer, uint64_t size, uint8_t init)
 {
 	uint8_t val = init;
 
 	for (uint64_t i = 0; i < size; i++) {
 		buffer[i] = buffer[i] ^ val;
-		val += 47;
+		val = Gen(val);
 	}
 }
 
@@ -355,4 +365,83 @@ CowBuffer<uint8_t> RemoveScrambler(CowBuffer<uint8_t> data)
 
 	Scramble(data.Pointer() + 1, data.Size() - 1, data.Pointer()[0]);
 	return data.Slice(1, data.Size() - 1);
+}
+
+// Stream reader.
+CryptoStreamReader::~CryptoStreamReader()
+{
+	crypto_wipe(&_ctx, sizeof(_ctx));
+}
+
+bool CryptoStreamReader::Init(
+	EncryptedStream *ES,
+	const uint8_t nonce[NONCE_SIZE])
+{
+	bool success = VerifyNonce(ES->Nonce, nonce);
+
+	if (!success) {
+		return false;
+	}
+
+	memcpy(ES->Nonce, nonce, NONCE_SIZE);
+	crypto_aead_init_x(&_ctx, ES->Key, nonce);
+	return true;
+}
+
+CowBuffer<uint8_t> CryptoStreamReader::Decrypt(
+	const CowBuffer<uint8_t> cyphertext,
+	const CowBuffer<uint8_t> add)
+{
+	const CowBuffer<uint8_t> cyphertextDes = RemoveScrambler(cyphertext);
+
+	if (cyphertextDes.Size() <= MAC_SIZE) {
+		return CowBuffer<uint8_t>();
+	}
+
+	CowBuffer<uint8_t> result(cyphertextDes.Size() - MAC_SIZE);
+
+	int error = crypto_aead_read(
+		&_ctx,
+		result.Pointer(),
+		cyphertextDes.Pointer(),
+		add.Size() ? add.Pointer() : nullptr,
+		add.Size(),
+		cyphertextDes.Pointer(MAC_SIZE),
+		result.Size());
+
+	if (error) {
+		return CowBuffer<uint8_t>();
+	}
+
+	return result;
+}
+
+// Stream writer.
+CryptoStreamWriter::~CryptoStreamWriter()
+{
+	crypto_wipe(&_ctx, sizeof(_ctx));
+}
+
+void CryptoStreamWriter::Init(EncryptedStream *ES)
+{
+	UpdateNonce(ES->Nonce);
+	crypto_aead_init_x(&_ctx, ES->Key, ES->Nonce);
+}
+
+CowBuffer<uint8_t> CryptoStreamWriter::Encrypt(
+	const CowBuffer<uint8_t> plaintext,
+	const CowBuffer<uint8_t> add)
+{
+	CowBuffer<uint8_t> result(plaintext.Size() + MAC_SIZE);
+
+	crypto_aead_write(
+		&_ctx,
+		result.Pointer(MAC_SIZE),
+		result.Pointer(),
+		add.Size() ? add.Pointer() : nullptr,
+		add.Size(),
+		plaintext.Pointer(),
+		plaintext.Size());
+
+	return ApplyScrambler(result);
 }

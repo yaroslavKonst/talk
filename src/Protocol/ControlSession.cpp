@@ -75,7 +75,7 @@ void ControlSession::SendResponse(int32_t code, const CowBuffer<uint8_t> data)
 	CowBuffer<uint8_t> message(sizeof(code));
 	*message.SwitchType<int32_t>() = code;
 
-	Send(message.Concat(data), 0);
+	Send(message.Concat(data), 0, false);
 }
 
 void ControlSession::ProcessShutdownCommand()

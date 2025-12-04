@@ -34,6 +34,11 @@ struct ClientSession : public Session
 		return Socket != -1;
 	}
 
+	bool ConnectedActive()
+	{
+		return Socket != -1 && State == ClientStateActiveSession;
+	}
+
 	void Disconnect();
 
 	MessageProcessor *Processor;
