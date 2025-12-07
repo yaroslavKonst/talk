@@ -39,3 +39,11 @@ HANDSHAKE_MODULES_ABS := $(HANDSHAKE_MODULES:%=$(BUILD_DIR)/%)
 
 Handshake.Test: Handshake.Test.cpp $(HANDSHAKE_MODULES_ABS)
 	$(CXX) $(STATIC_FLAG) -o $@ $< $(HANDSHAKE_MODULES_ABS)
+
+TREE_MODULES =\
+	Common/MyString.o
+
+TREE_MODULES_ABS := $(TREE_MODULES:%=$(BUILD_DIR)/%)
+
+Tree.Test: Tree.Test.cpp $(TREE_MODULES_ABS)
+	$(CXX) $(STATIC_FLAG) -o $@ $< $(TREE_MODULES_ABS)
