@@ -47,3 +47,12 @@ TREE_MODULES_ABS := $(TREE_MODULES:%=$(BUILD_DIR)/%)
 
 Tree.Test: Tree.Test.cpp $(TREE_MODULES_ABS)
 	$(CXX) $(STATIC_FLAG) -o $@ $< $(TREE_MODULES_ABS)
+
+FILETREE_MODULES =\
+	Common/MyString.o \
+	Common/BinaryFile.o
+
+FILETREE_MODULES_ABS := $(FILETREE_MODULES:%=$(BUILD_DIR)/%)
+
+FileTree.Test: FileTree.Test.cpp $(FILETREE_MODULES_ABS)
+	$(CXX) $(STATIC_FLAG) -o $@ $< $(FILETREE_MODULES_ABS)
