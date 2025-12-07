@@ -175,11 +175,19 @@ CowBuffer<String> String::Split(char delim, bool removeEmpty) const
 	}
 
 	int partCount = 1;
+	int searchEnd = _data->Length;
 
-	for (int i = 0; i < _data->Length; i++) {
+	if (removeEmpty) {
+		while (searchEnd > 0 && _data->Data[searchEnd - 1] == delim) {
+			--searchEnd;
+		}
+	}
+
+	for (int i = 0; i < searchEnd; i++) {
 		if (_data->Data[i] == delim) {
 			bool newPart = !removeEmpty ||
-				(i > 0 && _data->Data[i - 1] != delim);
+				(i > 0 && _data->Data[i - 1] != delim &&
+				i < searchEnd - 1);
 
 			if (newPart) {
 				++partCount;
