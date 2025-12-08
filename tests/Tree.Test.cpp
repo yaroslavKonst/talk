@@ -17,7 +17,7 @@ String GetCommand()
 	return res;
 }
 
-int GetDepth(Tree<int, int>::Entry *entry)
+int GetDepth(Tree<int>::Entry *entry)
 {
 	if (!entry) {
 		return 0;
@@ -30,7 +30,7 @@ int GetDepth(Tree<int, int>::Entry *entry)
 }
 
 void FillLayer(
-	Tree<int, int>::Entry *entry,
+	Tree<int>::Entry *entry,
 	int layer,
 	int *array,
 	int *depth,
@@ -60,7 +60,7 @@ void FillLayer(
 }
 
 void PrintLayer(
-	Tree<int, int>::Entry *entry,
+	Tree<int>::Entry *entry,
 	int layer,
 	int depth)
 {
@@ -132,9 +132,9 @@ void PrintLayer(
 	write(1, "\n", 1);
 }
 
-void DumpTree(Tree<int, int> &tree)
+void DumpTree(Tree<int> &tree)
 {
-	Tree<int, int>::Entry *root = tree.FindSmallest();
+	Tree<int>::Entry *root = tree.FindSmallest();
 
 	if (!root) {
 		return;
@@ -151,9 +151,9 @@ void DumpTree(Tree<int, int> &tree)
 	}
 }
 
-void ListTree(Tree<int, int> &tree)
+void ListTree(Tree<int> &tree)
 {
-	Tree<int, int>::Entry *current = tree.FindSmallest();
+	Tree<int>::Entry *current = tree.FindSmallest();
 
 	while (current) {
 		printf(" %d", current->Key);
@@ -163,9 +163,9 @@ void ListTree(Tree<int, int> &tree)
 	printf("\n");
 }
 
-void RListTree(Tree<int, int> &tree)
+void RListTree(Tree<int> &tree)
 {
-	Tree<int, int>::Entry *current = tree.FindBiggest();
+	Tree<int>::Entry *current = tree.FindBiggest();
 
 	while (current) {
 		printf(" %d", current->Key);
@@ -177,7 +177,7 @@ void RListTree(Tree<int, int> &tree)
 
 int main(int argc, char **argv)
 {
-	Tree<int, int> tree;
+	Tree<int> tree;
 
 	String command;
 
@@ -198,7 +198,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			bool res = tree.AddEntry(atoi(args[1].CStr()), 0);
+			bool res = tree.AddEntry(atoi(args[1].CStr()));
 
 			if (res) {
 				printf("Added.\n");
@@ -213,7 +213,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			Tree<int, int>::Entry *entry =
+			Tree<int>::Entry *entry =
 				tree.FindEntry(atoi(args[1].CStr()));
 
 			if (!entry) {

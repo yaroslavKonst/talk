@@ -5,14 +5,13 @@
 
 #include "Exception.hpp"
 
-template <typename KT, typename VT>
+template <typename KT>
 class Tree
 {
 public:
 	struct Entry
 	{
 		KT Key;
-		VT Value;
 
 		Entry *Parent;
 		Entry *Left;
@@ -42,10 +41,8 @@ public:
 
 	Entry *FindEntry(const KT &key);
 
-	bool AddEntry(const KT &key, const VT &value);
+	bool AddEntry(const KT &key);
 	void RemoveEntry(Entry *address);
-
-	VT &GetEntry(Entry *address);
 
 	Entry *FindSmallest(const KT &key);
 	Entry *FindBiggest(const KT &key);
@@ -66,22 +63,22 @@ private:
 	void Swap(Entry *address1, Entry *address2);
 };
 
-template <typename KT, typename VT>
-Tree<KT, VT>::Tree()
+template <typename KT>
+Tree<KT>::Tree()
 {
 	_root = nullptr;
 }
 
-template <typename KT, typename VT>
-Tree<KT, VT>::~Tree()
+template <typename KT>
+Tree<KT>::~Tree()
 {
 	if (_root) {
 		delete _root;
 	}
 }
 
-template <typename KT, typename VT>
-typename Tree<KT, VT>::Entry *Tree<KT, VT>::FindEntry(const KT &key)
+template <typename KT>
+typename Tree<KT>::Entry *Tree<KT>::FindEntry(const KT &key)
 {
 	Entry *current = _root;
 
@@ -100,8 +97,8 @@ typename Tree<KT, VT>::Entry *Tree<KT, VT>::FindEntry(const KT &key)
 	return nullptr;
 }
 
-template <typename KT, typename VT>
-bool Tree<KT, VT>::AddEntry(const KT &key, const VT &value)
+template <typename KT>
+bool Tree<KT>::AddEntry(const KT &key)
 {
 	Entry **current = &_root;
 	Entry *parent = nullptr;
@@ -122,7 +119,6 @@ bool Tree<KT, VT>::AddEntry(const KT &key, const VT &value)
 
 	Entry *entry = new Entry;
 	entry->Key = key;
-	entry->Value = value;
 	entry->Parent = parent;
 	entry->Depth = 0;
 
@@ -133,8 +129,8 @@ bool Tree<KT, VT>::AddEntry(const KT &key, const VT &value)
 	return true;
 }
 
-template <typename KT, typename VT>
-void Tree<KT, VT>::RemoveEntry(Entry *address)
+template <typename KT>
+void Tree<KT>::RemoveEntry(Entry *address)
 {
 	if (!address->Left) {
 		Entry *parent = address->Parent;
@@ -206,14 +202,8 @@ void Tree<KT, VT>::RemoveEntry(Entry *address)
 	}
 }
 
-template <typename KT, typename VT>
-VT &Tree<KT, VT>::GetEntry(Entry *address)
-{
-	return address->Value;
-}
-
-template <typename KT, typename VT>
-typename Tree<KT, VT>::Entry *Tree<KT, VT>::FindSmallest(const KT &key)
+template <typename KT>
+typename Tree<KT>::Entry *Tree<KT>::FindSmallest(const KT &key)
 {
 	Entry *minAddress = nullptr;
 	KT minKey;
@@ -242,8 +232,8 @@ typename Tree<KT, VT>::Entry *Tree<KT, VT>::FindSmallest(const KT &key)
 	return minAddress;
 }
 
-template <typename KT, typename VT>
-typename Tree<KT, VT>::Entry *Tree<KT, VT>::FindBiggest(const KT &key)
+template <typename KT>
+typename Tree<KT>::Entry *Tree<KT>::FindBiggest(const KT &key)
 {
 	Entry *maxAddress = nullptr;
 	KT maxKey;
@@ -272,8 +262,8 @@ typename Tree<KT, VT>::Entry *Tree<KT, VT>::FindBiggest(const KT &key)
 	return maxAddress;
 }
 
-template <typename KT, typename VT>
-typename Tree<KT, VT>::Entry *Tree<KT, VT>::FindSmallest()
+template <typename KT>
+typename Tree<KT>::Entry *Tree<KT>::FindSmallest()
 {
 	Entry *currentAddress = _root;
 
@@ -288,8 +278,8 @@ typename Tree<KT, VT>::Entry *Tree<KT, VT>::FindSmallest()
 	return nullptr;
 }
 
-template <typename KT, typename VT>
-typename Tree<KT, VT>::Entry *Tree<KT, VT>::FindBiggest()
+template <typename KT>
+typename Tree<KT>::Entry *Tree<KT>::FindBiggest()
 {
 	Entry *currentAddress = _root;
 
@@ -304,8 +294,8 @@ typename Tree<KT, VT>::Entry *Tree<KT, VT>::FindBiggest()
 	return nullptr;
 }
 
-template <typename KT, typename VT>
-typename Tree<KT, VT>::Entry *Tree<KT, VT>::Next(Entry *address)
+template <typename KT>
+typename Tree<KT>::Entry *Tree<KT>::Next(Entry *address)
 {
 	if (address->Right) {
 		address = address->Right;
@@ -332,8 +322,8 @@ typename Tree<KT, VT>::Entry *Tree<KT, VT>::Next(Entry *address)
 	}
 }
 
-template <typename KT, typename VT>
-typename Tree<KT, VT>::Entry *Tree<KT, VT>::Previous(Entry *address)
+template <typename KT>
+typename Tree<KT>::Entry *Tree<KT>::Previous(Entry *address)
 {
 	if (address->Left) {
 		address = address->Left;
@@ -360,8 +350,8 @@ typename Tree<KT, VT>::Entry *Tree<KT, VT>::Previous(Entry *address)
 	}
 }
 
-template <typename KT, typename VT>
-void Tree<KT, VT>::RotateLeft(Entry *address)
+template <typename KT>
+void Tree<KT>::RotateLeft(Entry *address)
 {
 	/* Input argument is the address of node 1.
 	 *
@@ -443,8 +433,8 @@ void Tree<KT, VT>::RotateLeft(Entry *address)
 	}
 }
 
-template <typename KT, typename VT>
-void Tree<KT, VT>::RotateRight(Entry *address)
+template <typename KT>
+void Tree<KT>::RotateRight(Entry *address)
 {
 	/* Input argument is the address of node 1.
 	 *
@@ -526,8 +516,8 @@ void Tree<KT, VT>::RotateRight(Entry *address)
 	}
 }
 
-template <typename KT, typename VT>
-void Tree<KT, VT>::RollUp(Entry *address)
+template <typename KT>
+void Tree<KT>::RollUp(Entry *address)
 {
 	while (address) {
 		int32_t leftDepth = 0;
@@ -554,8 +544,8 @@ void Tree<KT, VT>::RollUp(Entry *address)
 	}
 }
 
-template <typename KT, typename VT>
-void Tree<KT, VT>::Swap(Entry *address1, Entry *address2)
+template <typename KT>
+void Tree<KT>::Swap(Entry *address1, Entry *address2)
 {
 	/*       P1      P2
 	 *       |       |
