@@ -58,6 +58,8 @@ public:
 
 	virtual void Redraw() = 0;
 	virtual void Notify(String message) = 0;
+	virtual void *BlockNotify(String message) = 0;
+	virtual void BlockCancel(void *handle) = 0;
 };
 
 #endif

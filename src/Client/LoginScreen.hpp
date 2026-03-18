@@ -25,6 +25,8 @@ private:
 	bool _modified;
 
 	Root *_root;
+
+	Screen *ProcessConnection();
 };
 
 #endif

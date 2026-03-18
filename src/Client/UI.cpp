@@ -113,7 +113,16 @@ void UI::Redraw()
 void UI::Notify(String message)
 {
 	_notifier.Notify(message);
-	Redraw();
+}
+
+void *UI::BlockNotify(String message)
+{
+	return _notifier.BlockNotify(message);
+}
+
+void UI::BlockCancel(void *handle)
+{
+	_notifier.BlockCancel(handle);
 }
 
 void UI::DrawConnectionState()

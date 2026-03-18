@@ -10,6 +10,9 @@ NotificationSystem::NotificationSystem(Root *root)
 	_first = nullptr;
 	_last = nullptr;
 
+	_blockFirst = nullptr;
+	_blockLast = nullptr;
+
 	_root = root;
 }
 
@@ -22,6 +25,14 @@ NotificationSystem::~NotificationSystem()
 	}
 
 	_last = nullptr;
+
+	while (_blockFirst) {
+		Notification *tmp = _blockFirst;
+		_blockFirst = _blockFirst->Next;
+		delete tmp;
+	}
+
+	_blockLast = nullptr;
 }
 
 void NotificationSystem::Notify(String message)
@@ -41,9 +52,72 @@ void NotificationSystem::Notify(String message)
 	_root->Ui->Redraw();
 }
 
+void *NotificationSystem::BlockNotify(String message)
+{
+	Notification *notification = new Notification;
+	notification->Next = nullptr;
+	notification->Message = message;
+
+	if (!_blockFirst) {
+		_blockFirst = notification;
+		_blockLast = notification;
+	} else {
+		_blockLast->Next = notification;
+		_blockLast = notification;
+	}
+
+	_root->Ui->Redraw();
+
+	return _blockLast;
+}
+
+void NotificationSystem::BlockCancel(void *handle)
+{
+	Notification *node = reinterpret_cast<Notification*>(handle);
+
+	if (node == _blockFirst) {
+		_blockFirst = _blockFirst->Next;
+
+		if (!_blockFirst) {
+			_blockLast = nullptr;
+		}
+
+		delete node;
+		_root->Ui->Redraw();
+		return;
+	}
+
+	Notification *prevNode = _blockFirst;
+
+	while (prevNode) {
+		if (prevNode->Next != node) {
+			prevNode = prevNode->Next;
+			continue;
+		}
+
+		prevNode->Next = node->Next;
+
+		if (_blockLast == node) {
+			_blockLast = prevNode;
+		}
+
+		delete node;
+		_root->Ui->Redraw();
+		return;
+	}
+
+	_root->Ui->Redraw();
+}
+
 void NotificationSystem::Redraw()
 {
-	if (!_first) {
+	Notification *node;
+
+	if (_blockFirst) {
+		node = _blockFirst;
+	} else if (_first) {
+		node = _first;
+	} else {
 		return;
 	}
 
@@ -51,7 +125,7 @@ void NotificationSystem::Redraw()
 	int columns;
 	getmaxyx(stdscr, rows, columns);
 
-	int messageSize = _first->Message.Length();
+	int messageSize = node->Message.Length();
 	int frameSize = messageSize + 3;
 
 	if (frameSize < 30) {
@@ -71,21 +145,29 @@ void NotificationSystem::Redraw()
 		limitY - 1,
 		baseX + 1,
 		limitX - 1,
-		"Notification",
+		node == _first ? "Notification" : "Please wait",
 		COLOR_PAIR(YELLOW_TEXT));
 
 	// Message.
 	move(baseY + 3, columns / 2 - messageSize / 2);
-	addstr(_first->Message.CStr());
+	addstr(node->Message.CStr());
 
-	move(baseY + 5, columns / 2 - 10);
-	addstr(("Press " +
-		_root->Conf->NotificationConfirmName() +
-		" to close.").CStr());
+	if (node == _first) {
+		move(baseY + 5, columns / 2 - 10);
+		addstr(("Press " +
+			_root->Conf->NotificationConfirmName() +
+			" to close.").CStr());
+	} else {
+		move(baseY + 5, columns / 2);
+	}
 }
 
 bool NotificationSystem::ProcessEvent(int event)
 {
+	if (_blockFirst) {
+		return true;
+	}
+
 	if (!_first) {
 		return false;
 	}

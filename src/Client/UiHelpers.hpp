@@ -40,6 +40,8 @@ namespace UiHelpers
 		void Redraw();
 		void SetCursor();
 
+		void ProcessChar(int event);
+
 	private:
 		int _cX;
 		int _cY;

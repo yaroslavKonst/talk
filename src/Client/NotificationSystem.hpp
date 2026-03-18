@@ -12,6 +12,8 @@ public:
 	~NotificationSystem();
 
 	void Notify(String message);
+	void *BlockNotify(String message);
+	void BlockCancel(void *handle);
 
 	void Redraw();
 	bool ProcessEvent(int event);
@@ -25,6 +27,9 @@ private:
 
 	Notification *_first;
 	Notification *_last;
+
+	Notification *_blockFirst;
+	Notification *_blockLast;
 
 	Root *_root;
 };

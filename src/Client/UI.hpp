@@ -42,6 +42,8 @@ public:
 	void Redraw() override;
 
 	void Notify(String message) override;
+	void *BlockNotify(String message) override;
+	void BlockCancel(void *handle) override;
 
 private:
 	Root *_root;

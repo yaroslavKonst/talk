@@ -251,3 +251,17 @@ void TextBox::SetCursor()
 {
 	move(_tY, _tX + Text.Length());
 }
+
+void TextBox::ProcessChar(int event)
+{
+	if (event == '\b') {
+		if (Text.Length() == 0) {
+			return;
+		}
+
+		Text = Text.Substring(0, Text.Length() - 1);
+		return;
+	}
+
+	Text += event;
+}

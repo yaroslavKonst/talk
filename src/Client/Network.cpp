@@ -69,7 +69,6 @@ void Network::ProcessRead()
 			_handshake = nullptr;
 			CloseConnection();
 			_root->Ui->Notify("Handshake failed.");
-			_root->Ui->Redraw();
 		}
 
 		if (_handshake->ConnectionSuccessful()) {
@@ -94,7 +93,6 @@ void Network::ProcessWrite()
 			_handshake = nullptr;
 			CloseConnection();
 			_root->Ui->Notify("Handshake failed.");
-			_root->Ui->Redraw();
 		}
 
 		if (_handshake->ConnectionSuccessful()) {

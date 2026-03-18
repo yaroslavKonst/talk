@@ -82,6 +82,29 @@ void LoginScreen::Redraw()
 	}
 }
 
+static bool LegalIpChar(int event)
+{
+	return
+		(event >= '0' && event <= '9') ||
+		event == '.' ||
+		event == '\b';
+}
+
+static bool LegalPortChar(int event)
+{
+	return
+		(event >= '0' && event <= '9') ||
+		event == '\b';
+}
+
+static bool LegalKeyChar(int event)
+{
+	return
+		(event >= '0' && event <= '9') ||
+		(event >= 'a' && event <= 'f') ||
+		event == '\b';
+}
+
 Screen *LoginScreen::ProcessEvent(int event)
 {
 	if (event == _root->Conf->LoginBackKey()) {
@@ -123,126 +146,100 @@ Screen *LoginScreen::ProcessEvent(int event)
 			return this;
 		}
 
-		// Transition to work state.
-		if (_serverKeyHex.Text.Length() != KEY_SIZE * 2) {
-			_root->Ui->Notify("Invalid server key length.");
-			return this;
-		}
-
-		uint8_t serverKey[KEY_SIZE];
-		HexToData(_serverKeyHex.Text, serverKey);
-
-		uint16_t port = atoi(_port.Text.CStr());
-
-		if (port == 0) {
-			_root->Ui->Notify("Invalid port number.");
-			return this;
-		}
-
-		struct sockaddr_in addr;
-		addr.sin_family = AF_INET;
-		addr.sin_port = htons(port);
-		int res = inet_aton(_ip.Text.CStr(), &addr.sin_addr);
-
-		if (!res) {
-			_root->Ui->Notify("Invalid IP address.");
-			return this;
-		}
-
-		if (_modified) {
-			_root->Conf->SetServerAddress(_ip.Text);
-			_root->Conf->SetServerPort(_port.Text);
-			_root->Conf->SetServerKeyHex(_serverKeyHex.Text);
-			_root->Conf->Save();
-			_modified = false;
-		}
-
-		_root->Ui->Notify("Connecting...");
-		_root->Ui->Redraw();
-
-		int socketFd = socket(AF_INET, SOCK_STREAM, 0);
-
-		if (socketFd == -1) {
-			_root->Ui->Notify("Failed to create socket.");
-			return this;
-		}
-
-		res = connect(
-			socketFd,
-			(struct sockaddr*)&addr,
-			sizeof(addr));
-
-		if (res == -1) {
-			close(socketFd);
-			_root->Ui->Notify("Failed to connect.");
-			return this;
-		}
-
-		MakeNonblocking(socketFd);
-
-		_root->Network->StartConnection(socketFd, serverKey);
-
-		return new WorkScreen(_root);
-	}
-
-	if (event == '\b') {
-		if (_writingIp) {
-			if (_ip.Text.Length() == 0) {
-				return this;
-			}
-
-			_ip.Text = _ip.Text.Substring(0, _ip.Text.Length() - 1);
-			_modified = true;
-		} else if (_writingPort) {
-			if (_port.Text.Length() == 0) {
-				return this;
-			}
-
-			_port.Text = _port.Text.Substring(
-				0,
-				_port.Text.Length() - 1);
-			_modified = true;
-		} else if (_writingKey) {
-			if (_serverKeyHex.Text.Length() == 0) {
-				return this;
-			}
-
-			_serverKeyHex.Text = _serverKeyHex.Text.Substring(
-				0,
-				_serverKeyHex.Text.Length() - 1);
-			_modified = true;
-		}
-
-		return this;
+		return ProcessConnection();
 	}
 
 	if (_writingIp) {
-		if ((event < '0' || event > '9') && event != '.') {
+		if (!LegalIpChar(event)) {
 			_root->Ui->Notify("Illegal character.");
 			return this;
 		}
 
-		_ip.Text += event;
+		_ip.ProcessChar(event);
 		_modified = true;
 	} else if (_writingPort) {
-		if (event < '0' || event > '9') {
+		if (!LegalPortChar(event)) {
 			_root->Ui->Notify("Illegal character.");
 			return this;
 		}
 
-		_port.Text += event;
+		_port.ProcessChar(event);
 		_modified = true;
 	} else if (_writingKey) {
-		if ((event < '0' || event > '9') &&
-			(event < 'a' || event > 'f'))
-		{
+		if (!LegalKeyChar(event)) {
 			_root->Ui->Notify("Illegal character.");
 			return this;
 		}
 
-		_serverKeyHex.Text += event;
+		_serverKeyHex.ProcessChar(event);
 		_modified = true;
 	}
 
 	return this;
+}
+
+Screen *LoginScreen::ProcessConnection()
+{
+	if (_serverKeyHex.Text.Length() != KEY_SIZE * 2) {
+		_root->Ui->Notify("Invalid server key length.");
+		return this;
+	}
+
+	uint8_t serverKey[KEY_SIZE];
+	HexToData(_serverKeyHex.Text, serverKey);
+
+	uint16_t port = atoi(_port.Text.CStr());
+
+	if (port == 0) {
+		_root->Ui->Notify("Invalid port number.");
+		return this;
+	}
+
+	struct sockaddr_in addr;
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(port);
+	int res = inet_aton(_ip.Text.CStr(), &addr.sin_addr);
+
+	if (!res) {
+		_root->Ui->Notify("Invalid IP address.");
+		return this;
+	}
+
+	if (_modified) {
+		_root->Conf->SetServerAddress(_ip.Text);
+		_root->Conf->SetServerPort(_port.Text);
+		_root->Conf->SetServerKeyHex(_serverKeyHex.Text);
+		_root->Conf->Save();
+		_modified = false;
+	}
+
+	void *blockHandle = _root->Ui->BlockNotify("Connecting...");
+
+	int socketFd = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (socketFd == -1) {
+		_root->Ui->BlockCancel(blockHandle);
+		_root->Ui->Notify("Failed to create socket.");
+		return this;
+	}
+
+	res = connect(
+		socketFd,
+		(struct sockaddr*)&addr,
+		sizeof(addr));
+
+	if (res == -1) {
+		_root->Ui->BlockCancel(blockHandle);
+		close(socketFd);
+		_root->Ui->Notify("Failed to connect.");
+		return this;
+	}
+
+	MakeNonblocking(socketFd);
+
+	_root->Ui->BlockCancel(blockHandle);
+
+	_root->Network->StartConnection(socketFd, serverKey);
+
+	return new WorkScreen(_root);
 }
