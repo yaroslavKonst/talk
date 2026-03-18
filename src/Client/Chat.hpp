@@ -2,10 +2,10 @@
 #define _CHAT_HPP
 
 #include "NotificationSystem.hpp"
-#include "ControlStorage.hpp"
 #include "../Protocol/ClientSession.hpp"
 #include "../Message/MessageStorage.hpp"
 #include "../Message/AttributeStorage.hpp"
+#include "../Common/Tree.hpp"
 
 struct MessageContents
 {
@@ -24,94 +24,59 @@ struct MessageContents
 		EntryTypeData = 2
 	};
 
-	CowBuffer<uint8_t> Build() const
-	{
-		CowBuffer<uint8_t> text;
-		CowBuffer<uint8_t> data;
-
-		if (Text.Length()) {
-			text.Resize(sizeof(int32_t) * 2 + Text.Length());
-			*text.SwitchType<int32_t>() = EntryTypeText;
-			*text.SwitchType<int32_t>(sizeof(int32_t)) =
-				Text.Length();
-
-			memcpy(
-				text.Pointer(sizeof(int32_t) * 2),
-				Text.CStr(),
-				Text.Length());
-		}
-
-		if (Attachment.Size()) {
-			data.Resize(sizeof(int32_t) * 2 + Attachment.Size());
-			*data.SwitchType<int32_t>() = EntryTypeData;
-			*data.SwitchType<int32_t>(sizeof(int32_t)) =
-				Attachment.Size();
-
-			memcpy(
-				data.Pointer(sizeof(int32_t) * 2),
-				Attachment.Pointer(),
-				Attachment.Size());
-		}
-
-		return text.Concat(data);
-	}
-
-	void Parse(const CowBuffer<uint8_t> data)
-	{
-		if (!data.Size()) {
-			return;
-		}
-
-		unsigned int offset = 0;
-
-		while (offset < data.Size()) {
-			int type = ' ';
-
-			if (data.Size() - offset >= sizeof(int32_t)) {
-				type = *data.SwitchType<int32_t>(offset);
-			}
-
-			if (type == EntryTypeText) {
-				int size = *data.SwitchType<int32_t>(
-					offset + sizeof(int32_t));
-
-				offset += sizeof(int32_t) * 2;
-				Text.Clear();
-
-				for (int i = 0; i < size; i++) {
-					Text += data[offset];
-					++offset;
-				}
-			} else if (type == EntryTypeData) {
-				int size = *data.SwitchType<int32_t>(
-					offset + sizeof(int32_t));
-
-				offset += sizeof(int32_t) * 2;
-				Attachment.Resize(size);
-
-				for (int i = 0; i < size; i++) {
-					Attachment[i] = data[offset];
-					++offset;
-				}
-			} else {
-				Text.Clear();
-
-				while (offset < data.Size()) {
-					Text += data[offset];
-					++offset;
-				}
-			}
-		}
-	}
+	CowBuffer<uint8_t> Build() const;
+	void Parse(const CowBuffer<uint8_t> data);
 };
 
-class MessageDescriptor
+class MessageDecryptor
 {
 public:
-	MessageDescriptor(AttributeStorage *attrStorage);
+	MessageDecryptor(
+		const CowBuffer<uint8_t> *message,
+		MessageContents *contents);
 
-	MessageDescriptor *Next;
+	void Run();
+	bool End();
 
+private:
+	const CowBuffer<uint8_t> *_message;
+	int _offset;
+
+	CowBuffer<uint8_t> _decryptedPart;
+
+	MessageContents *_contents;
+
+	CryptoStreamReader _streamReader;
+};
+
+class MessageEncryptor
+{
+public:
+	MessageEncryptor(
+		const MessageContents *contents,
+		CowBuffer<uint8_t> *message);
+
+	void Run();
+	bool End();
+
+private:
+	const CowBuffer<uint8_t> *_message;
+	int _offset;
+
+	CowBuffer<uint8_t> _encryptedPart;
+
+	MessageContents *_contents;
+};
+
+class MessageDescriptor : public QuantEventProcessor
+{
+public:
+	MessageDescriptor(
+		MessageStorage *msgStorage,
+		AttributeStorage *attrStorage,
+		Root *root);
+
+	Message::MessageID ID;
 	CowBuffer<uint8_t> Message;
 
 	bool Read;
@@ -125,8 +90,15 @@ public:
 	void SetSent(bool value);
 	void SetSendFailure(bool value);
 
+	MessageDecryptor *Dec;
+	MessageEncryptor *Enc;
+
+	void ProcessQuant() override;
+
 private:
+	MessageStorage *_messageStorage;
 	AttributeStorage *_attributeStorage;
+	Root *_root;
 
 	void SaveAttributes();
 };
@@ -134,12 +106,7 @@ private:
 class Chat
 {
 public:
-	Chat(
-		ClientSession *session,
-		const uint8_t *peerKey,
-		NotificationSystem *notificationSystem,
-		int64_t *latestReceiveTime,
-		ControlStorage *controls);
+	Chat(Root *root, const uint8_t *peerKey, int64_t *latestReceiveTime);
 	~Chat();
 
 	const uint8_t *GetPeerKey()
@@ -147,28 +114,21 @@ public:
 		return _peerKey;
 	}
 
-	void SetPeerName(String name)
-	{
-		_peerName = name;
-	}
-
-	void Redraw(int rows, int columns);
-
 	bool HasUnread();
-	bool HasUnsent();
-
-	bool Typing();
-
-	void StartTyping();
-	void ProcessTyping(int event);
 
 	void SwitchUp();
 	void SwitchDown();
 
+	void MoveLeft();
+	void MoveRight();
+
+	void AddChar(int c);
+
+	void SendMessage();
+
 	void DeliverMessage(CowBuffer<uint8_t> message);
 
-	void MarkRead();
-	void MarkRead(int messageIndex);
+	void MarkReadCurrentMessage();
 
 	bool HasAttachment();
 	CowBuffer<uint8_t> ExtractAttachment();
@@ -177,30 +137,39 @@ public:
 	void ClearAttachment();
 
 private:
-	ClientSession *_session;
+	struct MessageContainer
+	{
+		MessageDescriptor *Descriptor;
 
-	int _rows;
-	int _columns;
+		MessageContainer(MessageDescriptor *descr)
+		{
+			Descriptor = descr;
+		}
 
-	void RedrawMessageWindow();
-	void RedrawTextWindow();
-	CowBuffer<String> MakeMultiline(String text, int limit);
+		bool operator==(const MessageContainer &c) const
+		{
+			return Descriptor->ID == c.Descriptor->ID;
+		}
 
-	static int64_t _LastLoadedTime;
+		bool operator<(const MessageContainer &c) const
+		{
+			return Descriptor->ID < c.Descriptor->ID;
+		}
+	};
+
+	Root *_root;
 
 	const uint8_t *_peerKey;
-	String _peerName;
-
-	bool _typing;
 
 	MessageStorage _messageStorage;
 	AttributeStorage _attributeStorage;
 
-	MessageDescriptor *_last;
-	int _loadedMessages;
-	int _currentMessage;
+	int64_t *_latestReceiveTime;
 
-	void LoadMessages(int count);
+	Tree<MessageContainer> _messages;
+	Tree<MessageContainer>::Entry *_currentMessage;
+
+	void LoadMessages();
 	void UnloadMessages();
 
 	CowBuffer<uint8_t> EncryptMessage(
@@ -211,20 +180,12 @@ private:
 		int32_t index);
 	MessageContents DecryptMessage(CowBuffer<uint8_t> message);
 
-	void SendMessage();
-
 	int _utf8ExpectedSize;
 	String _utf8Buffer;
 
 	String _draft;
 	String _draftSuffix;
 	CowBuffer<uint8_t> _draftAttachment;
-
-	NotificationSystem *_notificationSystem;
-
-	int64_t *_latestReceiveTime;
-
-	ControlStorage *_controls;
 };
 
 #endif

@@ -1,417 +1,283 @@
 #include "UserDB.hpp"
 
-#include <cstring>
+#include "../Common/File.hpp"
 
-#include "../ThirdParty/monocypher.h"
-#include "../Common/Debug.hpp"
-
-UserDB::UserDB() : _userFile("talkd.users", true)
+UserDB::UserDB(
+	EventDispatcher *dispatcher,
+	const uint8_t *privateKey,
+	const uint8_t *publicKey)
 {
-	_users = nullptr;
-	_freeIndices = nullptr;
-	_deletedUsers = nullptr;
+	_dispatcher = dispatcher;
+
+	_privateKey = privateKey;
+	_publicKey = publicKey;
+
+	_startupSessions = nullptr;
+	_timeQuantRequested = false;
 
 	LoadUserData();
 }
 
 UserDB::~UserDB()
 {
+	if (_timeQuantRequested) {
+		_dispatcher->UnregisterQuantProcessor(this);
+		_timeQuantRequested = false;
+	}
+
+	while (_startupSessions) {
+		StartupSession *tmp = _startupSessions;
+		_startupSessions = _startupSessions->Next;
+		delete tmp->Session;
+		delete tmp;
+	}
+
 	FreeUserData();
+}
+
+bool UserDB::HasUser(String name)
+{
+	Tree<UserByName>::Entry *data = _usersByName.FindEntry(name);
+	return data;
 }
 
 bool UserDB::HasUser(const uint8_t key[KEY_SIZE])
 {
-	UserTree **data = FindEntry(key);
+	Tree<UserByKey>::Entry *data = _usersByKey.FindEntry(key);
 	return data;
 }
 
-const uint8_t *UserDB::GetUserPublicKey(const uint8_t key[KEY_SIZE])
+User *UserDB::GetUser(String name)
 {
-	UserTree **data = FindEntry(key);
+	Tree<UserByName>::Entry *data = _usersByName.FindEntry(name);
 
 	if (!data) {
-		THROW("Requested user does not exist.");
-	}
-
-	return (*data)->Data->PublicKey;
-}
-
-const uint8_t *UserDB::GetUserSignature(const uint8_t key[KEY_SIZE])
-{
-	UserTree **data = FindEntry(key);
-
-	if (!data) {
-		THROW("Requested user does not exist.");
-	}
-
-	return (*data)->Data->SignaturePublicKey;
-}
-
-int64_t UserDB::GetUserAccessTime(const uint8_t key[KEY_SIZE])
-{
-	UserTree **data = FindEntry(key);
-
-	if (!data) {
-		THROW("Requested user does not exist.");
-	}
-
-	return (*data)->Data->AccessTime;
-}
-
-String UserDB::GetUserName(const uint8_t key[KEY_SIZE])
-{
-	UserTree **data = FindEntry(key);
-
-	if (!data) {
-		THROW("Requested user does not exist.");
-	}
-
-	return (*data)->Data->Name;
-}
-
-void UserDB::UpdateUserAccessTime(
-	const uint8_t key[KEY_SIZE],
-	int64_t accessTime)
-{
-	UserTree **data = FindEntry(key);
-
-	if (!data) {
-		THROW("Requested user does not exist.");
-	}
-
-	(*data)->Data->AccessTime = accessTime;
-
-	_userFile.Write<int64_t>(
-		&accessTime,
-		1,
-		(*data)->Data->IndexInFile * _EntrySize +
-		_UserAccessTimeOffset);
-}
-
-void UserDB::AddUser(
-	const uint8_t key[KEY_SIZE],
-	const uint8_t signature[SIGNATURE_PUBLIC_KEY_SIZE],
-	int64_t accessTime,
-	String name)
-{
-	// Free index lookup.
-	uint64_t freeIndex;
-
-	if (_freeIndices) {
-		freeIndex = _freeIndices->Index;
-		FreeIndex *tmp = _freeIndices;
-		_freeIndices = _freeIndices->Next;
-		delete tmp;
-	} else {
-		freeIndex = _userFile.Size() / _EntrySize;
-	}
-
-	// Write to file.
-	char *zeroBuffer = new char[_EntrySize];
-	memset(zeroBuffer, 0, _EntrySize);
-
-	_userFile.Write<char>(
-		zeroBuffer,
-		_EntrySize,
-		freeIndex * _EntrySize);
-
-	delete[] zeroBuffer;
-
-	_userFile.Write<uint8_t>(
-		key,
-		KEY_SIZE,
-		freeIndex * _EntrySize + _UserKeyOffset);
-
-	_userFile.Write<uint8_t>(
-		signature,
-		SIGNATURE_PUBLIC_KEY_SIZE,
-		freeIndex * _EntrySize + _UserSignatureOffset);
-
-	_userFile.Write<int64_t>(
-		&accessTime,
-		1,
-		freeIndex * _EntrySize + _UserAccessTimeOffset);
-
-	uint8_t valid = 1;
-
-	_userFile.Write<uint8_t>(
-		&valid,
-		1,
-		freeIndex * _EntrySize + _ValidOffset);
-
-	if (name.Length() >= _MaxNameLength) {
-		name = name.Substring(0, _MaxNameLength - 1);
-	}
-
-	_userFile.Write<char>(
-		name.CStr(),
-		name.Length() + 1,
-		freeIndex * _EntrySize + _UserNameOffset);
-
-	// Add tree entry.
-	UserData *data = new UserData;
-	data->IndexInFile = freeIndex;
-
-	memcpy(data->PublicKey, key, KEY_SIZE);
-	memcpy(data->SignaturePublicKey, signature, SIGNATURE_PUBLIC_KEY_SIZE);
-	data->AccessTime = accessTime;
-	data->Name = name;
-
-	UserTree *entry = new UserTree;
-	entry->Data = data;
-	entry->Left = nullptr;
-	entry->Right = nullptr;
-
-	AddEntry(&_users, entry);
-}
-
-void UserDB::RemoveUser(const uint8_t key[KEY_SIZE])
-{
-	// Tree node lookup.
-	UserTree **root = FindEntry(key);
-
-	if (!root) {
-		THROW("Requested user does not exist.");
-	}
-
-	// Erase entry in file.
-	uint8_t *buffer = new uint8_t[_EntrySize];
-	memset(buffer, 0, _EntrySize);
-
-	_userFile.Write<uint8_t>(
-		buffer,
-		_EntrySize,
-		(*root)->Data->IndexInFile * _EntrySize);
-
-	delete[] buffer;
-
-	// Add free index to list.
-	FreeIndex *idx = new FreeIndex;
-	idx->Index = (*root)->Data->IndexInFile;
-	idx->Next = _freeIndices;
-	_freeIndices = idx;
-
-	// Remove tree node.
-	UserTree *deletedNode = new UserTree;
-	deletedNode->Data = (*root)->Data;
-	deletedNode->Left = nullptr;
-	deletedNode->Right = _deletedUsers;
-	_deletedUsers = deletedNode;
-
-	(*root)->Data = nullptr;
-	RemoveEntry(root);
-}
-
-int32_t UserDB::GetUserCount()
-{
-	return GetEntryNumber(_users);
-}
-
-CowBuffer<const uint8_t*> UserDB::ListUsers()
-{
-	int userCount = GetUserCount();
-
-	CowBuffer<const uint8_t*> data(userCount);
-
-	userCount = 0;
-	FillUserList(_users, data.Pointer(), &userCount);
-
-	return data;
-}
-
-UserDB::UserData::~UserData()
-{
-	crypto_wipe(PublicKey, KEY_SIZE);
-	crypto_wipe(SignaturePublicKey, SIGNATURE_PUBLIC_KEY_SIZE);
-}
-
-int UserDB::UserData::Compare(const uint8_t *key)
-{
-	for (int i = 0; i < KEY_SIZE; i++) {
-		if (PublicKey[i] != key[i]) {
-			return (int)PublicKey[i] - (int)key[i];
-		}
-	}
-
-	return 0;
-}
-
-UserDB::UserTree::~UserTree()
-{
-	if (Data) {
-		delete Data;
-	}
-
-	if (Left) {
-		delete Left;
-	}
-
-	if (Right) {
-		delete Right;
-	}
-}
-
-UserDB::UserTree **UserDB::FindEntry(const uint8_t *key)
-{
-	UserTree **root = &_users;
-
-	while (*root) {
-		int cmp = (*root)->Data->Compare(key);
-
-		if (!cmp) {
-			break;
-		}
-
-		if (cmp < 0) {
-			root = &((*root)->Right);
-		} else {
-			root = &((*root)->Left);
-		}
-	}
-
-	if (!*root) {
 		return nullptr;
 	}
 
-	return root;
+	return data->Key.user;
 }
 
-void UserDB::AddEntry(UserTree **root, UserTree *entry)
+User *UserDB::GetUser(const uint8_t key[KEY_SIZE])
 {
-	const uint8_t *key = entry->Data->PublicKey;
+	Tree<UserByKey>::Entry *data = _usersByKey.FindEntry(key);
 
-	while (*root) {
-		int cmp = (*root)->Data->Compare(key);
+	if (!data) {
+		return nullptr;
+	}
 
-		if (!cmp) {
-			THROW("Trying to add duplicate tree node.");
+	return data->Key.user;
+}
+
+void UserDB::AddUser(String name, const uint8_t key[KEY_SIZE])
+{
+	if (HasUser(name)) {
+		THROW("User with name " + name + " already exists.");
+	}
+
+	if (HasUser(key)) {
+		THROW("User with the same key already exists.");
+	}
+
+	User::CreateUser(name, key);
+}
+
+void UserDB::RemoveUser(String name)
+{
+	User *user = GetUser(name);
+
+	if (!user) {
+		THROW("Requested user does not exist.");
+	}
+
+	const uint8_t *key = user->GetPublicKey();
+
+	Tree<UserByName>::Entry *nameEntry = _usersByName.FindEntry(name);
+	Tree<UserByKey>::Entry *keyEntry = _usersByKey.FindEntry(key);
+
+	_usersByName.RemoveEntry(nameEntry);
+	_usersByKey.RemoveEntry(keyEntry);
+
+	delete user;
+	User::RemoveUser(name);
+}
+
+int UserDB::GetUserCount()
+{
+	int userCount = 0;
+
+	Tree<UserByKey>::Entry *entry = _usersByKey.FindSmallest();
+
+	while (entry) {
+		++userCount;
+		entry = _usersByKey.Next(entry);
+	}
+
+	return userCount;
+}
+
+CowBuffer<String> UserDB::ListUsers()
+{
+	int userCount = GetUserCount();
+	CowBuffer<String> data(userCount);
+
+	int index = 0;
+	Tree<UserByName>::Entry *entry = _usersByName.FindSmallest();
+
+	while (entry) {
+		data[index] = entry->Key.user->GetName();
+		++index;
+		entry = _usersByName.Next(entry);
+	}
+
+	return data;
+}
+
+void UserDB::AddSession(int fd)
+{
+	StartupSession *s = new StartupSession;
+
+	s->Next = _startupSessions;
+	s->Remove = false;
+	s->Session = new ServerHandshake(
+		fd,
+		this,
+		_dispatcher,
+		_privateKey,
+		_publicKey);
+
+	_startupSessions = s;
+}
+
+void UserDB::MarkSessionForRemoval(ServerHandshake *session)
+{
+	StartupSession *s = _startupSessions;
+
+	while (s) {
+		if (s->Session == session) {
+			s->Remove = true;
 		}
 
-		if (cmp < 0) {
-			root = &((*root)->Right);
+		s = s->Next;
+	}
+
+	if (!_timeQuantRequested) {
+		_dispatcher->RegisterQuantProcessor(this);
+		_timeQuantRequested = true;
+	}
+}
+
+void UserDB::ProcessQuant()
+{
+	_timeQuantRequested = false;
+
+	StartupSession **s = &_startupSessions;
+
+	while (*s) {
+		if ((*s)->Remove) {
+			delete (*s)->Session;
+
+			StartupSession *tmp = *s;
+			*s = (*s)->Next;
+			delete tmp;
 		} else {
-			root = &((*root)->Left);
+			s = &(*s)->Next;
+		}
+	}
+}
+
+UserDB::UserByName::UserByName()
+{
+	user = nullptr;
+}
+
+UserDB::UserByName::UserByName(User *u)
+{
+	user = u;
+	Name = user->GetName();
+}
+
+UserDB::UserByName::UserByName(String name)
+{
+	user = nullptr;
+	Name = name;
+}
+
+bool UserDB::UserByName::operator<(const UserByName &u) const
+{
+	return Name < u.Name;
+}
+
+bool UserDB::UserByName::operator==(const UserByName &u) const
+{
+	return Name == u.Name;
+}
+
+UserDB::UserByKey::UserByKey()
+{
+	user = nullptr;
+	PublicKey = nullptr;
+}
+
+UserDB::UserByKey::UserByKey(User *u)
+{
+	user = u;
+	PublicKey = user->GetPublicKey();
+}
+
+UserDB::UserByKey::UserByKey(const uint8_t *publicKey)
+{
+	user = nullptr;
+	PublicKey = publicKey;
+}
+
+bool UserDB::UserByKey::operator<(const UserByKey &u) const
+{
+	for (int i = 0; i < KEY_SIZE; i++) {
+		if (PublicKey[i] != u.PublicKey[i]) {
+			return PublicKey[i] < u.PublicKey[i];
 		}
 	}
 
-	*root = entry;
+	return false;
 }
 
-void UserDB::RemoveEntry(UserTree **entry)
+bool UserDB::UserByKey::operator==(const UserByKey &u) const
 {
-	UserTree *root = *entry;
-
-	if (!root->Left) {
-		*entry = root->Right;
-		root->Right = nullptr;
-		delete root;
-		return;
+	for (int i = 0; i < KEY_SIZE; i++) {
+		if (PublicKey[i] != u.PublicKey[i]) {
+			return false;
+		}
 	}
 
-	if (!root->Right) {
-		*entry = root->Left;
-		root->Left = nullptr;
-		delete root;
-		return;
-	}
-
-	UserTree **leftMax = &(root->Left);
-
-	while ((*leftMax)->Right) {
-		leftMax = &((*leftMax)->Right);
-	}
-
-	root->Data = (*leftMax)->Data;
-	(*leftMax)->Data = nullptr;
-
-	RemoveEntry(leftMax);
+	return true;
 }
 
 void UserDB::LoadUserData()
 {
-	uint64_t entryCount = _userFile.Size() / _EntrySize;
+	String root = "storage/users";
 
-	for (uint64_t entryIdx = 0; entryIdx < entryCount; entryIdx++) {
-		uint8_t valid;
+	if (!FileExists(root)) {
+		CreateDirectory("storage");
+		CreateDirectory(root);
+	}
 
-		_userFile.Read<uint8_t>(
-			&valid,
-			1,
-			entryIdx * _EntrySize + _ValidOffset);
+	CowBuffer<String> userNames = ListDirectory(root);
 
-		if (!valid) {
-			FreeIndex *idx = new FreeIndex;
-			idx->Index = entryIdx;
-			idx->Next = _freeIndices;
-			_freeIndices = idx;
-			continue;
-		}
+	for (unsigned int i = 0; i < userNames.Size(); i++) {
+		User *user = new User(userNames[i]);
 
-		UserData *newUser = new UserData;
-		newUser->IndexInFile = entryIdx;
-
-		_userFile.Read<uint8_t>(
-			newUser->PublicKey,
-			KEY_SIZE,
-			entryIdx * _EntrySize + _UserKeyOffset);
-
-		_userFile.Read<uint8_t>(
-			newUser->SignaturePublicKey,
-			SIGNATURE_PUBLIC_KEY_SIZE,
-			entryIdx * _EntrySize + _UserSignatureOffset);
-
-		_userFile.Read<int64_t>(
-			&newUser->AccessTime,
-			1,
-			entryIdx * _EntrySize + _UserAccessTimeOffset);
-
-		char *nameBuffer = new char[_MaxNameLength];
-		_userFile.Read<char>(
-			nameBuffer,
-			_MaxNameLength,
-			entryIdx * _EntrySize + _UserNameOffset);
-
-		newUser->Name = String(nameBuffer);
-		delete[] nameBuffer;
-
-		UserTree *entry = new UserTree;
-		entry->Data = newUser;
-		entry->Left = nullptr;
-		entry->Right = nullptr;
-
-		AddEntry(&_users, entry);
+		_usersByName.AddEntry(user);
+		_usersByKey.AddEntry(user);
 	}
 }
 
 void UserDB::FreeUserData()
 {
-	delete _deletedUsers;
-	delete _users;
+	Tree<UserByName>::Entry *entry = _usersByName.FindSmallest();
 
-	while (_freeIndices) {
-		FreeIndex *index = _freeIndices;
-		_freeIndices = _freeIndices->Next;
-		delete index;
+	while (entry) {
+		delete entry->Key.user;
+		entry = _usersByName.Next(entry);
 	}
-}
-
-int32_t UserDB::GetEntryNumber(UserTree *entry)
-{
-	if (!entry) {
-		return 0;
-	}
-
-	return 1 + GetEntryNumber(entry->Left) + GetEntryNumber(entry->Right);
-}
-
-void UserDB::FillUserList(UserTree *entry, const uint8_t **data, int *index)
-{
-	if (!entry) {
-		return;
-	}
-
-	FillUserList(entry->Left, data, index);
-	data[*index] = entry->Data->PublicKey;
-	*index += 1;
-	FillUserList(entry->Right, data, index);
 }

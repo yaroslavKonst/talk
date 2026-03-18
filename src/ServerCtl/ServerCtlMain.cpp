@@ -4,12 +4,13 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include "SocketName.hpp"
 #include "RequestBuilder.hpp"
 #include "ResponseProcessor.hpp"
-#include "../Protocol/Session.hpp"
+#include "../Protocol/ControlParser.hpp"
 #include "../Common/Version.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/StreamReader.hpp"
+#include "../Common/StreamWriter.hpp"
 
 static int OpenSocket()
 {
@@ -37,36 +38,59 @@ static int OpenSocket()
 
 static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
 {
-	Session session;
-	session.InputSizeLimit = 1024 * 1024 * 1024;
-	session.Socket = OpenSocket();
+	int socket = OpenSocket();
 
-	if (session.Socket == -1) {
+	if (socket == -1) {
 		return CowBuffer<uint8_t>();
 	}
 
-	session.Send(command, 0, false);
+	CowBuffer<uint8_t> commandSize(sizeof(uint64_t));
+	*commandSize.SwitchType<uint64_t>() = command.Size();
 
-	bool res;
+	StreamWriter *writer = new StreamWriter(
+		socket,
+		commandSize.Concat(command));
 
-	while (session.CanWrite()) {
-		res = session.Write();
+	do {
+		bool writeSuccess = writer->Write();
 
-		if (!res) {
+		if (!writeSuccess) {
 			printf("Failed to send request.\n");
 			return CowBuffer<uint8_t>();
 		}
-	}
+	} while (!writer->WritingEnd());
 
-	while (!session.CanReceive()) {
-		res = session.Read();
+	delete writer;
 
-		if (!res) {
+	StreamReader *reader = new StreamReader(socket, sizeof(uint64_t));
+
+	do {
+		bool readSuccess = reader->Read();
+
+		if (!readSuccess) {
+			printf("Failed to get response size.\n");
 			return CowBuffer<uint8_t>();
 		}
-	}
+	} while (!reader->ReadingEnd());
 
-	return session.Receive();
+	uint64_t responseSize = *reader->GetBuffer().SwitchType<uint64_t>();
+	delete reader;
+
+	reader = new StreamReader(socket, responseSize);
+
+	do {
+		bool readSuccess = reader->Read();
+
+		if (!readSuccess) {
+			printf("Failed to get response.\n");
+			return CowBuffer<uint8_t>();
+		}
+	} while (!reader->ReadingEnd());
+
+	CowBuffer<uint8_t> response = reader->GetBuffer();
+	delete reader;
+
+	return response;
 }
 
 int main(int argc, char **argv)

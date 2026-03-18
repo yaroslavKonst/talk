@@ -2,11 +2,6 @@
 
 #include <cstring>
 
-static bool IsSpace(char c)
-{
-	return c == ' ' || c == '\n' || c == '\t' || c == '\r';
-}
-
 String::String()
 {
 	_data = 0;

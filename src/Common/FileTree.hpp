@@ -3,7 +3,7 @@
 
 #include "BinaryFile.hpp"
 
-template <typename KT, typename VT>
+template <typename KT>
 class FileTree
 {
 public:
@@ -11,11 +11,15 @@ public:
 
 	uint32_t FindEntry(const KT &key);
 
-	bool AddEntry(const KT &key, const VT &value);
+	bool AddEntry(const KT &key);
 	void RemoveEntry(uint32_t address);
 
-	VT GetEntry(uint32_t address);
-	void SetEntry(uint32_t address, const VT &value);
+	KT GetEntry(uint32_t address);
+
+	// This method should be used only to update key members that
+	// are insignificant for comparison operations, otherwise
+	// tree structure will be destroyed.
+	void SetEntry(uint32_t address, const KT &key);
 
 	uint32_t FindSmallest(const KT &key);
 	uint32_t FindBiggest(const KT &key);
@@ -32,7 +36,6 @@ private:
 	struct Entry
 	{
 		KT Key;
-		VT Value;
 
 		uint32_t This;
 		uint32_t Parent;
@@ -40,6 +43,15 @@ private:
 		uint32_t Right;
 
 		int32_t Depth;
+
+		Entry()
+		{
+			This = 0;
+			Parent = 0;
+			Left = 0;
+			Right = 0;
+			Depth = 0;
+		}
 	};
 
 	class Cache;
@@ -82,7 +94,6 @@ private:
 					sizeof(Entry) * address);
 				_entry.This = address;
 			} else {
-				memset(&_entry, 0, sizeof(_entry));
 				_entry.This = address;
 				_file->Write<Entry>(
 					&_entry,
@@ -156,20 +167,19 @@ private:
 	void Free(uint32_t address);
 };
 
-template <typename KT, typename VT>
-FileTree<KT, VT>::FileTree(const String path) :
+template <typename KT>
+FileTree<KT>::FileTree(const String path) :
 	_file(path, true),
 	_cache(&_file)
 {
 	if (_file.Size() == 0) {
 		Entry entry;
-		memset(&entry, 0, sizeof(entry));
 		_file.Write<Entry>(&entry, 1, 0);
 	}
 }
 
-template <typename KT, typename VT>
-uint32_t FileTree<KT, VT>::FindEntry(const KT &key)
+template <typename KT>
+uint32_t FileTree<KT>::FindEntry(const KT &key)
 {
 	Entry md = _cache[0];
 
@@ -192,8 +202,8 @@ uint32_t FileTree<KT, VT>::FindEntry(const KT &key)
 	return 0;
 }
 
-template <typename KT, typename VT>
-bool FileTree<KT, VT>::AddEntry(const KT &key, const VT &value)
+template <typename KT>
+bool FileTree<KT>::AddEntry(const KT &key)
 {
 	Entry parentEntry = _cache[0];
 
@@ -218,11 +228,9 @@ bool FileTree<KT, VT>::AddEntry(const KT &key, const VT &value)
 	uint32_t newAddress = Allocate();
 
 	Entry entry;
-	memset(&entry, 0, sizeof(entry));
 
 	entry.This = newAddress;
 	entry.Key = key;
-	entry.Value = value;
 	entry.Parent = parentEntry.This;
 	entry.Depth = 0;
 
@@ -237,8 +245,8 @@ bool FileTree<KT, VT>::AddEntry(const KT &key, const VT &value)
 	return true;
 }
 
-template <typename KT, typename VT>
-void FileTree<KT, VT>::RemoveEntry(uint32_t address)
+template <typename KT>
+void FileTree<KT>::RemoveEntry(uint32_t address)
 {
 	Entry entry = _cache[address];
 
@@ -314,23 +322,23 @@ void FileTree<KT, VT>::RemoveEntry(uint32_t address)
 	}
 }
 
-template <typename KT, typename VT>
-VT FileTree<KT, VT>::GetEntry(uint32_t address)
+template <typename KT>
+KT FileTree<KT>::GetEntry(uint32_t address)
 {
 	Entry entry = _cache[address];
-	return entry.Value;
+	return entry.Key;
 }
 
-template <typename KT, typename VT>
-void FileTree<KT, VT>::SetEntry(uint32_t address, const VT &value)
+template <typename KT>
+void FileTree<KT>::SetEntry(uint32_t address, const KT &key)
 {
 	Entry entry = _cache[address];
-	entry.Value = value;
+	entry.Key = key;
 	_cache[address] = entry;
 }
 
-template <typename KT, typename VT>
-uint32_t FileTree<KT, VT>::FindSmallest(const KT &key)
+template <typename KT>
+uint32_t FileTree<KT>::FindSmallest(const KT &key)
 {
 	Entry md = _cache[0];
 
@@ -346,7 +354,7 @@ uint32_t FileTree<KT, VT>::FindSmallest(const KT &key)
 			return currentAddress;
 		}
 
-		if (entry.Key >= key) {
+		if (!(entry.Key < key)) {
 			if (!minAddress || entry.Key < minKey) {
 				minAddress = currentAddress;
 				minKey = entry.Key;
@@ -363,8 +371,8 @@ uint32_t FileTree<KT, VT>::FindSmallest(const KT &key)
 	return minAddress;
 }
 
-template <typename KT, typename VT>
-uint32_t FileTree<KT, VT>::FindBiggest(const KT &key)
+template <typename KT>
+uint32_t FileTree<KT>::FindBiggest(const KT &key)
 {
 	Entry md = _cache[0];
 
@@ -397,8 +405,8 @@ uint32_t FileTree<KT, VT>::FindBiggest(const KT &key)
 	return maxAddress;
 }
 
-template <typename KT, typename VT>
-uint32_t FileTree<KT, VT>::FindSmallest()
+template <typename KT>
+uint32_t FileTree<KT>::FindSmallest()
 {
 	Entry md = _cache[0];
 	uint32_t currentAddress = md.Right;
@@ -416,8 +424,8 @@ uint32_t FileTree<KT, VT>::FindSmallest()
 	return 0;
 }
 
-template <typename KT, typename VT>
-uint32_t FileTree<KT, VT>::FindBiggest()
+template <typename KT>
+uint32_t FileTree<KT>::FindBiggest()
 {
 	Entry md = _cache[0];
 	uint32_t currentAddress = md.Right;
@@ -435,8 +443,8 @@ uint32_t FileTree<KT, VT>::FindBiggest()
 	return 0;
 }
 
-template <typename KT, typename VT>
-uint32_t FileTree<KT, VT>::Next(uint32_t address)
+template <typename KT>
+uint32_t FileTree<KT>::Next(uint32_t address)
 {
 	Entry entry = _cache[address];
 
@@ -465,8 +473,8 @@ uint32_t FileTree<KT, VT>::Next(uint32_t address)
 	}
 }
 
-template <typename KT, typename VT>
-uint32_t FileTree<KT, VT>::Previous(uint32_t address)
+template <typename KT>
+uint32_t FileTree<KT>::Previous(uint32_t address)
 {
 	Entry entry = _cache[address];
 
@@ -495,8 +503,8 @@ uint32_t FileTree<KT, VT>::Previous(uint32_t address)
 	}
 }
 
-template <typename KT, typename VT>
-void FileTree<KT, VT>::RotateLeft(uint32_t address)
+template <typename KT>
+void FileTree<KT>::RotateLeft(uint32_t address)
 {
 	uint32_t address1 = address;
 	Entry node1 = _cache[address1];
@@ -566,8 +574,8 @@ void FileTree<KT, VT>::RotateLeft(uint32_t address)
 	}
 }
 
-template <typename KT, typename VT>
-void FileTree<KT, VT>::RotateRight(uint32_t address)
+template <typename KT>
+void FileTree<KT>::RotateRight(uint32_t address)
 {
 	uint32_t address1 = address;
 	Entry node1 = _cache[address1];
@@ -637,8 +645,8 @@ void FileTree<KT, VT>::RotateRight(uint32_t address)
 	}
 }
 
-template <typename KT, typename VT>
-void FileTree<KT, VT>::RollUp(uint32_t address)
+template <typename KT>
+void FileTree<KT>::RollUp(uint32_t address)
 {
 	while (address) {
 		Entry entry = _cache[address];
@@ -669,8 +677,8 @@ void FileTree<KT, VT>::RollUp(uint32_t address)
 	}
 }
 
-template <typename KT, typename VT>
-void FileTree<KT, VT>::Swap(uint32_t address1, uint32_t address2)
+template <typename KT>
+void FileTree<KT>::Swap(uint32_t address1, uint32_t address2)
 {
 	if (!address1 || !address2) {
 		return;
@@ -773,8 +781,8 @@ void FileTree<KT, VT>::Swap(uint32_t address1, uint32_t address2)
 	_cache[address2] = node2;
 }
 
-template <typename KT, typename VT>
-uint32_t FileTree<KT, VT>::Allocate()
+template <typename KT>
+uint32_t FileTree<KT>::Allocate()
 {
 	Entry md = _cache[0];
 
@@ -791,8 +799,8 @@ uint32_t FileTree<KT, VT>::Allocate()
 	return newAddress;
 }
 
-template <typename KT, typename VT>
-void FileTree<KT, VT>::Free(uint32_t address)
+template <typename KT>
+void FileTree<KT>::Free(uint32_t address)
 {
 	Entry md = _cache[0];
 	Entry entry = _cache[address];

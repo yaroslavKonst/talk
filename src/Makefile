@@ -1,23 +1,24 @@
 SERVER_MODULES =\
 	Server/Server.o \
 	Server/ServerMain.o \
+	Server/User.o \
 	Server/UserDB.o \
-	Server/MessagePipe.o \
-	Server/FailBan.o \
-	Protocol/Session.o \
-	Protocol/ServerSession.o \
-	Protocol/ControlSession.o \
-	Protocol/ActiveSession.o \
-	Protocol/Handshake.o \
-	Common/UnixTime.o \
+	Server/ListeningSocket.o \
+	Server/ControlSocket.o \
+	Server/ControlSession.o \
+	Server/Config.o \
+	Server/ServerHandshake.o \
+	Protocol/HandshakeParser.o \
+	Common/EventDispatcher.o \
 	Common/MyString.o \
+	Common/UnixTime.o \
+	Common/File.o \
 	Common/IniFile.o \
 	Common/BinaryFile.o \
-	Common/File.o \
-	Common/Version.o \
 	Common/SignalHandling.o \
-	Message/Message.o \
-	Message/MessageStorage.o \
+	Common/Version.o \
+	Common/StreamReader.o \
+	Common/StreamWriter.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
@@ -25,43 +26,35 @@ SERVERCTL_MODULES=\
 	ServerCtl/ServerCtlMain.o \
 	ServerCtl/RequestBuilder.o \
 	ServerCtl/ResponseProcessor.o \
-	Protocol/Session.o \
 	Common/UnixTime.o \
 	Common/MyString.o \
 	Common/Version.o \
-	Crypto/Crypto.o \
-	ThirdParty/monocypher.o
+	Common/StreamReader.o \
+	Common/StreamWriter.o
 
 CLIENT_MODULES=\
 	Client/Client.o \
 	Client/ClientMain.o \
+	Client/Root.o \
+	Client/Config.o \
+	Client/Network.o \
+	Client/ClientHandshake.o \
 	Client/UI.o \
-	Client/VoiceChat.o \
+	Client/UiHelpers.o \
 	Client/Screen.o \
-	Client/PasswordScreen.o \
 	Client/WorkScreen.o \
 	Client/LoginScreen.o \
-	Client/AttachmentScreen.o \
 	Client/NotificationSystem.o \
-	Client/Chat.o \
-	Client/ChatList.o \
-	Client/ControlStorage.o \
-	Protocol/Session.o \
-	Protocol/ClientSession.o \
-	Protocol/ActiveSession.o \
-	Protocol/Handshake.o \
-	Common/UnixTime.o \
+	Protocol/HandshakeParser.o \
 	Common/MyString.o \
-	Common/IniFile.o \
-	Common/BinaryFile.o \
-	Common/File.o \
 	Common/Version.o \
 	Common/SignalHandling.o \
-	Message/Message.o \
-	Message/MessageStorage.o \
-	Message/ContactStorage.o \
-	Message/AttributeStorage.o \
-	Audio/Audio.o \
+	Common/IniFile.o \
+	Common/File.o \
+	Common/EventDispatcher.o \
+	Common/UnixTime.o \
+	Common/StreamReader.o \
+	Common/StreamWriter.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
@@ -103,12 +96,13 @@ $(BUILD_DIR)/%.o: %.c | $(BUILD_DIRS)
 $(BUILD_DIRS):
 	mkdir -p $(BUILD_DIRS)
 
+DEPS_HEADER := $(shell find . -name *.hpp)
 DEPS_SOURCE := $(shell find . -name *.cpp)
 DEPS_SOURCE := $(subst ./,,$(DEPS_SOURCE))
 DEPS_RES := $(DEPS_SOURCE:%.cpp=-MT:$(BUILD_DIR)/%.o:)
 DEPS_ARGS := $(join $(DEPS_RES),$(DEPS_SOURCE))
 
-$(BUILD_DIR)/deps.mk: $(DEPS_SOURCE) | $(BUILD_DIRS)
+$(BUILD_DIR)/deps.mk: $(DEPS_SOURCE) $(DEPS_HEADER) | $(BUILD_DIRS)
 	truncate -s 0 $@
 	for ENTRY in $(DEPS_ARGS) ; do $(CXX) -MM `echo $$ENTRY | sed "s|:| |g"` >> $@ ; done
 

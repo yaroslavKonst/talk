@@ -17,7 +17,7 @@ String GetCommand()
 	return res;
 }
 
-void ListTree(FileTree<long, int> &tree)
+void ListTree(FileTree<int> &tree)
 {
 	uint32_t current = tree.FindSmallest();
 
@@ -29,7 +29,7 @@ void ListTree(FileTree<long, int> &tree)
 	printf("\n");
 }
 
-void RListTree(FileTree<long, int> &tree)
+void RListTree(FileTree<int> &tree)
 {
 	uint32_t current = tree.FindBiggest();
 
@@ -43,7 +43,7 @@ void RListTree(FileTree<long, int> &tree)
 
 int main(int argc, char **argv)
 {
-	FileTree<long, int> tree("TestTreeFile.bin");
+	FileTree<int> tree("TestTreeFile.bin");
 
 	String command;
 
@@ -64,9 +64,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			bool res = tree.AddEntry(
-				atoi(args[1].CStr()),
-				atoi(args[1].CStr()));
+			bool res = tree.AddEntry(atoi(args[1].CStr()));
 
 			if (res) {
 				printf("Added.\n");

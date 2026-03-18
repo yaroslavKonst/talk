@@ -1,12 +1,12 @@
 #ifndef _SCREEN_HPP
 #define _SCREEN_HPP
 
-#include "../Protocol/ClientSession.hpp"
+#include "../Common/MyString.hpp"
 
 class Screen
 {
 public:
-	Screen(ClientSession *session);
+	Screen();
 	virtual ~Screen();
 
 	virtual Screen *ProcessEvent(int event) = 0;
@@ -16,10 +16,6 @@ public:
 protected:
 	int _rows;
 	int _columns;
-
-	ClientSession *_session;
-
-	void ClearScreen();
 };
 
 #endif

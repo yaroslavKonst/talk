@@ -10,7 +10,27 @@ struct EncryptedStream
 {
 	uint8_t Key[KEY_SIZE];
 	uint8_t Nonce[NONCE_SIZE];
+
+	EncryptedStream()
+	{ }
+
+	EncryptedStream(const EncryptedStream &s)
+	{
+		memcpy(Key, s.Key, KEY_SIZE);
+		memcpy(Nonce, s.Nonce, NONCE_SIZE);
+	}
+
+	~EncryptedStream()
+	{
+		crypto_wipe(Key, KEY_SIZE);
+		crypto_wipe(Nonce, NONCE_SIZE);
+	}
 };
+
+void GenerateRandomData(
+	uint64_t size,
+	uint8_t *buffer,
+	bool random = true);
 
 void InitStream(EncryptedStream &stream, const uint8_t key[KEY_SIZE]);
 void InitStream(
@@ -69,6 +89,7 @@ void GetSalt(String file, uint8_t salt[SALT_SIZE]);
 
 CowBuffer<uint8_t> ApplyScrambler(CowBuffer<uint8_t> data);
 CowBuffer<uint8_t> RemoveScrambler(CowBuffer<uint8_t> data);
+uint8_t ApplyScrambler(uint8_t *data, unsigned long length, uint8_t init);
 
 class CryptoStreamReader
 {

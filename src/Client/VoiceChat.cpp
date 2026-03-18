@@ -59,9 +59,9 @@ static void LowPassFilter(
 }
 
 // Voice chat.
-VoiceChat::VoiceChat()
+VoiceChat::VoiceChat(Root *root)
 {
-	_controls = nullptr;
+	_root = root;
 
 	_state = VoiceStateOff;
 	_silence = true;
@@ -73,7 +73,6 @@ VoiceChat::VoiceChat()
 	_silenceSlope = 0;
 
 	_configFile = nullptr;
-	_settingsMode = false;
 }
 
 VoiceChat::~VoiceChat()
@@ -87,16 +86,6 @@ void VoiceChat::SetConfigFile(IniFile *configFile)
 	LoadConfigFile();
 }
 
-void VoiceChat::SetControls(ControlStorage *controls)
-{
-	_controls = controls;
-}
-
-void VoiceChat::StartSettings()
-{
-	_settingsMode = true;
-}
-
 void VoiceChat::ProcessInput()
 {
 	CowBuffer<int16_t> audioData = _audio.ReadRaw();
@@ -105,11 +94,8 @@ void VoiceChat::ProcessInput()
 		return;
 	}
 
-	if (!_voiceProcessor) {
-		return;
-	}
-
 	if (_mute) {
+		_silenceSlope = 0;
 		return;
 	}
 
@@ -128,14 +114,14 @@ void VoiceChat::ProcessInput()
 	if (absMax < silenceLevel) {
 		if (!_silence) {
 			_silence = true;
-			_voiceProcessor->VoiceRedrawRequested();
+			_root->Ui->Redraw();
 		}
 
 		--_silenceSlope;
 	} else {
 		if (_silence) {
 			_silence = false;
-			_voiceProcessor->VoiceRedrawRequested();
+			_root->Ui->Redraw();
 		}
 
 		_silenceSlope += 50;
@@ -156,140 +142,7 @@ void VoiceChat::ProcessInput()
 		audioData[i] = audioData[i] * _silenceSlope / 100;
 	}
 
-	_voiceProcessor->SendVoiceFrame(EncryptSoundFrame(audioData));
-}
-
-void VoiceChat::Redraw(int rows, int columns)
-{
-	int tmpY;
-	int tmpX;
-	getyx(stdscr, tmpY, tmpX);
-	RedrawState(rows, columns);
-	move(tmpY, tmpX);
-
-	if (_settingsMode) {
-		RedrawSettings(rows, columns);
-	}
-
-	if (_state != VoiceStateAsk) {
-		return;
-	}
-
-	String prompt = "Incomng call.";
-	String choice = "Press " +
-		_controls->VoiceAcceptName() +
-		" to answer, " +
-		_controls->VoiceDeclineName() +
-		" to decline call.";
-
-	int messageSize = choice.Length();
-
-	if (_peerName.Length() > messageSize) {
-		messageSize = _peerName.Length();
-	}
-
-	int frameSize = messageSize + 2;
-
-	if (frameSize < 30) {
-		frameSize = 30;
-	}
-
-	int baseY = rows / 2 - 4;
-	int limitY = rows / 2 + 4;
-
-	int baseX = columns / 2 - frameSize / 2 - 2;
-	int limitX = columns / 2 + frameSize / 2 + 3;
-
-	// Clear.
-	for (int r = baseY; r < limitY; r++) {
-		for (int c = baseX; c < limitX; c++) {
-			move(r, c);
-			addch(' ');
-		}
-	}
-
-	// Frame.
-	attrset(COLOR_PAIR(YELLOW_TEXT));
-
-	for (int r = baseY + 2; r < limitY - 2; r++) {
-		move(r, baseX + 1);
-		addch(ACS_VLINE);
-
-		move(r, limitX - 2);
-		addch(ACS_VLINE);
-	}
-
-	for (int c = baseX + 2; c < limitX - 2; c++) {
-		move(baseY + 1, c);
-		addch(ACS_HLINE);
-
-		move(limitY - 2, c);
-		addch(ACS_HLINE);
-	}
-
-	move(baseY + 1, baseX + 1);
-	addch(ACS_ULCORNER);
-	move(baseY + 1, limitX - 2);
-	addch(ACS_URCORNER);
-	move(limitY - 2, baseX + 1);
-	addch(ACS_LLCORNER);
-	move(limitY - 2, limitX - 2);
-	addch(ACS_LRCORNER);
-
-	move(baseY + 1, baseX + 2);
-	addstr("Incoming voice call");
-
-	attrset(COLOR_PAIR(DEFAULT_TEXT));
-
-	// Message.
-	move(baseY + 2, columns / 2 - prompt.Length() / 2);
-	addstr(prompt.CStr());
-
-	move(baseY + 3, columns / 2 - _peerName.Length() / 2);
-	addstr(_peerName.CStr());
-
-	move(baseY + 5, columns / 2 - choice.Length() / 2);
-	addstr(choice.CStr());
-}
-
-bool VoiceChat::ProcessEvent(int event)
-{
-	bool settingsMode = _settingsMode;
-
-	if (_settingsMode) {
-		ProcessSettings(event);
-	}
-
-	if (_state == VoiceStateOff) {
-		return settingsMode;
-	}
-
-	if (_state == VoiceStateAsk) {
-		if (event == _controls->VoiceAcceptKey()) {
-			_state = VoiceStateActive;
-			_voiceProcessor->AnswerVoiceRequest(true);
-		} else if (event == _controls->VoiceDeclineKey()) {
-			_state = VoiceStateOff;
-			_voiceProcessor->AnswerVoiceRequest(false);
-		}
-
-		return true;
-	}
-
-	if (event == _controls->VoiceEndKey()) {
-		Stop();
-		_voiceProcessor->EndVoice();
-		return true;
-	}
-
-	if (event == _controls->VoiceMuteKey()) {
-		if (_state == VoiceStateActive) {
-			_mute = !_mute;
-			return true;
-		}
-	}
-
-	return settingsMode;
+	_root->Network->SendVoiceFrame(EncryptSoundFrame(audioData));
 }
 
 bool VoiceChat::Active()
@@ -366,7 +219,7 @@ bool VoiceChat::ReceiveVoiceFrame(CowBuffer<uint8_t> frame)
 
 	if (audioData.Size() == 0) {
 		Stop();
-		_voiceProcessor->EndVoice();
+		_root->Network->EndVoice();
 		return false;
 	}
 
@@ -394,145 +247,80 @@ int VoiceChat::GetSoundReadFileDescriptor()
 	return _audio.GetSoundReadFileDescriptor();
 }
 
-void VoiceChat::RedrawState(int rows, int columns)
+String VoiceChat::GetPeerName()
 {
-	move(rows - 1, 0);
-	addstr("Voice status: ");
-
-	switch (_state) {
-	case VoiceStateOff:
-		addstr("not connected.");
-		return;
-	case VoiceStateInit:
-		attrset(COLOR_PAIR(YELLOW_TEXT));
-		addstr("initializing connection");
-		break;
-	case VoiceStateAsk:
-		attrset(COLOR_PAIR(YELLOW_TEXT));
-		addstr("please respond");
-		break;
-	case VoiceStateWait:
-		attrset(COLOR_PAIR(YELLOW_TEXT));
-		addstr("waiting for answer");
-		break;
-	case VoiceStateActive:
-		attrset(COLOR_PAIR(GREEN_TEXT));
-		addstr("active");
-		break;
-	}
-
-	String name = _peerName;
-
-	if (name.Length() > 30) {
-		name = name.Substring(0, 30) + "...";
-	}
-
-	addstr((" (" + name + ")").CStr());
-
-	if (_state == VoiceStateActive) {
-		if (_mute) {
-			attrset(COLOR_PAIR(RED_TEXT));
-			addstr(" (mute)");
-		} else if (_silence) {
-			addstr(" (silence)");
-		}
-	}
-
-	attrset(COLOR_PAIR(DEFAULT_TEXT));
-	addch('.');
+	return _peerName;
 }
 
-static void DrawSelector(
-	String name,
-	String value,
-	String upKey,
-	String downKey,
-	int y,
-	int x)
+bool VoiceChat::IsMuted()
 {
-	move(y - 4, x - name.Length() / 2);
-	addstr(name.CStr());
-	move(y - 2, x - upKey.Length() / 2);
-	addstr(upKey.CStr());
-	move(y, x - value.Length() / 2);
-	addstr(value.CStr());
-	move(y + 2, x - downKey.Length() / 2);
-	addstr(downKey.CStr());
+	return _mute;
 }
 
-void VoiceChat::RedrawSettings(int rows, int columns)
+void VoiceChat::ToggleMute()
 {
-	for (int r = 0; r < rows - 1; r++) {
-		for (int c = 0; c < columns; c++) {
-			move(r, c);
-			addch(' ');
-		}
-	}
-
-	move(0, 0);
-	addstr(("Exit: " + _controls->VoiceExitSettingsName()).CStr());
-
-	DrawSelector(
-		"Volume",
-		ToString(_volume),
-		_controls->VoiceVolumeIncName(),
-		_controls->VoiceVolumeDecName(),
-		rows / 2,
-		columns / 4);
-
-	DrawSelector(
-		"Silence level",
-		ToString(_silenceLevel),
-		_controls->VoiceSilenceIncName(),
-		_controls->VoiceSilenceDecName(),
-		rows / 2,
-		columns / 2);
-
-	DrawSelector(
-		"Filter",
-		_applyFilter ? "Yes" : "No",
-		_controls->VoiceFilterUpName(),
-		_controls->VoiceFilterDownName(),
-		rows / 2,
-		columns * 3 / 4);
-
-	move(1, 0);
+	_mute = !_mute;
 }
 
-void VoiceChat::ProcessSettings(int event)
+int VoiceChat::GetVolume()
 {
-	if (event == _controls->VoiceExitSettingsKey()) {
-		_settingsMode = false;
-		UpdateConfigFile();
-	} else if (event == _controls->VoiceVolumeIncKey()) {
-		++_volume;
+	return _volume;
+}
 
-		if (_volume > 200) {
-			_volume = 200;
-		}
-	} else if (event == _controls->VoiceVolumeDecKey()) {
-		--_volume;
+void VoiceChat::IncreaseVolume()
+{
+	++_volume;
 
-		if (_volume <= 0) {
-			_volume = 1;
-		}
-	} else if (event == _controls->VoiceSilenceIncKey()) {
-		++_silenceLevel;
-
-		if (_silenceLevel > 100) {
-			_silenceLevel = 100;
-		}
-	} else if (event == _controls->VoiceSilenceDecKey()) {
-		--_silenceLevel;
-
-		if (_silenceLevel <= 0) {
-			_silenceLevel = 1;
-		}
-	} else if (event == _controls->VoiceFilterUpKey()) {
-		_applyFilter = true;
-	} else if (event == _controls->VoiceFilterDownKey()) {
-		_applyFilter = false;
+	if (_volume > 200) {
+		_volume = 200;
 	}
+}
+
+void VoiceChat::DecreaseVolume()
+{
+	--_volume;
+
+	if (_volume <= 0) {
+		_volume = 1;
+	}
+}
+
+int VoiceChat::GetSilenceLevel()
+{
+	return _silenceLevel;
+}
+
+void VoiceChat::IncreaseSilenceLevel()
+{
+	++_silenceLevel;
+
+	if (_silenceLevel > 100) {
+		_silenceLevel = 100;
+	}
+}
+
+void VoiceChat::DecreaseSilenceLevel()
+{
+	--_silenceLevel;
+
+	if (_silenceLevel <= 0) {
+		_silenceLevel = 1;
+	}
+}
+
+bool VoiceChat::GetFilterEnabled()
+{
+	return _applyFilter;
+}
+
+void VoiceChat::EnableFilter()
+{
+	_applyFilter = true;
+}
+
+void VoiceChat::DisableFilter()
+{
+	_applyFilter = false;
 }
 
 void VoiceChat::LoadConfigFile()

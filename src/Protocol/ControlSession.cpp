@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-#include "../ServerCtl/SocketName.hpp"
+#include "ControlParser.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Hex.hpp"
 #include "../Common/Log.hpp"

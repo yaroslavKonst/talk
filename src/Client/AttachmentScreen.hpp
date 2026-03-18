@@ -1,6 +1,7 @@
 #ifndef _ATTACHMENT_SCREEN_HPP
 #define _ATTACHMENT_SCREEN_HPP
 
+#include "Root.hpp"
 #include "Screen.hpp"
 #include "Chat.hpp"
 #include "ControlStorage.hpp"
@@ -8,7 +9,7 @@
 class AttachmentScreen : public Screen
 {
 public:
-	AttachmentScreen(Chat *chat, bool extract, ControlStorage *controls);
+	AttachmentScreen(Root *root, bool extract, ControlStorage *controls);
 
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;
@@ -23,6 +24,7 @@ private:
 	bool ExtractAttachment();
 	bool LoadAttachment();
 
+	Root *_root;
 	ControlStorage *_controls;
 };
 

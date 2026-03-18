@@ -1,108 +1,86 @@
 #ifndef _USERDB_HPP
 #define _USERDB_HPP
 
+#include "User.hpp"
+#include "ServerHandshake.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
-#include "../Common/BinaryFile.hpp"
-#include "../Common/CowBuffer.hpp"
+#include "../Common/Tree.hpp"
 
-class UserDB
+class UserDB :
+	public ServerHandshakeStorage,
+	public QuantEventProcessor
 {
 public:
-	UserDB();
+	UserDB(
+		EventDispatcher *dispatcher,
+		const uint8_t *privateKey,
+		const uint8_t *publicKey);
 	~UserDB();
 
-	bool HasUser(const uint8_t key[KEY_SIZE]);
+	bool HasUser(String name);
+	bool HasUser(const uint8_t key[KEY_SIZE]) override;
 
-	const uint8_t *GetUserPublicKey(const uint8_t key[KEY_SIZE]);
-	const uint8_t *GetUserSignature(const uint8_t key[KEY_SIZE]);
-	int64_t GetUserAccessTime(const uint8_t key[KEY_SIZE]);
-	String GetUserName(const uint8_t key[KEY_SIZE]);
+	User *GetUser(String name);
+	User *GetUser(const uint8_t key[KEY_SIZE]) override;
 
-	void UpdateUserAccessTime(
-		const uint8_t key[KEY_SIZE],
-		int64_t accessTime);
+	void AddUser(String name, const uint8_t key[KEY_SIZE]);
+	void RemoveUser(String name);
 
-	void AddUser(
-		const uint8_t key[KEY_SIZE],
-		const uint8_t signature[SIGNATURE_PUBLIC_KEY_SIZE],
-		int64_t accessTime,
-		String name);
+	int GetUserCount();
+	CowBuffer<String> ListUsers();
 
-	void RemoveUser(const uint8_t key[KEY_SIZE]);
+	void AddSession(int fd);
+	void MarkSessionForRemoval(ServerHandshake *session) override;
 
-	int32_t GetUserCount();
-	CowBuffer<const uint8_t*> ListUsers();
+	void ProcessQuant() override;
 
 private:
-	struct UserData
-	{
-		uint64_t IndexInFile;
+	EventDispatcher *_dispatcher;
 
-		uint8_t PublicKey[KEY_SIZE];
-		uint8_t SignaturePublicKey[SIGNATURE_PUBLIC_KEY_SIZE];
-		int64_t AccessTime;
+	struct UserByName
+	{
+		User *user;
 		String Name;
 
-		~UserData();
-		int Compare(const uint8_t *key);
+		UserByName();
+		UserByName(User *u);
+		UserByName(String name);
+
+		bool operator<(const UserByName &u) const;
+		bool operator==(const UserByName &u) const;
 	};
 
-	struct UserTree
+	struct UserByKey
 	{
-		UserTree *Left;
-		UserTree *Right;
+		User *user;
+		const uint8_t *PublicKey;
 
-		UserData *Data;
+		UserByKey();
+		UserByKey(User *u);
+		UserByKey(const uint8_t *publicKey);
 
-		~UserTree();
+		bool operator<(const UserByKey &u) const;
+		bool operator==(const UserByKey &u) const;
 	};
 
-	struct FreeIndex
-	{
-		int32_t Index;
-		FreeIndex *Next;
-	};
-
-	UserTree *_users;
-	FreeIndex *_freeIndices;
-	UserTree *_deletedUsers;
-
-	UserTree **FindEntry(const uint8_t *key);
-	void AddEntry(UserTree **root, UserTree *entry);
-	void RemoveEntry(UserTree **entry);
+	Tree<UserByName> _usersByName;
+	Tree<UserByKey> _usersByKey;
 
 	void LoadUserData();
 	void FreeUserData();
 
-	int32_t GetEntryNumber(UserTree *entry);
+	struct StartupSession
+	{
+		StartupSession *Next;
+		ServerHandshake *Session;
+		bool Remove;
+	};
 
-	void FillUserList(UserTree *entry, const uint8_t **data, int *index);
+	StartupSession *_startupSessions;
+	bool _timeQuantRequested;
 
-	// User file structure.
-	// File consists of records with equal size.
-	// Each record contains data about one user.
-	//
-	// Record structure.
-	// Valid, 8 bit unsigned integer.
-	// User key, KEY_SIZE bytes.
-	// User signature, SIGNATURE_PUBLIC_KEY_SIZE bytes.
-	// Access time, 64 bit signed integer.
-	// User name, C-string. 55 bytes are reserved.
-	const int64_t _MaxNameLength = 55;
-
-	const uint64_t _EntrySize =
-		1 + KEY_SIZE + SIGNATURE_PUBLIC_KEY_SIZE +
-		sizeof(int64_t) + _MaxNameLength;
-	const uint64_t _ValidOffset = 0;
-	const uint64_t _UserKeyOffset = 1;
-	const uint64_t _UserSignatureOffset = 1 + KEY_SIZE;
-	const uint64_t _UserAccessTimeOffset =
-		1 + KEY_SIZE + SIGNATURE_PUBLIC_KEY_SIZE;
-	const uint64_t _UserNameOffset =
-		1 + KEY_SIZE + SIGNATURE_PUBLIC_KEY_SIZE +
-		sizeof(int64_t);
-
-	BinaryFile _userFile;
+	const uint8_t *_privateKey;
+	const uint8_t *_publicKey;
 };
 
 #endif

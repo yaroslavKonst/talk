@@ -9,33 +9,35 @@
 #include <arpa/inet.h>
 #include <curses.h>
 
+#include "WorkScreen.hpp"
 #include "../Common/Hex.hpp"
+#include "../Common/File.hpp"
+#include "../Crypto/CryptoDefinitions.hpp"
 
-static const char *ipMessage = "Enter IP address: ";
-static const char *portMessage = "Enter port: ";
-
-LoginScreen::LoginScreen(
-	ClientSession *session,
-	IniFile *configFile,
-	ControlStorage *controls) :
-	Screen(session)
+LoginScreen::LoginScreen(Root *root)
 {
 	_writingIp = true;
 	_writingPort = false;
 	_writingKey = false;
 
-	_controls = controls;
+	_root = root;
 
-	_ip = configFile->Get("connection", "ServerIP");
-	_port = configFile->Get("connection", "ServerPort");
-	_serverKeyHex = configFile->Get("connection", "ServerKey");
+	_ip.Caption = "IP address: ";
+	_port.Caption = "Port: ";
+	_serverKeyHex.Caption = "Server public key: ";
 
-	if (_ip.Length()) {
+	_ip.Text = _root->Conf->GetServerAddress();
+	_port.Text = _root->Conf->GetServerPort();
+	_serverKeyHex.Text = _root->Conf->GetServerKeyHex();
+
+	_modified = false;
+
+	if (_ip.Text.Length()) {
 		_writingIp = false;
 		_writingPort = true;
 	}
 
-	if (_writingPort && _port.Length()) {
+	if (_writingPort && _port.Text.Length()) {
 		_writingPort = false;
 		_writingKey = true;
 	}
@@ -43,72 +45,50 @@ LoginScreen::LoginScreen(
 
 void LoginScreen::Redraw()
 {
-	ClearScreen();
-
 	String helpString =
-		"Exit: " + _controls->LoginBackName() +
-		" | Next: " + _controls->LoginDownName() + "/" +
-		_controls->LoginConnectName() +
-		" | Previous: " + _controls->LoginUpName() +
-		" | Connect: " + _controls->LoginConnectName();
+		"Exit: " + _root->Conf->LoginBackName() +
+		" | Next: " + _root->Conf->LoginDownName() + "/" +
+		_root->Conf->LoginConnectName() +
+		" | Previous: " + _root->Conf->LoginUpName() +
+		" | Connect: " + _root->Conf->LoginConnectName();
 
-	move(0, 0);
+	move(1, 0);
 	addstr(helpString.CStr());
 
-	move(_rows / 2 - 10, 4);
-	addstr("Your public key:");
-	move(_rows / 2 - 9, 4);
-	String hex = DataToHex(_session->PublicKey, KEY_SIZE);
-	addstr(hex.CStr());
-
 	move(_rows / 2 - 7, 4);
-	addstr("Your signature:");
+	addstr("Your public key:");
 	move(_rows / 2 - 6, 4);
-	hex = DataToHex(_session->SignaturePublicKey, KEY_SIZE);
+	String hex = DataToHex(_root->PublicKey, KEY_SIZE);
 	addstr(hex.CStr());
 
-	move(_rows / 2 - 4, 4);
-	addstr(ipMessage);
-	addstr(_ip.CStr());
+	_ip.SetCaptionPosition(_rows / 2 - 4, 4);
+	_ip.AlignTextToCaption();
+	_ip.Redraw();
 
-	move(_rows / 2 - 2, 4);
-	addstr(portMessage);
-	addstr(_port.CStr());
+	_port.SetCaptionPosition(_rows / 2 - 2, 4);
+	_port.AlignTextToCaption();
+	_port.Redraw();
 
-	move(_rows / 2, 4);
-	addstr("Server public key:");
-	move(_rows / 2 + 1, 4);
-	addstr(_serverKeyHex.CStr());
-
-	if (_status.Length() > 0) {
-		move(_rows / 2 + 3, _columns / 2 - _status.Length() / 2);
-		addstr(_status.CStr());
-	}
+	_serverKeyHex.SetCaptionPosition(_rows / 2, 4);
+	_serverKeyHex.SetTextPosition(_rows / 2 + 1, 4);
+	_serverKeyHex.Redraw();
 
 	if (_writingIp) {
-		move(
-			_rows / 2 - 4,
-			4 + strlen(ipMessage) + strlen(_ip.CStr()));
+		_ip.SetCursor();
 	} else if (_writingPort) {
-		move(
-			_rows / 2 - 2,
-			4 + strlen(portMessage) + strlen(_port.CStr()));
+		_port.SetCursor();
 	} else if (_writingKey) {
-		move(
-			_rows / 2 + 1,
-			4 + strlen(_serverKeyHex.CStr()));
+		_serverKeyHex.SetCursor();
 	}
-
-	refresh();
 }
 
 Screen *LoginScreen::ProcessEvent(int event)
 {
-	if (event == _controls->LoginBackKey()) {
-		return nullptr;
+	if (event == _root->Conf->LoginBackKey()) {
+		return new WorkScreen(_root);
 	}
 
-	if (event == _controls->LoginUpKey()) {
+	if (event == _root->Conf->LoginUpKey()) {
 		if (_writingPort) {
 			_writingPort = false;
 			_writingIp = true;
@@ -120,7 +100,7 @@ Screen *LoginScreen::ProcessEvent(int event)
 		return this;
 	}
 
-	if (event == _controls->LoginDownKey()) {
+	if (event == _root->Conf->LoginDownKey()) {
 		if (_writingIp) {
 			_writingIp = false;
 			_writingPort = true;
@@ -132,7 +112,7 @@ Screen *LoginScreen::ProcessEvent(int event)
 		return this;
 	}
 
-	if (event == _controls->LoginConnectKey()) {
+	if (event == _root->Conf->LoginConnectKey()) {
 		if (_writingIp) {
 			_writingIp = false;
 			_writingPort = true;
@@ -144,93 +124,93 @@ Screen *LoginScreen::ProcessEvent(int event)
 		}
 
 		// Transition to work state.
-		if (_serverKeyHex.Length() != KEY_SIZE * 2) {
-			_status = "Invalid server key length.";
+		if (_serverKeyHex.Text.Length() != KEY_SIZE * 2) {
+			_root->Ui->Notify("Invalid server key length.");
 			return this;
 		}
 
-		HexToData(_serverKeyHex, _session->PeerPublicKey);
+		uint8_t serverKey[KEY_SIZE];
+		HexToData(_serverKeyHex.Text, serverKey);
 
-		uint16_t port = atoi(_port.CStr());
+		uint16_t port = atoi(_port.Text.CStr());
 
 		if (port == 0) {
-			_status = "Invalid port number.";
+			_root->Ui->Notify("Invalid port number.");
 			return this;
 		}
 
 		struct sockaddr_in addr;
 		addr.sin_family = AF_INET;
 		addr.sin_port = htons(port);
-		int res = inet_aton(_ip.CStr(), &addr.sin_addr);
+		int res = inet_aton(_ip.Text.CStr(), &addr.sin_addr);
 
 		if (!res) {
-			_status = "Invalid IP address.";
+			_root->Ui->Notify("Invalid IP address.");
 			return this;
 		}
 
-		_status = "Connecting...";
-		Redraw();
+		if (_modified) {
+			_root->Conf->SetServerAddress(_ip.Text);
+			_root->Conf->SetServerPort(_port.Text);
+			_root->Conf->SetServerKeyHex(_serverKeyHex.Text);
+			_root->Conf->Save();
+			_modified = false;
+		}
 
-		_session->Socket = socket(AF_INET, SOCK_STREAM, 0);
+		_root->Ui->Notify("Connecting...");
+		_root->Ui->Redraw();
 
-		if (_session->Socket == -1) {
-			_status = "Failed to create socket.";
+		int socketFd = socket(AF_INET, SOCK_STREAM, 0);
+
+		if (socketFd == -1) {
+			_root->Ui->Notify("Failed to create socket.");
 			return this;
 		}
 
 		res = connect(
-			_session->Socket,
+			socketFd,
 			(struct sockaddr*)&addr,
 			sizeof(addr));
 
 		if (res == -1) {
-			close(_session->Socket);
-			_session->Socket = -1;
-			_status = "Failed to connect.";
+			close(socketFd);
+			_root->Ui->Notify("Failed to connect.");
 			return this;
 		}
 
-		bool nonblock = MakeNonblocking(_session->Socket);
+		MakeNonblocking(socketFd);
 
-		if (!nonblock) {
-			close(_session->Socket);
-			_session->Socket = -1;
-			_status = "Failed to make socket nonblocking.";
-			return this;
-		}
+		_root->Network->StartConnection(socketFd, serverKey);
 
-		bool initRes = _session->InitSession();
-
-		if (!initRes) {
-			_session->Close();
-			_status = "Failed to init session.";
-			return this;
-		}
-
-		return nullptr;
+		return new WorkScreen(_root);
 	}
 
 	if (event == '\b') {
 		if (_writingIp) {
-			if (_ip.Length() == 0) {
+			if (_ip.Text.Length() == 0) {
 				return this;
 			}
 
-			_ip = _ip.Substring(0, _ip.Length() - 1);
+			_ip.Text = _ip.Text.Substring(0, _ip.Text.Length() - 1);
+			_modified = true;
 		} else if (_writingPort) {
-			if (_port.Length() == 0) {
+			if (_port.Text.Length() == 0) {
 				return this;
 			}
 
-			_port = _port.Substring(0, _port.Length() - 1);
-		} else if (_writingKey) {
-			if (_serverKeyHex.Length() == 0) {
-				return this;
-			}
-
-			_serverKeyHex = _serverKeyHex.Substring(
+			_port.Text = _port.Text.Substring(
 				0,
-				_serverKeyHex.Length() - 1);
+				_port.Text.Length() - 1);
+			_modified = true;
+		} else if (_writingKey) {
+			if (_serverKeyHex.Text.Length() == 0) {
+				return this;
+			}
+
+			_serverKeyHex.Text = _serverKeyHex.Text.Substring(
+				0,
+				_serverKeyHex.Text.Length() - 1);
+			_modified = true;
 		}
 
 		return this;
@@ -238,46 +218,31 @@ Screen *LoginScreen::ProcessEvent(int event)
 
 	if (_writingIp) {
 		if ((event < '0' || event > '9') && event != '.') {
-			_status = "Illegal character.";
+			_root->Ui->Notify("Illegal character.");
 			return this;
 		}
 
-		_ip += event;
+		_ip.Text += event;
+		_modified = true;
 	} else if (_writingPort) {
 		if (event < '0' || event > '9') {
-			_status = "Illegal character.";
+			_root->Ui->Notify("Illegal character.");
 			return this;
 		}
 
-		_port += event;
+		_port.Text += event;
+		_modified = true;
 	} else if (_writingKey) {
 		if ((event < '0' || event > '9') &&
 			(event < 'a' || event > 'f'))
 		{
-			_status = "Illegal character.";
+			_root->Ui->Notify("Illegal character.");
 			return this;
 		}
 
-		_serverKeyHex += event;
+		_serverKeyHex.Text += event;
+		_modified = true;
 	}
 
 	return this;
-}
-
-bool LoginScreen::MakeNonblocking(int fd)
-{
-	int flags = fcntl(fd, F_GETFL);
-
-	if (flags == -1) {
-		return false;
-	}
-
-	flags = flags | O_NONBLOCK;
-	int res = fcntl(fd, F_SETFL, flags);
-
-	if (res == -1) {
-		return false;
-	}
-
-	return true;
 }

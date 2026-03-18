@@ -1,12 +1,18 @@
 #include "UI.hpp"
 
-#include "locale.h"
+#include <locale.h>
+#include <curses.h>
 
 #include "TextColor.hpp"
-#include "PasswordScreen.hpp"
+#include "WorkScreen.hpp"
+#include "UiHelpers.hpp"
+#include "../Common/Exception.hpp"
 
-UI::UI(ClientSession *session)
+UI::UI(Root *root) :
+	_notifier(root)
 {
+	_root = root;
+
 	setlocale(LC_ALL, "");
 
 	initscr();
@@ -19,21 +25,25 @@ UI::UI(ClientSession *session)
 	init_pair(YELLOW_TEXT, COLOR_YELLOW, COLOR_BLACK);
 	init_pair(RED_TEXT, COLOR_RED, COLOR_BLACK);
 
-	_session = session;
-	_screen = new PasswordScreen(_session, &_voiceChat);
+	_screen = new WorkScreen(_root);
 
 	ProcessResize();
+
+	_root->Dispatcher->RegisterDescriptorProcessor(this);
 }
 
 UI::~UI()
 {
+	_root->Dispatcher->UnregisterDescriptorProcessor(this);
 	endwin();
 }
 
-void UI::ProcessResize()
+void UI::ProcessRead()
 {
-	if (_screen) {
-		_screen->ProcessResize();
+	bool res = ProcessEvent();
+
+	if (!res) {
+		_root->Dispatcher->Stop();
 	}
 }
 
@@ -46,6 +56,13 @@ bool UI::ProcessEvent()
 		return true;
 	}
 
+	bool notificationProcessed = _notifier.ProcessEvent(event);
+
+	if (notificationProcessed) {
+		Redraw();
+		return true;
+	}
+
 	if (event == KEY_ENTER) {
 		event = '\n';
 	} else if (event == KEY_BACKSPACE) {
@@ -54,43 +71,117 @@ bool UI::ProcessEvent()
 
 	Screen *newScreen = _screen->ProcessEvent(event);
 
-	if (newScreen) {
-		newScreen->Redraw();
+	if (newScreen != _screen) {
+		delete _screen;
+		_screen = newScreen;
 	}
 
-	if (newScreen == _screen) {
-		return true;
+	if (_screen) {
+		Redraw();
 	}
-
-	delete _screen;
-	_screen = newScreen;
 
 	return _screen;
 }
 
-void UI::Disconnect()
+void UI::ProcessResize()
 {
-	if (!_session->Connected()) {
-		return;
+	getmaxyx(stdscr, _rows, _columns);
+
+	if (_screen) {
+		_screen->ProcessResize();
 	}
 
-	_session->Disconnect();
+	Redraw();
+}
 
-	if (_voiceChat.Active()) {
-		_voiceChat.Stop();
-	}
+void UI::Redraw()
+{
+	UiHelpers::ClearScreen(0, _rows - 1, 0, _columns - 1);
+
+	DrawConnectionState();
+	//DrawVoiceState();
 
 	if (_screen) {
 		_screen->Redraw();
 	}
+
+	_notifier.Redraw();
+
+	refresh();
 }
 
-int UI::GetSoundReadFileDescriptor()
+void UI::Notify(String message)
 {
-	return _voiceChat.GetSoundReadFileDescriptor();
+	_notifier.Notify(message);
+	Redraw();
 }
 
-void UI::ProcessSound()
+void UI::DrawConnectionState()
 {
-	_voiceChat.ProcessInput();
+	move(0, 0);
+	addstr("Connection status: ");
+
+	if (_root->Network->ConnectionActive()) {
+		attrset(COLOR_PAIR(GREEN_TEXT));
+		addstr("connected");
+	} else if (_root->Network->HandshakeActive()) {
+		attrset(COLOR_PAIR(YELLOW_TEXT));
+		addstr("connecting");
+	} else {
+		attrset(COLOR_PAIR(RED_TEXT));
+		addstr("not connected");
+	}
+
+	attrset(COLOR_PAIR(DEFAULT_TEXT));
+	addch('.');
 }
+
+/*void UI::DrawVoiceState()
+{
+	move(1, 0);
+	addstr("Voice status: ");
+
+	VoiceEventProcessor::VoiceState state = _root->Voice->GetState();
+
+	switch (state) {
+	case VoiceEventProcessor::VoiceStateOff:
+		addstr("not connected.");
+		return;
+	case VoiceEventProcessor::VoiceStateInit:
+		attrset(COLOR_PAIR(YELLOW_TEXT));
+		addstr("initializing connection");
+		break;
+	case VoiceEventProcessor::VoiceStateAsk:
+		attrset(COLOR_PAIR(YELLOW_TEXT));
+		addstr("please respond");
+		break;
+	case VoiceEventProcessor::VoiceStateWait:
+		attrset(COLOR_PAIR(YELLOW_TEXT));
+		addstr("waiting for answer");
+		break;
+	case VoiceEventProcessor::VoiceStateActive:
+		attrset(COLOR_PAIR(GREEN_TEXT));
+		addstr("active");
+		break;
+	}
+
+	String name = _root->Voice->GetPeerName();
+
+	if (name.Length() > 30) {
+		name = name.Substring(0, 30) + "...";
+	}
+
+	addstr((" (" + name + ")").CStr());
+
+	if (state == VoiceEventProcessor::VoiceStateActive) {
+		if (_root->Voice->IsMuted()) {
+			attrset(COLOR_PAIR(RED_TEXT));
+			addstr(" (mute)");
+		} else if (_root->Voice->IsSilent()) {
+			addstr(" (silence)");
+		}
+	}
+
+	attrset(COLOR_PAIR(DEFAULT_TEXT));
+	addch('.');
+}*/

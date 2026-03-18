@@ -152,10 +152,10 @@ bool StreamReader::ReadDataSize(int sockFd, uint64_t sizeLimit)
 
 	if (!_expectedInt) {
 		if (!_inES) {
-			_intBuffer = CowBuffer<uint8_t>(sizeof(dataSize));
+			_intBuffer = CowBuffer<uint8_t>(sizeof(dataSize) + 1);
 		} else {
 			_intBuffer = CowBuffer<uint8_t>(
-				sizeof(dataSize) + NONCE_SIZE);
+				sizeof(dataSize) + NONCE_SIZE + 1);
 		}
 
 		_expectedInt = _intBuffer.Size();
@@ -177,6 +177,7 @@ bool StreamReader::ReadDataSize(int sockFd, uint64_t sizeLimit)
 		return true;
 	}
 
+	_intBuffer = RemoveScrambler(_intBuffer);
 	dataSize = *_intBuffer.SwitchType<uint64_t>();
 
 	if (_inES) {
@@ -206,7 +207,7 @@ bool StreamReader::ReadSliceSize(int sockFd)
 	uint32_t sliceSize;
 
 	if (!_expectedInt) {
-		_intBuffer = CowBuffer<uint8_t>(sizeof(sliceSize));
+		_intBuffer = CowBuffer<uint8_t>(sizeof(sliceSize) + 1);
 		_expectedInt = _intBuffer.Size();
 		return true;
 	}
@@ -226,6 +227,7 @@ bool StreamReader::ReadSliceSize(int sockFd)
 		return true;
 	}
 
+	_intBuffer = RemoveScrambler(_intBuffer);
 	sliceSize = *_intBuffer.SwitchType<uint32_t>();
 	_intBuffer = CowBuffer<uint8_t>();
 
@@ -261,7 +263,7 @@ bool StreamReader::ReadSlice(int sockFd)
 	if (_inES) {
 		result = DecryptSlice();
 	} else {
-		result = AppendSlice(_slice);
+		result = AppendSlice(RemoveScrambler(_slice));
 	}
 
 	_slice = CowBuffer<uint8_t>();
@@ -407,6 +409,7 @@ bool StreamWriter::WriteDataSize(int sockFd, uint8_t stream)
 	}
 
 	*_intBuffer.SwitchType<uint64_t>() = _remainingData;
+	_intBuffer = ApplyScrambler(_intBuffer);
 	_remainingInt = _intBuffer.Size();
 
 	return true;
@@ -439,11 +442,12 @@ bool StreamWriter::WriteSliceSize(int sockFd, uint8_t stream)
 
 		_remainingData -= _remainingSlice - 1 - MAC_SIZE;
 	} else {
-		_slice = _data.Slice(
+		_slice = ApplyScrambler(_data.Slice(
 			_data.Size() - _remainingData,
-			_remainingSlice);
+			_remainingSlice));
 
 		_remainingData -= _remainingSlice;
+		_remainingSlice += 1;
 	}
 
 	if (!_remainingData) {
@@ -458,6 +462,7 @@ bool StreamWriter::WriteSliceSize(int sockFd, uint8_t stream)
 
 	_intBuffer = CowBuffer<uint8_t>(sizeof(uint32_t));
 	*_intBuffer.SwitchType<uint32_t>() = _remainingSlice;
+	_intBuffer = ApplyScrambler(_intBuffer);
 	_remainingInt = _intBuffer.Size();
 
 	return true;

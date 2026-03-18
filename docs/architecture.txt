@@ -156,14 +156,14 @@ Files containing message data blocks.
 /owner_key/storage/peer_key/out/timestamp_index - outgoing message
 
 Message attributes.
-/owner_key/attributes/peer_key/timestamp_index_{s,r}
-Each file contains flags. If the file does not exist it means that all
-flags are cleared.
+/owner_key/attributes/peer_key
+Index file contains flags. If the index entry does not exist it means
+that all flags are cleared.
 Flag list: unread, unsent, fault.
 unread: incoming message that has not been marked as read.
 unsent: outgoing message that has not been sent.
-fault: outgoing message that will not be sent due to permanent error
-(invalid user keys etc.).
+fault: outgoing message that will not be sent due to irrecoverable error
+(not existing destination, invalid message header etc.).
 
 Contact book.
 /owner_key/contacts/peer_key
@@ -173,25 +173,27 @@ Configuration
 -------------
 Server configuration.
 talkd.conf in ini format.
-RestrictedMode
+    RestrictedMode
 
-[Network]
-IPv4
-Port
+    [Network]
+    IPv4
+    Port
 
-[FailBan]
-Enabled
-AllowedTries
-CooldownInterval
+    [FailBan]
+    Enabled
+    AllowedTries
+    CooldownInterval
 
 Client configuration.
 /owner_key/talk.conf in ini format.
-[connection]
-ServerIP
-ServerPort
-ServerKey
+    [connection]
+    ServerIP
+    ServerPort
+    ServerKey
 
-[voice]
-Volume
-ApplyFilter
-SilenceLevel
+    [voice]
+    Volume
+    ApplyFilter
+    SilenceLevel
+
+/owner_key/talk.keys in ini format contains key bindings.

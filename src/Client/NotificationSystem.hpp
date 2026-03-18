@@ -1,24 +1,14 @@
 #ifndef _NOTIFICATION_SYSTEM_HPP
 #define _NOTIFICATION_SYSTEM_HPP
 
+#include "Root.hpp"
 #include "ControlStorage.hpp"
 #include "../Common/MyString.hpp"
-
-class NotifyRedrawHandler
-{
-public:
-	virtual ~NotifyRedrawHandler()
-	{ }
-
-	virtual void NotifyRedraw() = 0;
-};
 
 class NotificationSystem
 {
 public:
-	NotificationSystem(
-		NotifyRedrawHandler *handler,
-		ControlStorage *controls);
+	NotificationSystem(Root *root);
 	~NotificationSystem();
 
 	void Notify(String message);
@@ -36,9 +26,7 @@ private:
 	Notification *_first;
 	Notification *_last;
 
-	NotifyRedrawHandler *_handler;
-
-	ControlStorage *_controls;
+	Root *_root;
 };
 
 #endif

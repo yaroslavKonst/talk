@@ -244,10 +244,10 @@ void IniFile::Load()
 		}
 
 		String key = kvp[0].Trim();
-		String value;
+		String value = kvp[1];
 
-		for (unsigned int p = 1; p < kvp.Size(); p++) {
-			value += kvp[p];
+		for (unsigned int p = 2; p < kvp.Size(); p++) {
+			value += "=" + kvp[p];
 		}
 
 		Set(currentSection, key, value.Trim());

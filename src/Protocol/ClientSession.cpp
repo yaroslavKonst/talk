@@ -3,7 +3,7 @@
 #include <cstring>
 
 #include "ActiveSession.hpp"
-#include "Handshake.hpp"
+#include "HandshakeParser.hpp"
 #include "../Message/Message.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Exception.hpp"

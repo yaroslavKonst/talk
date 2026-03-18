@@ -99,4 +99,9 @@ inline String ToString(int value)
 	return res;
 }
 
+inline bool IsSpace(char c)
+{
+	return c == ' ' || c == '\n' || c == '\t' || c == '\r';
+}
+
 #endif

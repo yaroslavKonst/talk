@@ -1,5 +1,5 @@
-#ifndef _SOCKET_NAME_HPP
-#define _SOCKET_NAME_HPP
+#ifndef _CONTROL_PARSER_HPP
+#define _CONTROL_PARSER_HPP
 
 #define TALKD_SOCKET_NAME "talkd.socket"
 
@@ -22,5 +22,6 @@
 #define COMMAND_BAN_IP 7
 #define COMMAND_UNBAN_IP 8
 #define COMMAND_RELOAD 9
+
 
 #endif

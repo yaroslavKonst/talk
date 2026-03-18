@@ -112,6 +112,33 @@ CowBuffer<uint8_t> CommandDeliverMessage::BuildCommand(const Command &data)
 	return commandBuffer.Concat(data.Message);
 }
 
+bool CommandDeliverMessage::ParseResponse(
+	const CowBuffer<uint8_t> buffer,
+	Response &result)
+{
+	if (buffer.Size() != sizeof(int32_t) + Message::HeaderSize) {
+		return false;
+	}
+
+	int32_t command = *buffer.SwitchType<int32_t>();
+
+	if (command != SESSION_COMMAND_DELIVER_MESSAGE) {
+		return false;
+	}
+
+	return Message::GetID(
+		buffer.Slice(sizeof(int32_t), Message::HeaderSize),
+		result.ID);
+}
+
+CowBuffer<uint8_t> CommandDeliverMessage::BuildResponse(const Response &data)
+{
+	CowBuffer<uint8_t> buffer(sizeof(int32_t) + Message::HeaderSize);
+	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_DELIVER_MESSAGE;
+
+	return buffer.Concat(Message::BuildHeader(data.ID));
+}
+
 CowBuffer<uint8_t> CommandListUsers::BuildCommand()
 {
 	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));

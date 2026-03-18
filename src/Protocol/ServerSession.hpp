@@ -3,11 +3,11 @@
 
 #include "Session.hpp"
 #include "../Server/UserDB.hpp"
-#include "../Server/MessagePipe.hpp"
-#include "../Server/FailBan.hpp"
+#include "../Message/Message.hpp"
 #include "../Crypto/Crypto.hpp"
 
-struct ServerSession : public Session, public SendMessageHandler
+struct ServerSession :
+	public Session
 {
 	~ServerSession();
 
@@ -19,11 +19,7 @@ struct ServerSession : public Session, public SendMessageHandler
 	};
 
 	UserDB *Users;
-	MessagePipe *Pipe;
-	FailBan *Ban;
 	uint32_t IPv4;
-
-	const bool *RestrictedMode;
 
 	ServerSessionState State;
 
@@ -41,6 +37,9 @@ struct ServerSession : public Session, public SendMessageHandler
 
 	Stream Streams[StreamCount];
 
+	void ProcessQuant() override;
+
+	// Request processing.
 	bool Process() override;
 	bool ProcessFirstSyn();
 	bool ProcessSecondSyn();
@@ -50,6 +49,7 @@ struct ServerSession : public Session, public SendMessageHandler
 
 	bool ProcessKeepAlive(const CowBuffer<uint8_t> plainText);
 	bool ProcessTextMessage(const CowBuffer<uint8_t> plainText);
+	bool ProcessDeliverMessage(const CowBuffer<uint8_t> plainText);
 	bool ProcessListUsers(const CowBuffer<uint8_t> plainText);
 	bool ProcessGetMessages(const CowBuffer<uint8_t> plainText);
 
@@ -65,7 +65,6 @@ struct ServerSession : public Session, public SendMessageHandler
 	};
 
 	ServerSessionVoiceState VoiceState;
-	SendMessageHandler *VoicePeer;
 	bool InVoice() override;
 	void SendVoiceFrame(const CowBuffer<uint8_t> frame) override;
 	void StartVoice(

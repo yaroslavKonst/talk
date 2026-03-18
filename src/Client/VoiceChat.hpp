@@ -1,44 +1,22 @@
 #ifndef _VOICE_CHAT_HPP
 #define _VOICE_CHAT_HPP
 
+#include "Root.hpp"
 #include "ControlStorage.hpp"
 #include "../Audio/Audio.hpp"
 #include "../Crypto/Crypto.hpp"
 #include "../Common/IniFile.hpp"
 
-class VoiceProcessor
+class VoiceChat : public VoiceEventProcessor
 {
 public:
-	virtual ~VoiceProcessor()
-	{ }
-
-	virtual void SendVoiceFrame(CowBuffer<uint8_t> frame) = 0;
-	virtual void AnswerVoiceRequest(bool accept) = 0;
-	virtual void EndVoice() = 0;
-	virtual void VoiceRedrawRequested() = 0;
-};
-
-class VoiceChat
-{
-public:
-	VoiceChat();
+	VoiceChat(Root *root);
 	~VoiceChat();
 
-	void RegisterProcessor(VoiceProcessor *processor)
-	{
-		_voiceProcessor = processor;
-	}
-
 	void SetConfigFile(IniFile *configFile);
-	void SetControls(ControlStorage *controls);
-	void StartSettings();
 
 	// Process microphone input.
 	void ProcessInput();
-
-	// Process GUI.
-	void Redraw(int rows, int columns);
-	bool ProcessEvent(int event);
 
 	// Control.
 	bool Active();
@@ -58,31 +36,35 @@ public:
 
 	int GetSoundReadFileDescriptor();
 
-private:
-	void RedrawState(int rows, int columns);
+	String GetPeerName() override;
+	bool IsMuted() override;
+	bool IsSilent() override;
+	VoiceState GetState() override;
 
-	bool _settingsMode;
-	void RedrawSettings(int rows, int columns);
-	void ProcessSettings(int event);
+	void ToggleMute() override;
+
+	int GetVolume();
+	void IncreaseVolume();
+	void DecreaseVolume();
+
+	int GetSilenceLevel();
+	void IncreaseSilenceLevel();
+	void DecreaseSilenceLevel();
+
+	bool GetFilterEnabled();
+	void EnableFilter();
+	void DisableFilter();
+
+private:
+	Root *_root;
 
 	IniFile *_configFile;
 	void LoadConfigFile();
 	void UpdateConfigFile();
 
-	enum VoiceChatState
-	{
-		VoiceStateOff = 0,
-		VoiceStateInit = 1,
-		VoiceStateAsk = 2,
-		VoiceStateWait = 3,
-		VoiceStateActive = 4
-	};
-
-	VoiceChatState _state;
+	VoiceState _state;
 
 	Audio _audio;
-
-	VoiceProcessor *_voiceProcessor;
 
 	String _peerName;
 
@@ -99,8 +81,6 @@ private:
 	int _volume;
 	bool _applyFilter;
 	int _silenceLevel;
-
-	ControlStorage *_controls;
 };
 
 #endif

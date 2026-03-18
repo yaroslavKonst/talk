@@ -94,3 +94,20 @@ CowBuffer<String> ListDirectory(String path)
 
 	return result;
 }
+
+void MakeNonblocking(int fd)
+{
+	int flags = fcntl(fd, F_GETFL);
+
+	if (flags == -1) {
+		THROW("Failed to get fd flags.");
+	}
+
+	flags |= O_NONBLOCK;
+
+	int res = fcntl(fd, F_SETFL, flags);
+
+	if (res == -1) {
+		THROW("Failed to set fd flags.");
+	}
+}

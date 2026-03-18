@@ -21,7 +21,10 @@ public:
 
 		Entry()
 		{
-			memset(this, 0, sizeof(*this));
+			Parent = nullptr;
+			Left = nullptr;
+			Right = nullptr;
+			Depth = 0;
 		}
 
 		~Entry()

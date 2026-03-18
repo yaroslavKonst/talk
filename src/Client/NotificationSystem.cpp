@@ -3,16 +3,14 @@
 #include <curses.h>
 
 #include "TextColor.hpp"
+#include "UiHelpers.hpp"
 
-NotificationSystem::NotificationSystem(
-	NotifyRedrawHandler *handler,
-	ControlStorage *controls)
+NotificationSystem::NotificationSystem(Root *root)
 {
 	_first = nullptr;
 	_last = nullptr;
 
-	_handler = handler;
-	_controls = controls;
+	_root = root;
 }
 
 NotificationSystem::~NotificationSystem()
@@ -40,7 +38,7 @@ void NotificationSystem::Notify(String message)
 		_last = notification;
 	}
 
-	_handler->NotifyRedraw();
+	_root->Ui->Redraw();
 }
 
 void NotificationSystem::Redraw()
@@ -54,58 +52,27 @@ void NotificationSystem::Redraw()
 	getmaxyx(stdscr, rows, columns);
 
 	int messageSize = _first->Message.Length();
-	int frameSize = messageSize + 2;
+	int frameSize = messageSize + 3;
 
 	if (frameSize < 30) {
 		frameSize = 30;
 	}
 
 	int baseY = rows / 2 - 4;
-	int limitY = rows / 2 + 4;
+	int limitY = rows / 2 + 3;
 
 	int baseX = columns / 2 - frameSize / 2 - 2;
-	int limitX = columns / 2 + frameSize / 2 + 3;
+	int limitX = columns / 2 + frameSize / 2 + 2;
 
-	// Clear.
-	for (int r = baseY; r < limitY; r++) {
-		for (int c = baseX; c < limitX; c++) {
-			move(r, c);
-			addch(' ');
-		}
-	}
+	UiHelpers::ClearScreen(baseY, limitY, baseX, limitX);
 
-	// Frame.
-	attrset(COLOR_PAIR(YELLOW_TEXT));
-
-	for (int r = baseY + 2; r < limitY - 2; r++) {
-		move(r, baseX + 1);
-		addch(ACS_VLINE);
-
-		move(r, limitX - 2);
-		addch(ACS_VLINE);
-	}
-
-	for (int c = baseX + 2; c < limitX - 2; c++) {
-		move(baseY + 1, c);
-		addch(ACS_HLINE);
-
-		move(limitY - 2, c);
-		addch(ACS_HLINE);
-	}
-
-	move(baseY + 1, baseX + 1);
-	addch(ACS_ULCORNER);
-	move(baseY + 1, limitX - 2);
-	addch(ACS_URCORNER);
-	move(limitY - 2, baseX + 1);
-	addch(ACS_LLCORNER);
-	move(limitY - 2, limitX - 2);
-	addch(ACS_LRCORNER);
-
-	move(baseY + 1, baseX + 2);
-	addstr("Notification");
-
-	attrset(COLOR_PAIR(DEFAULT_TEXT));
+	UiHelpers::DrawFrame(
+		baseY + 1,
+		limitY - 1,
+		baseX + 1,
+		limitX - 1,
+		"Notification",
+		COLOR_PAIR(YELLOW_TEXT));
 
 	// Message.
 	move(baseY + 3, columns / 2 - messageSize / 2);
@@ -113,7 +80,7 @@ void NotificationSystem::Redraw()
 
 	move(baseY + 5, columns / 2 - 10);
 	addstr(("Press " +
-		_controls->NotificationConfirmName() +
+		_root->Conf->NotificationConfirmName() +
 		" to close.").CStr());
 }
 
@@ -123,7 +90,7 @@ bool NotificationSystem::ProcessEvent(int event)
 		return false;
 	}
 
-	if (event == _controls->NotificationConfirmKey()) {
+	if (event == _root->Conf->NotificationConfirmKey()) {
 		Notification *tmp = _first;
 		_first = _first->Next;
 		delete tmp;

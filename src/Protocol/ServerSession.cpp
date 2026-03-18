@@ -1,15 +1,18 @@
 #include "ServerSession.hpp"
 
 #include "ActiveSession.hpp"
-#include "Handshake.hpp"
+#include "HandshakeParser.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Message/MessageStorage.hpp"
+#include "../Message/AttributeStorage.hpp"
 #include "../Message/Message.hpp"
 
 #include "../Common/Debug.hpp"
 
 ServerSession::~ServerSession()
 {
+	Dispatcher->CancelRequest(this);
+
 	if (InVoice()) {
 		VoicePeer->EndVoice();
 		VoicePeer = nullptr;
@@ -24,6 +27,24 @@ ServerSession::~ServerSession()
 		crypto_wipe(Streams[i].InES.Key, KEY_SIZE);
 		crypto_wipe(Streams[i].OutES.Key, KEY_SIZE);
 	}
+}
+
+void ServerSession::ProcessQuant()
+{
+	Tree<Message::MessageID>::Entry *first = PlannedMessages.FindSmallest();
+
+	if (!first) {
+		return;
+	}
+
+	MessageStorage container(PeerPublicKey);
+
+	CowBuffer<uint8_t> message = container.GetMessage(first->Key);
+
+	PlannedMessages.RemoveEntry(first);
+
+	SendMessage(message);
+	Dispatcher->RequestQuant(this);
 }
 
 bool ServerSession::Process()
@@ -174,6 +195,8 @@ bool ServerSession::ProcessActiveSession()
 		return ProcessListUsers(plainText);
 	} else if (command == SESSION_COMMAND_GET_MESSAGES) {
 		return ProcessGetMessages(plainText);
+	} else if (command == SESSION_COMMAND_DELIVER_MESSAGE) {
+		return ProcessDeliverMessage(plainText);
 	} else if (command == SESSION_COMMAND_VOICE_INIT) {
 		return ProcessVoiceInit(plainText);
 	} else if (command == SESSION_COMMAND_VOICE_REQUEST) {
@@ -253,6 +276,23 @@ bool ServerSession::ProcessTextMessage(const CowBuffer<uint8_t> plainText)
 	return true;
 }
 
+bool ServerSession::ProcessDeliverMessage(const CowBuffer<uint8_t> plainText)
+{
+	CommandDeliverMessage::Response response;
+	bool parseResult = CommandDeliverMessage::ParseResponse(
+		plainText,
+		response);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	AttributeStorage container(PeerPublicKey);
+	container.SetAttribute(response.ID, 0);
+
+	return true;
+}
+
 bool ServerSession::ProcessListUsers(const CowBuffer<uint8_t> plainText)
 {
 	if (*RestrictedMode) {
@@ -296,6 +336,10 @@ bool ServerSession::ProcessListUsers(const CowBuffer<uint8_t> plainText)
 
 bool ServerSession::ProcessGetMessages(const CowBuffer<uint8_t> plainText)
 {
+	if (PlannedMessages.FindSmallest()) {
+		return true;
+	}
+
 	CommandGetMessages::Command command;
 
 	bool parseResult = CommandGetMessages::ParseCommand(plainText, command);
@@ -306,16 +350,28 @@ bool ServerSession::ProcessGetMessages(const CowBuffer<uint8_t> plainText)
 
 	const int64_t intMax = 0x7fffffffffffffff;
 
-	MessageStorage container(
-		PeerPublicKey);
+	AttributeStorage container(PeerPublicKey);
 
-	CowBuffer<CowBuffer<uint8_t>> messages = container.GetMessageRange(
+	CowBuffer<Message::MessageID> unsentMessages = container.ListUnsent();
+
+	MessageStorage storage(PeerPublicKey);
+	CowBuffer<Message::MessageID> messages = storage.GetMessageRange(
 		command.Timestamp,
 		intMax);
 
-	for (uint32_t i = 0; i < messages.Size(); i++) {
-		SendMessage(messages[i]);
+	if (!unsentMessages.Size() && !messages.Size()) {
+		return true;
 	}
+
+	for (uint32_t i = 0; i < unsentMessages.Size(); i++) {
+		PlannedMessages.AddEntry(unsentMessages[i]);
+	}
+
+	for (uint32_t i = 0; i < messages.Size(); i++) {
+		PlannedMessages.AddEntry(messages[i]);
+	}
+
+	Dispatcher->RequestQuant(this);
 
 	return true;
 }

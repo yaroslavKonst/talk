@@ -1,108 +1,90 @@
 #include "Client.hpp"
 
-#include <poll.h>
+#include <unistd.h>
 #include <sys/stat.h>
-#include <errno.h>
 
-#include "../Common/Exception.hpp"
-#include "../Common/UnixTime.hpp"
+#include "Network.hpp"
+#include "UI.hpp"
 #include "../Common/SignalHandling.hpp"
+#include "../Common/Exception.hpp"
+#include "../Crypto/Crypto.hpp"
+#include "../ThirdParty/monocypher.h"
 
-Client::Client() : _ui(&_session)
+Client::Client()
 {
 	umask(077);
 
-	_session.State = ClientSession::ClientStateUnconnected;
-	_session.Processor = nullptr;
+	DisableSigPipe();
+	GetPassword();
 }
 
 Client::~Client()
 {
+	crypto_wipe(_privateKey, KEY_SIZE);
+	crypto_wipe(_publicKey, KEY_SIZE);
 }
 
 int Client::Run()
 {
-	DisableSigPipe();
+	_root.PrivateKey = _privateKey;
+	_root.PublicKey = _publicKey;
 
-	bool work = true;
+	EventDispatcher dispatcher(2000);
+	_root.Dispatcher = &dispatcher;
 
-	struct pollfd *fds = new struct pollfd[3];
+	Config config(_publicKey);
+	_root.Conf = &config;
 
-	fds[0].fd = 0;
-	fds[0].events = POLLIN;
+	Network network(&_root);
+	_root.Network = &network;
 
-	fds[1].fd = _ui.GetSoundReadFileDescriptor();
-	fds[1].events = POLLIN;
+	UI ui(&_root);
+	_root.Ui = &ui;
 
-	int64_t currentTime = GetUnixTime();
-
-	while (work) {
-		bool connected = _session.Connected();
-
-		if (connected)
-		{
-			fds[2].fd = _session.Socket;
-
-			if (_session.CanWrite()) {
-				fds[2].events = POLLIN | POLLOUT;
-			} else {
-				fds[2].events = POLLIN;
-			}
-		}
-
-		int res = poll(fds, connected ? 3 : 2, 1000);
-
-		if (res == -1) {
-			if (errno == EINTR) {
-				_ui.ProcessResize();
-				work = _ui.ProcessEvent();
-				continue;
-			} else {
-				THROW("Error on poll.");
-			}
-		}
-
-		int64_t newTime = GetUnixTime();
-		bool updateTime = newTime - currentTime >= 2;
-
-		if (updateTime) {
-			currentTime = newTime;
-		}
-
-		if (fds[0].revents & POLLIN) {
-			work = _ui.ProcessEvent();
-		}
-
-		if (fds[1].revents & POLLIN) {
-			_ui.ProcessSound();
-		}
-
-		if (connected) {
-			bool endSession = false;
-
-			if (fds[2].revents & POLLOUT) {
-				endSession = !_session.Write();
-			}
-
-			if (!endSession && (fds[2].revents & POLLIN)) {
-				endSession = !_session.Read();
-			}
-
-			if (!endSession && _session.CanReceive()) {
-				endSession = !_session.Process();
-			}
-
-			if (!endSession && updateTime) {
-				endSession = !_session.TimePassed();
-			}
-
-			if (endSession) {
-				_ui.Disconnect();
-			}
-		}
-	}
-
-	delete[] fds;
+	dispatcher.Run();
 
 	return 0;
+}
+
+void Client::GetPassword()
+{
+	const char *prompt = "Enter password: ";
+	int res = write(1, prompt, strlen(prompt));
+
+	if (res != (int)strlen(prompt)) {
+		THROW("Failed to ask for password.");
+	}
+
+	String password;
+
+	while (password.Length() < 100000) {
+		char c;
+		int res = read(0, &c, 1);
+
+		if (res <= 0 || c == '\n') {
+			break;
+		}
+
+		password += c;
+	}
+
+	if (!password.Length()) {
+		THROW("Empty password is not allowed.");
+	}
+
+	if (password.Length() >= 100000) {
+		THROW("Password is too long.");
+	}
+
+	GenerateKeys(password);
+	password.Wipe();
+}
+
+void Client::GenerateKeys(const String &password)
+{
+	uint8_t salt[SALT_SIZE];
+	GetSalt("talk.salt", salt);
+	DeriveKey(password.CStr(), salt, _privateKey);
+	crypto_wipe(salt, SALT_SIZE);
+	GeneratePublicKey(_privateKey, _publicKey);
 }

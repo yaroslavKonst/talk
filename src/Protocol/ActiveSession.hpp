@@ -1,6 +1,7 @@
 #ifndef _ACTIVE_SESSION_HPP
 #define _ACTIVE_SESSION_HPP
 
+#include "../Message/Message.hpp"
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
 
@@ -23,6 +24,7 @@
 #define SESSION_COMMAND_VOICE_REQUEST 501
 #define SESSION_COMMAND_VOICE_END 502
 #define SESSION_COMMAND_VOICE_DATA 503
+
 #define SESSION_RESPONSE_VOICE_RINGING 510
 #define SESSION_RESPONSE_VOICE_ACCEPT 511
 #define SESSION_RESPONSE_VOICE_DECLINE 512
@@ -47,6 +49,7 @@ namespace CommandTextMessage
 
 	struct Response
 	{
+		Message::MessageID ID;
 		int32_t Status;
 	};
 
@@ -63,8 +66,15 @@ namespace CommandDeliverMessage
 		CowBuffer<uint8_t> Message;
 	};
 
+	struct Response
+	{
+		Message::MessageID ID;
+	};
+
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
 	CowBuffer<uint8_t> BuildCommand(const Command &data);
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
+	CowBuffer<uint8_t> BuildResponse(const Response &data);
 }
 
 namespace CommandListUsers

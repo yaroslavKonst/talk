@@ -2,46 +2,58 @@
 #define _CLIENT_SESSION_HPP
 
 #include "Session.hpp"
+#include "../Client/Processors.hpp"
+#include "../Client/Root.hpp"
 #include "../Crypto/Crypto.hpp"
 
-class MessageProcessor
+struct ClientSession : public Session, public NetworkEventProcessor
 {
-public:
-	virtual ~MessageProcessor();
-
-	// Text.
-	virtual void NotifyDelivery(void *userPointer, int32_t status) = 0;
-	virtual void DeliverMessage(CowBuffer<uint8_t> message) = 0;
-
-	virtual void UpdateUserData(const uint8_t *key, String name) = 0;
-
-	virtual int64_t GetLatestReceiveTimestamp() = 0;
-
-	// Voice.
-	virtual void VoiceRequest(const uint8_t *key, int64_t timestamp) = 0;
-	virtual void VoiceInitResponse(int32_t code) = 0;
-	virtual void VoiceEnd() = 0;
-	virtual void ReceiveVoiceFrame(CowBuffer<uint8_t> frame) = 0;
-};
-
-struct ClientSession : public Session
-{
-	ClientSession();
+	ClientSession(Root *root);
 	~ClientSession();
 
-	bool Connected()
+	uint8_t *GetPrivateKey() override
+	{
+		return PrivateKey;
+	}
+
+	uint8_t *GetPublicKey() override
+	{
+		return PublicKey;
+	}
+
+	uint8_t *GetSignaturePrivateKey() override
+	{
+		return SignaturePrivateKey;
+	}
+
+	uint8_t *GetSignaturePublicKey() override
+	{
+		return SignaturePublicKey;
+	}
+
+	uint8_t *GetPeerPublicKey() override
+	{
+		return PeerPublicKey;
+	}
+
+	int &GetSocket() override
+	{
+		return Socket;
+	}
+
+	bool Connected() override
 	{
 		return Socket != -1;
 	}
 
-	bool ConnectedActive()
+	bool ConnectedActive() override
 	{
 		return Socket != -1 && State == ClientStateActiveSession;
 	}
 
-	void Disconnect();
+	void Disconnect() override;
 
-	MessageProcessor *Processor;
+	Root *ClientRoot;
 
 	enum ClientSessionState
 	{
@@ -68,8 +80,8 @@ struct ClientSession : public Session
 
 	Stream Streams[StreamCount];
 
-	bool InitSession();
-	bool SendMessage(const CowBuffer<uint8_t> message, void *userPointer);
+	bool InitSession() override;
+	bool SendMessage(const CowBuffer<uint8_t> message) override;
 
 	struct SMUser
 	{
@@ -81,7 +93,7 @@ struct ClientSession : public Session
 	SMUser *SMUserPointersLast;
 	void ResetAllSent();
 
-	bool RequestUserList();
+	bool RequestUserList() override;
 	bool RequestNewMessages(int64_t timestamp);
 
 	bool InitVoice(const uint8_t *key, int64_t timestamp);

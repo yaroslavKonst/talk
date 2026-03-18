@@ -2,16 +2,13 @@
 #define _LOGIN_SCREEN_HPP
 
 #include "Screen.hpp"
-#include "ControlStorage.hpp"
-#include "../Common/IniFile.hpp"
+#include "Root.hpp"
+#include "UiHelpers.hpp"
 
 class LoginScreen : public Screen
 {
 public:
-	LoginScreen(
-		ClientSession *session,
-		IniFile *configFile,
-		ControlStorage *controls);
+	LoginScreen(Root *root);
 
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;
@@ -21,15 +18,13 @@ private:
 	bool _writingPort;
 	bool _writingKey;
 
-	String _ip;
-	String _port;
-	String _serverKeyHex;
+	UiHelpers::TextBox _ip;
+	UiHelpers::TextBox _port;
+	UiHelpers::TextBox _serverKeyHex;
 
-	String _status;
+	bool _modified;
 
-	ControlStorage *_controls;
-
-	bool MakeNonblocking(int fd);
+	Root *_root;
 };
 
 #endif

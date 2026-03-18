@@ -8,5 +8,6 @@
 #define NONCE_SIZE 24
 #define MAC_SIZE 16
 #define SALT_SIZE 16
+#define CRYPTO_HEADER_SIZE (MAC_SIZE + NONCE_SIZE)
 
 #endif

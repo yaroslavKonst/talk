@@ -6,8 +6,10 @@
 class ControlStorage
 {
 public:
-	ControlStorage(const uint8_t *key);
+	ControlStorage();
 	~ControlStorage();
+
+	void LoadKeys(String path);
 
 	int WorkExitKey()
 	{
@@ -430,7 +432,7 @@ private:
 	};
 
 	IniFile _configFile;
-	void InitConfig(const uint8_t *key);
+	void InitConfig();
 
 	void Load();
 

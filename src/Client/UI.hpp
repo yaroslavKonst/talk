@@ -1,32 +1,59 @@
 #ifndef _UI_HPP
 #define _UI_HPP
 
-#include <curses.h>
-
+#include "Root.hpp"
 #include "Screen.hpp"
-#include "VoiceChat.hpp"
-#include "../Protocol/ClientSession.hpp"
+#include "ControlStorage.hpp"
+#include "NotificationSystem.hpp"
+#include "../Common/Exception.hpp"
 
-class UI
+class UI :
+	public UIEventProcessor,
+	public DescriptorEventProcessor
 {
 public:
-	UI(ClientSession *session);
+	UI(Root *root);
 	~UI();
+
+	int GetDescriptor() override
+	{
+		return 0;
+	}
+
+	bool RequestRead() override
+	{
+		return true;
+	}
+
+	bool RequestWrite() override
+	{
+		return false;
+	}
+
+	void ProcessRead() override;
+
+	void ProcessWrite() override
+	{
+		THROW("This method must never be called.");
+	}
 
 	bool ProcessEvent();
 	void ProcessResize();
+	void Redraw() override;
 
-	void Disconnect();
-
-	int GetSoundReadFileDescriptor();
-	void ProcessSound();
+	void Notify(String message) override;
 
 private:
+	Root *_root;
 	Screen *_screen;
 
-	ClientSession *_session;
+	NotificationSystem _notifier;
 
-	VoiceChat _voiceChat;
+	int _rows;
+	int _columns;
+
+	void DrawConnectionState();
+	void DrawVoiceState();
 };
 
 #endif

@@ -6,20 +6,18 @@
 #include <curses.h>
 
 AttachmentScreen::AttachmentScreen(
-	Chat *chat,
+	Root *root,
 	bool extract,
-	ControlStorage *controls) :
-	Screen(nullptr)
+	ControlStorage *controls)
 {
-	_chat = chat;
+	_root = root;
+
 	_extract = extract;
 	_controls = controls;
 }
 
 void AttachmentScreen::Redraw()
 {
-	ClearScreen();
-
 	String helpString =
 		"Exit: " + _controls->AttachBackName() +
 		" | Proceed: " +

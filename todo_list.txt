@@ -1,0 +1,8 @@
+*. Client architecture refactoring.
+*. Server continuous events processing refactoring.
+*. Echo suppression.
+*. Direct voice connection via UDP.
+*. Protocol for server to server connection.
+*. Group chats.
+*. Lightweight voice relay.
+*. Mobile version.

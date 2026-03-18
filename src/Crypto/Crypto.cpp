@@ -18,7 +18,7 @@ static uint8_t Gen(uint8_t val)
 	return (val >> 1) | (bit << 7);
 }
 
-static void Scramble(uint8_t *buffer, uint64_t size, uint8_t init)
+uint8_t ApplyScrambler(uint8_t *buffer, uint64_t size, uint8_t init)
 {
 	uint8_t val = init;
 
@@ -26,12 +26,14 @@ static void Scramble(uint8_t *buffer, uint64_t size, uint8_t init)
 		buffer[i] = buffer[i] ^ val;
 		val = Gen(val);
 	}
+
+	return val;
 }
 
-static void GenerateRandomData(
+void GenerateRandomData(
 	uint64_t size,
 	uint8_t *buffer,
-	bool random = true)
+	bool random)
 {
 	uint64_t generatedBytes = 0;
 
@@ -129,12 +131,11 @@ CowBuffer<uint8_t> Encrypt(
 	uint64_t addSize)
 {
 	CowBuffer<uint8_t> result(
-		1 + MAC_SIZE + NONCE_SIZE + plaintext.Size());
+		MAC_SIZE + NONCE_SIZE + plaintext.Size());
 
-	uint8_t *scramblerInit = result.Pointer();
-	uint8_t *mac = result.Pointer() + 1;
-	uint8_t *nonce = result.Pointer() + 1 + MAC_SIZE;
-	uint8_t *message = result.Pointer() + 1 + MAC_SIZE + NONCE_SIZE;
+	uint8_t *mac = result.Pointer();
+	uint8_t *nonce = result.Pointer() + MAC_SIZE;
+	uint8_t *message = result.Pointer() + MAC_SIZE + NONCE_SIZE;
 
 	UpdateNonce(stream.Nonce);
 
@@ -150,9 +151,6 @@ CowBuffer<uint8_t> Encrypt(
 		plaintext.Pointer(),
 		plaintext.Size());
 
-	GenerateRandomData(1, scramblerInit, false);
-	Scramble(result.Pointer() + 1, result.Size() - 1, scramblerInit[0]);
-
 	return result;
 }
 
@@ -162,21 +160,13 @@ CowBuffer<uint8_t> Decrypt(
 	const uint8_t *addData,
 	uint64_t addSize)
 {
-	if (cyphertext.Size() <= 1 + MAC_SIZE + NONCE_SIZE) {
+	if (cyphertext.Size() <= MAC_SIZE + NONCE_SIZE) {
 		return CowBuffer<uint8_t>();
 	}
 
-	CowBuffer<uint8_t> workplace = cyphertext;
-
-	uint8_t *scramblerInit = workplace.Pointer();
-	uint8_t *mac = workplace.Pointer() + 1;
-	uint8_t *nonce = workplace.Pointer() + 1 + MAC_SIZE;
-	uint8_t *message = workplace.Pointer() + 1 + MAC_SIZE + NONCE_SIZE;
-
-	Scramble(
-		workplace.Pointer() + 1,
-		workplace.Size() - 1,
-		scramblerInit[0]);
+	const uint8_t *mac = cyphertext.Pointer();
+	const uint8_t *nonce = cyphertext.Pointer(MAC_SIZE);
+	const uint8_t *message = cyphertext.Pointer(MAC_SIZE + NONCE_SIZE);
 
 	int success = VerifyNonce(stream.Nonce, nonce);
 
@@ -185,7 +175,7 @@ CowBuffer<uint8_t> Decrypt(
 	}
 
 	CowBuffer<uint8_t> result(
-		workplace.Size() - (1 + MAC_SIZE + NONCE_SIZE));
+		cyphertext.Size() - (MAC_SIZE + NONCE_SIZE));
 
 	success = crypto_aead_unlock(
 		result.Pointer(),
@@ -348,7 +338,7 @@ CowBuffer<uint8_t> ApplyScrambler(CowBuffer<uint8_t> data)
 	GenerateRandomData(1, result.Pointer(), false);
 
 	if (data.Size()) {
-		Scramble(
+		ApplyScrambler(
 			result.Pointer() + 1,
 			result.Size() - 1,
 			result.Pointer()[0]);
@@ -363,7 +353,7 @@ CowBuffer<uint8_t> RemoveScrambler(CowBuffer<uint8_t> data)
 		return CowBuffer<uint8_t>();
 	}
 
-	Scramble(data.Pointer() + 1, data.Size() - 1, data.Pointer()[0]);
+	ApplyScrambler(data.Pointer() + 1, data.Size() - 1, data.Pointer()[0]);
 	return data.Slice(1, data.Size() - 1);
 }
 
@@ -392,21 +382,19 @@ CowBuffer<uint8_t> CryptoStreamReader::Decrypt(
 	const CowBuffer<uint8_t> cyphertext,
 	const CowBuffer<uint8_t> add)
 {
-	const CowBuffer<uint8_t> cyphertextDes = RemoveScrambler(cyphertext);
-
-	if (cyphertextDes.Size() <= MAC_SIZE) {
+	if (cyphertext.Size() <= MAC_SIZE) {
 		return CowBuffer<uint8_t>();
 	}
 
-	CowBuffer<uint8_t> result(cyphertextDes.Size() - MAC_SIZE);
+	CowBuffer<uint8_t> result(cyphertext.Size() - MAC_SIZE);
 
 	int error = crypto_aead_read(
 		&_ctx,
 		result.Pointer(),
-		cyphertextDes.Pointer(),
+		cyphertext.Pointer(),
 		add.Size() ? add.Pointer() : nullptr,
 		add.Size(),
-		cyphertextDes.Pointer(MAC_SIZE),
+		cyphertext.Pointer(MAC_SIZE),
 		result.Size());
 
 	if (error) {
@@ -443,5 +431,5 @@ CowBuffer<uint8_t> CryptoStreamWriter::Encrypt(
 		plaintext.Pointer(),
 		plaintext.Size());
 
-	return ApplyScrambler(result);
+	return result;
 }

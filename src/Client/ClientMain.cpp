@@ -1,5 +1,6 @@
-#include "Client.hpp"
+#include <cstdio>
 
+#include "Client.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/Version.hpp"
 

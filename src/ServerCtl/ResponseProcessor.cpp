@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <arpa/inet.h>
 
-#include "SocketName.hpp"
+#include "../Protocol/ControlParser.hpp"
 #include "../Common/MyString.hpp"
 #include "../Common/Hex.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
