@@ -11,7 +11,10 @@ class ControlSocket :
 	public ControlSessionStorage
 {
 public:
-	ControlSocket(UserDB *users, EventDispatcher *dispatcher);
+	ControlSocket(
+		UserDB *users,
+		EventDispatcher *dispatcher,
+		const uint8_t *publicKey);
 	~ControlSocket();
 
 	int GetDescriptor() override
@@ -40,6 +43,11 @@ public:
 	void AddSession(int fd);
 	void MarkSessionForRemoval(ControlSession *session) override;
 
+	const uint8_t *GetPublicKey() override
+	{
+		return _publicKey;
+	}
+
 private:
 	int _socketFd;
 	UserDB *_users;
@@ -54,6 +62,8 @@ private:
 
 	ControlNode *_controlSessions;
 	bool _timeQuantRequested;
+
+	const uint8_t *_publicKey;
 };
 
 #endif

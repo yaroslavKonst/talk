@@ -265,7 +265,7 @@ void UserDB::LoadUserData()
 	CowBuffer<String> userNames = ListDirectory(root);
 
 	for (unsigned int i = 0; i < userNames.Size(); i++) {
-		User *user = new User(userNames[i]);
+		User *user = new User(userNames[i], _dispatcher);
 
 		_usersByName.AddEntry(user);
 		_usersByKey.AddEntry(user);

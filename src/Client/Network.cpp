@@ -20,16 +20,6 @@ Network::Network(Root *root)
 
 Network::~Network()
 {
-	if (_handshake) {
-		delete _handshake;
-		_handshake = nullptr;
-	}
-
-	if (_session) {
-		//delete _session;
-		_session = nullptr;
-	}
-
 	CloseConnection();
 }
 
@@ -39,9 +29,9 @@ bool Network::RequestRead()
 		return _handshake->RequestRead();
 	}
 
-	/*if (_session) {
+	if (_session) {
 		return _session->RequestRead();
-	}*/
+	}
 
 	return false;
 }
@@ -52,9 +42,9 @@ bool Network::RequestWrite()
 		return _handshake->RequestWrite();
 	}
 
-	/*if (_session) {
+	if (_session) {
 		return _session->RequestWrite();
-	}*/
+	}
 
 	return false;
 }
@@ -65,22 +55,40 @@ void Network::ProcessRead()
 		bool success = _handshake->ProcessRead();
 
 		if (!success) {
-			delete _handshake;
-			_handshake = nullptr;
 			CloseConnection();
 			_root->Ui->Notify("Handshake failed.");
+			return;
 		}
 
 		if (_handshake->ConnectionSuccessful()) {
+			_session = new ClientSession(
+				_fd,
+				_handshake->GetOutES(),
+				_handshake->GetInES(),
+				_handshake->GetOutScramblerInit(),
+				_handshake->GetInScramblerInit());
+
 			delete _handshake;
 			_handshake = nullptr;
-			// TODO: open session.
+			_root->Ui->Redraw();
 		}
 
 		return;
 	}
 
-	THROW("Not implemented.");
+	if (_session) {
+		bool success = _session->ProcessRead();
+
+		if (!success) {
+			CloseConnection();
+			_root->Ui->Notify("Connection lost.");
+			return;
+		}
+
+		return;
+	}
+
+	THROW("Session is inactive.");
 }
 
 void Network::ProcessWrite()
@@ -89,22 +97,40 @@ void Network::ProcessWrite()
 		bool success = _handshake->ProcessWrite();
 
 		if (!success) {
-			delete _handshake;
-			_handshake = nullptr;
 			CloseConnection();
 			_root->Ui->Notify("Handshake failed.");
+			return;
 		}
 
 		if (_handshake->ConnectionSuccessful()) {
+			_session = new ClientSession(
+				_fd,
+				_handshake->GetOutES(),
+				_handshake->GetInES(),
+				_handshake->GetOutScramblerInit(),
+				_handshake->GetInScramblerInit());
+
 			delete _handshake;
 			_handshake = nullptr;
-			// TODO: open session.
+			_root->Ui->Redraw();
 		}
 
 		return;
 	}
 
-	THROW("Not implemented.");
+	if (_session) {
+		bool success = _session->ProcessWrite();
+
+		if (!success) {
+			CloseConnection();
+			_root->Ui->Notify("Connection lost.");
+			return;
+		}
+
+		return;
+	}
+
+	THROW("Session is inactive.");
 }
 
 void Network::ProcessTimeEvent()
@@ -135,6 +161,16 @@ void Network::StartConnection(int fd, const uint8_t *serverKey)
 
 void Network::CloseConnection()
 {
+	if (_handshake) {
+		delete _handshake;
+		_handshake = nullptr;
+	}
+
+	if (_session) {
+		delete _session;
+		_session = nullptr;
+	}
+
 	if (_fd != -1) {
 		shutdown(_fd, SHUT_RDWR);
 		close(_fd);

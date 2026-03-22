@@ -63,9 +63,9 @@ static CowBuffer<uint8_t> RequestGetKey()
 
 static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
 {
-	if (argc != 6) {
+	if (argc != 5) {
 		printf(
-			"Usage: %s %s NAME KEY SIGNATURE\n",
+			"Usage: %s %s NAME KEY\n",
 			UserSection,
 			AddUserCommand);
 		THROW("Invalid number of arguments.");
@@ -73,7 +73,6 @@ static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
 
 	String name(argv[3]);
 	String keyHex(argv[4]);
-	String signatureHex(argv[5]);
 
 	if (name.Length() == 0) {
 		THROW("Name is empty.\n");
@@ -84,33 +83,14 @@ static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
 			ToString(KEY_SIZE * 2) + ".");
 	}
 
-	if (signatureHex.Length() != SIGNATURE_PUBLIC_KEY_SIZE * 2) {
-		THROW("Signature length is not equal to " +
-			ToString(SIGNATURE_PUBLIC_KEY_SIZE * 2) + ".");
-	}
+	CowBuffer<uint8_t> key(KEY_SIZE);
+	HexToData(keyHex, key.Pointer());
 
-	CowBuffer<uint8_t> resultBuffer(
-		sizeof(int32_t) * 2 +
-		KEY_SIZE +
-		SIGNATURE_PUBLIC_KEY_SIZE +
-		name.Length());
-
-	int32_t *command = resultBuffer.SwitchType<int32_t>();
-	uint8_t *key = resultBuffer.Pointer(sizeof(int32_t));
-	uint8_t *signature = resultBuffer.Pointer(
-		sizeof(int32_t) + KEY_SIZE);
-	int32_t *nameLength = resultBuffer.SwitchType<int32_t>(
-		sizeof(int32_t) + KEY_SIZE +
-		SIGNATURE_PUBLIC_KEY_SIZE);
-	uint8_t *nameBuffer = resultBuffer.Pointer(
-		sizeof(int32_t) * 2 + KEY_SIZE +
-		SIGNATURE_PUBLIC_KEY_SIZE);
-
-	*command = COMMAND_ADD_USER;
-	*nameLength = name.Length();
-	memcpy(nameBuffer, name.CStr(), *nameLength);
-	HexToData(keyHex, key);
-	HexToData(signatureHex, signature);
+	CommandAddUser::Request request;
+	request.Name = name;
+	request.Key = key.Pointer();
+	
+	CowBuffer<uint8_t> resultBuffer = CommandAddUser::BuildRequest(request);
 
 	return resultBuffer;
 }
@@ -118,40 +98,43 @@ static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
 static CowBuffer<uint8_t> RequestRemoveUser(int argc, char **argv)
 {
 	if (argc != 4) {
-		printf("Usage: %s %s KEY\n", UserSection, RemoveUserCommand);
+		printf("Usage: %s %s NAME\n", UserSection, RemoveUserCommand);
 		THROW("Invalid number of arguments.");
 	}
 
-	String keyHex(argv[3]);
+	String name(argv[3]);
 
-	if (keyHex.Length() != KEY_SIZE * 2) {
-		THROW("Key length is not equal to " +
-			ToString(KEY_SIZE * 2) + ".");
+	if (name.Length() == 0) {
+		THROW("Name is empty.");
 	}
 
-	CowBuffer<uint8_t> resultBuffer(sizeof(int32_t) + KEY_SIZE);
-
-	int32_t *command = resultBuffer.SwitchType<int32_t>();
-	uint8_t *key = resultBuffer.Pointer(sizeof(int32_t));
-
-	*command = COMMAND_REMOVE_USER;
-	HexToData(keyHex, key);
+	CommandRemoveUser::Request request;
+	request.Name = name;
+	CowBuffer<uint8_t> resultBuffer = CommandRemoveUser::BuildRequest(
+		request);
 
 	return resultBuffer;
 }
 
-static CowBuffer<uint8_t> RequestListUsers()
+static CowBuffer<uint8_t> RequestListUsers(int argc, char **argv)
 {
-	CowBuffer<uint8_t> result(sizeof(int32_t));
-	*result.SwitchType<int32_t>() = COMMAND_LIST_USERS;
+	CommandListUsers::Request request;
+	request.Flags = 0;
 
+	for (int i = 3; i < argc; i++) {
+		if (String(argv[i]) == "key") {
+			request.Flags |= CommandListUsers::ShowKeys;
+		}
+	}
+
+	CowBuffer<uint8_t> result = CommandListUsers::BuildRequest(request);
 	return result;
 }
 
 static CowBuffer<uint8_t> RequestListBannedIP()
 {
 	CowBuffer<uint8_t> result(sizeof(int32_t));
-	*result.SwitchType<int32_t>() = COMMAND_LIST_BANNED_IP;
+	*result.SwitchType<int32_t>() = COMMAND_IP_LIST_BANNED;
 
 	return result;
 }
@@ -164,7 +147,7 @@ static CowBuffer<uint8_t> RequestBanIP(int argc, char **argv)
 	}
 
 	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(uint32_t));
-	*result.SwitchType<int32_t>() = COMMAND_BAN_IP;
+	*result.SwitchType<int32_t>() = COMMAND_IP_BAN;
 
 	struct in_addr addr;
 
@@ -186,7 +169,7 @@ static CowBuffer<uint8_t> RequestUnbanIP(int argc, char **argv)
 	}
 
 	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(uint32_t));
-	*result.SwitchType<int32_t>() = COMMAND_UNBAN_IP;
+	*result.SwitchType<int32_t>() = COMMAND_IP_UNBAN;
 
 	struct in_addr addr;
 
@@ -203,7 +186,7 @@ static CowBuffer<uint8_t> RequestUnbanIP(int argc, char **argv)
 static CowBuffer<uint8_t> RequestReload()
 {
 	CowBuffer<uint8_t> result(sizeof(int32_t));
-	*result.SwitchType<int32_t>() = COMMAND_RELOAD;
+	*result.SwitchType<int32_t>() = COMMAND_RELOAD_CONFIG;
 
 	return result;
 }
@@ -220,7 +203,7 @@ CowBuffer<uint8_t> CreateRequestUser(int argc, char **argv)
 	} else if (!strcmp(argv[2], RemoveUserCommand)) {
 		return RequestRemoveUser(argc, argv);
 	} else if (!strcmp(argv[2], ListUsersCommand)) {
-		return RequestListUsers();
+		return RequestListUsers(argc, argv);
 	}
 
 	THROW(String(argv[2]) + ": unknown command.");

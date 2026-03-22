@@ -1,16 +1,19 @@
 #ifndef _USER_HPP
 #define _USER_HPP
 
+#include "ServerSession.hpp"
 #include "../Common/MyString.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
-class User
+class User :
+	public ServerSessionStorage,
+	public QuantEventProcessor
 {
 public:
 	static void CreateUser(String name, const uint8_t publicKey[KEY_SIZE]);
 	static void RemoveUser(String name);
 
-	User(String name);
+	User(String name, EventDispatcher *dispatcher);
 	~User();
 
 	const uint8_t *GetPublicKey()
@@ -23,17 +26,28 @@ public:
 		return _name;
 	}
 
-	void AddSession(int fd);
-	//void MarkSessionForRemoval(ServerSession *session) override;
+	void AddSession(
+		int fd,
+		EncryptedStream *outES,
+		EncryptedStream *inES,
+		uint8_t outScramblerInit,
+		uint8_t inScramblerInit);
+	void MarkSessionForRemoval(ServerSession *session) override;
+
+	void ProcessQuant() override;
 
 private:
+	EventDispatcher *_dispatcher;
+
 	struct UserSession
 	{
 		UserSession *Next;
+		ServerSession *Session;
 		bool Remove;
 	};
 
 	UserSession *_sessions;
+	bool _timeQuantRequested;
 
 	String _root;
 

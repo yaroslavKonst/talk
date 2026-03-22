@@ -243,7 +243,12 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 		return;
 	}
 
-	_user->AddSession(_fd);
+	_user->AddSession(
+		_fd,
+		&_outES,
+		&_inES,
+		_outScramblerInit,
+		_inScramblerInit);
 
 	_fd = -1;
 	_storage->MarkSessionForRemoval(this);

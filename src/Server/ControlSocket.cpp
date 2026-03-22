@@ -6,11 +6,15 @@
 
 #include "../Protocol/ControlParser.hpp"
 
-ControlSocket::ControlSocket(UserDB *users, EventDispatcher *dispatcher)
+ControlSocket::ControlSocket(
+	UserDB *users,
+	EventDispatcher *dispatcher,
+	const uint8_t *publicKey)
 {
 	_socketFd = -1;
 	_dispatcher = dispatcher;
 	_users = users;
+	_publicKey = publicKey;
 
 	_controlSessions = nullptr;
 	_timeQuantRequested = false;

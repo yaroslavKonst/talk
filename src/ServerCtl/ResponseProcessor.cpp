@@ -83,7 +83,7 @@ static int ProcessGetKey(const CowBuffer<uint8_t> response)
 		return 1;
 	}
 
-	String keyHex = DataToHex(response.Pointer() + sizeof(code), KEY_SIZE);
+	String keyHex = DataToHex(response.Pointer(sizeof(code)), KEY_SIZE);
 	printf("%s\n", keyHex.CStr());
 	return 0;
 }
@@ -186,13 +186,13 @@ int ProcessResponse(
 		return ProcessResultCode(response);
 	} else if (commandId == COMMAND_LIST_USERS) {
 		return ProcessListUsers(response);
-	} else if (commandId == COMMAND_LIST_BANNED_IP) {
+	} else if (commandId == COMMAND_IP_LIST_BANNED) {
 		return ProcessListBannedIP(response);
-	} else if (commandId == COMMAND_BAN_IP) {
+	} else if (commandId == COMMAND_IP_BAN) {
 		return ProcessResultCode(response);
-	} else if (commandId == COMMAND_UNBAN_IP) {
+	} else if (commandId == COMMAND_IP_UNBAN) {
 		return ProcessResultCode(response);
-	} else if (commandId == COMMAND_RELOAD) {
+	} else if (commandId == COMMAND_RELOAD_CONFIG) {
 		return ProcessResultCode(response);
 	}
 

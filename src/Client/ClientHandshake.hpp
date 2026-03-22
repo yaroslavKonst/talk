@@ -22,6 +22,26 @@ public:
 
 	bool ConnectionSuccessful();
 
+	EncryptedStream &GetOutES()
+	{
+		return _outES;
+	}
+
+	EncryptedStream &GetInES()
+	{
+		return _inES;
+	}
+
+	uint8_t GetOutScramblerInit()
+	{
+		return _outScramblerInit;
+	}
+
+	uint8_t GetInScramblerInit()
+	{
+		return _inScramblerInit;
+	}
+
 private:
 	enum class State
 	{

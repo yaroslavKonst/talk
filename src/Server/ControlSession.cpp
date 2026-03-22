@@ -8,6 +8,7 @@
 #include "../Common/Exception.hpp"
 #include "../Common/Log.hpp"
 #include "../Common/Debug.hpp"
+#include "../Crypto/CryptoDefinitions.hpp"
 
 ControlSession::ControlSession(
 	int fd,
@@ -178,7 +179,9 @@ void ControlSession::Process(const CowBuffer<uint8_t> buffer)
 	switch (command) {
 		case COMMAND_SHUTDOWN:
 			ProcessShutdownCommand();
-			_dispatcher->Stop();
+			break;
+		case COMMAND_GET_PUBLIC_KEY:
+			ProcessGetKeyCommand();
 			break;
 		default:
 			ProcessUnknownCommand(command);
@@ -210,6 +213,19 @@ void ControlSession::ProcessUnknownCommand(int32_t command)
 
 void ControlSession::ProcessShutdownCommand()
 {
-	Log("Control: Shutdown requested.");
+	Log("Control: Shutdown is requested.");
 	_dispatcher->Stop();
+}
+
+void ControlSession::ProcessGetKeyCommand()
+{
+	Log("Control: Public key is requested.");
+
+	CowBuffer<uint8_t> code(sizeof(int32_t));
+	*code.SwitchType<int32_t>() = OK;
+
+	CowBuffer<uint8_t> key(KEY_SIZE);
+	memcpy(key.Pointer(), _storage->GetPublicKey(), KEY_SIZE);
+
+	SendResponse(code.Concat(key));
 }

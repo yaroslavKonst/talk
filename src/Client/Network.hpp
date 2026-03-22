@@ -3,6 +3,7 @@
 
 #include "Root.hpp"
 #include "ClientHandshake.hpp"
+#include "ClientSession.hpp"
 
 class Network :
 	public NetworkEventProcessor,
@@ -35,7 +36,7 @@ private:
 	Root *_root;
 
 	ClientHandshake *_handshake;
-	void *_session;
+	ClientSession *_session;
 
 	void CloseConnection();
 };

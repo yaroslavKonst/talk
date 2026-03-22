@@ -8,7 +8,10 @@ SERVER_MODULES =\
 	Server/ControlSession.o \
 	Server/Config.o \
 	Server/ServerHandshake.o \
+	Server/ServerSession.o \
 	Protocol/HandshakeParser.o \
+	Protocol/SessionProtocol.o \
+	Protocol/ControlParser.o \
 	Common/EventDispatcher.o \
 	Common/MyString.o \
 	Common/UnixTime.o \
@@ -26,6 +29,7 @@ SERVERCTL_MODULES=\
 	ServerCtl/ServerCtlMain.o \
 	ServerCtl/RequestBuilder.o \
 	ServerCtl/ResponseProcessor.o \
+	Protocol/ControlParser.o \
 	Common/UnixTime.o \
 	Common/MyString.o \
 	Common/Version.o \
@@ -39,6 +43,7 @@ CLIENT_MODULES=\
 	Client/Config.o \
 	Client/Network.o \
 	Client/ClientHandshake.o \
+	Client/ClientSession.o \
 	Client/UI.o \
 	Client/UiHelpers.o \
 	Client/Screen.o \
@@ -46,6 +51,7 @@ CLIENT_MODULES=\
 	Client/LoginScreen.o \
 	Client/NotificationSystem.o \
 	Protocol/HandshakeParser.o \
+	Protocol/SessionProtocol.o \
 	Common/MyString.o \
 	Common/Version.o \
 	Common/SignalHandling.o \
