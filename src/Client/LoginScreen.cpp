@@ -52,25 +52,19 @@ void LoginScreen::Redraw()
 		" | Previous: " + _root->Conf->LoginUpName() +
 		" | Connect: " + _root->Conf->LoginConnectName();
 
-	move(1, 0);
+	move(4, 0);
 	addstr(helpString.CStr());
 
-	move(_rows / 2 - 7, 4);
-	addstr("Your public key:");
-	move(_rows / 2 - 6, 4);
-	String hex = DataToHex(_root->PublicKey, KEY_SIZE);
-	addstr(hex.CStr());
-
-	_ip.SetCaptionPosition(_rows / 2 - 4, 4);
+	_ip.SetCaptionPosition(_rows / 2 - 2, 4);
 	_ip.AlignTextToCaption();
 	_ip.Redraw();
 
-	_port.SetCaptionPosition(_rows / 2 - 2, 4);
+	_port.SetCaptionPosition(_rows / 2, 4);
 	_port.AlignTextToCaption();
 	_port.Redraw();
 
-	_serverKeyHex.SetCaptionPosition(_rows / 2, 4);
-	_serverKeyHex.SetTextPosition(_rows / 2 + 1, 4);
+	_serverKeyHex.SetCaptionPosition(_rows / 2 + 2, 4);
+	_serverKeyHex.SetTextPosition(_rows / 2 + 3, 4);
 	_serverKeyHex.Redraw();
 
 	if (_writingIp) {

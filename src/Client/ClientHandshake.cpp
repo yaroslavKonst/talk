@@ -5,11 +5,13 @@
 
 ClientHandshake::ClientHandshake(
 	int fd,
+	String name,
 	const uint8_t *privateKey,
 	const uint8_t *publicKey,
 	const uint8_t *serverPublicKey)
 {
 	_fd = fd;
+	_name = name;
 	_privateKey = privateKey;
 	_publicKey = publicKey;
 	memcpy(_serverPublicKey, serverPublicKey, KEY_SIZE);
@@ -104,14 +106,24 @@ bool ClientHandshake::ConnectionSuccessful()
 void ClientHandshake::InitSyn()
 {
 	HandshakeSyn::Data data;
-	data.Key = _publicKey;
+	data.Name = _name;
 
 	CowBuffer<uint8_t> buffer = HandshakeSyn::Build(data);
 
-	buffer = ApplyScrambler(buffer);
-	_outScramblerInit = buffer[0];
+	GenerateRandomData(
+		sizeof(_outScramblerInit),
+		&_outScramblerInit,
+		false);
 
-	_writer = new StreamWriter(_fd, buffer);
+	CowBuffer<uint8_t> outScrambler(1);
+	outScrambler[0] = _outScramblerInit;
+
+	_outScramblerInit = ApplyScrambler(
+		buffer.Pointer(),
+		buffer.Size(),
+		_outScramblerInit);
+
+	_writer = new StreamWriter(_fd, outScrambler.Concat(buffer));
 	_reader = new StreamReader(_fd, HandshakeSynAck::Length + 1);
 
 	_state = State::WaitingSynAck;
@@ -124,7 +136,12 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 	}
 
 	_inScramblerInit = buffer[0];
-	buffer = RemoveScrambler(buffer);
+
+	buffer = buffer.Slice(1, buffer.Size() - 1);
+	_inScramblerInit = ApplyScrambler(
+		buffer.Pointer(),
+		buffer.Size(),
+		_inScramblerInit);
 
 	HandshakeSynAck::Data data;
 	bool parseResult = HandshakeSynAck::Parse(buffer, data);

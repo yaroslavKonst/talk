@@ -97,7 +97,7 @@ $(BUILD_DIR)/%.o: %.cpp | $(BUILD_DIRS)
 	$(CXX) $(OBJ_FLAG) -o $@ $<
 
 $(BUILD_DIR)/%.o: %.c | $(BUILD_DIRS)
-	$(C) $(OBJ_FLAG) -o $@ $<
+	$(CC) $(OBJ_FLAG) -o $@ $<
 
 $(BUILD_DIRS):
 	mkdir -p $(BUILD_DIRS)

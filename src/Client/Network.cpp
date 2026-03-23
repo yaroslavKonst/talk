@@ -135,7 +135,8 @@ void Network::ProcessWrite()
 
 void Network::ProcessTimeEvent()
 {
-	THROW("Not implemented.");
+	CloseConnection();
+	_root->Ui->Notify("Connection lost due to timeout.");
 }
 
 bool Network::ConnectionActive()
@@ -150,17 +151,34 @@ bool Network::HandshakeActive()
 
 void Network::StartConnection(int fd, const uint8_t *serverKey)
 {
+	SetTimestamp(GetUnixTime());
+
 	_fd = fd;
+
+	String name = _root->Conf->GetName();
+
+	if (name.Length() == 0) {
+		CloseConnection();
+		_root->Ui->Notify("Please specify user name.");
+		return;
+	}
 
 	_handshake = new ClientHandshake(
 		_fd,
+		name,
 		_root->PrivateKey,
 		_root->PublicKey,
 		serverKey);
+
+	_root->Dispatcher->RegisterDescriptorProcessor(this);
+	_root->Dispatcher->RegisterTimeProcessor(this);
 }
 
 void Network::CloseConnection()
 {
+	_root->Dispatcher->UnregisterDescriptorProcessor(this);
+	_root->Dispatcher->UnregisterTimeProcessor(this);
+
 	if (_handshake) {
 		delete _handshake;
 		_handshake = nullptr;

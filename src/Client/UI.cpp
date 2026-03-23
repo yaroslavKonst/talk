@@ -7,6 +7,8 @@
 #include "WorkScreen.hpp"
 #include "UiHelpers.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/Hex.hpp"
+#include "../Crypto/CryptoDefinitions.hpp"
 
 UI::UI(Root *root) :
 	_notifier(root)
@@ -98,8 +100,9 @@ void UI::Redraw()
 {
 	UiHelpers::ClearScreen(0, _rows - 1, 0, _columns - 1);
 
+	DrawUserData();
 	DrawConnectionState();
-	//DrawVoiceState();
+	DrawVoiceState();
 
 	if (_screen) {
 		_screen->Redraw();
@@ -125,9 +128,26 @@ void UI::BlockCancel(void *handle)
 	_notifier.BlockCancel(handle);
 }
 
-void UI::DrawConnectionState()
+void UI::DrawUserData()
 {
 	move(0, 0);
+	addstr("Login: ");
+	if (_root->Conf->GetName().Length() > 0) {
+		addstr(_root->Conf->GetName().CStr());
+	} else {
+		attrset(COLOR_PAIR(RED_TEXT));
+		addstr("not specified.");
+		attrset(COLOR_PAIR(DEFAULT_TEXT));
+	}
+
+	move(1, 0);
+	addstr("Key: ");
+	addstr(DataToHex(_root->PublicKey, KEY_SIZE).CStr());
+}
+
+void UI::DrawConnectionState()
+{
+	move(2, 0);
 	addstr("Connection status: ");
 
 	if (_root->Network->ConnectionActive()) {
@@ -145,12 +165,12 @@ void UI::DrawConnectionState()
 	addch('.');
 }
 
-/*void UI::DrawVoiceState()
+void UI::DrawVoiceState()
 {
-	move(1, 0);
+	move(3, 0);
 	addstr("Voice status: ");
 
-	VoiceEventProcessor::VoiceState state = _root->Voice->GetState();
+/*	VoiceEventProcessor::VoiceState state = _root->Voice->GetState();
 
 	switch (state) {
 	case VoiceEventProcessor::VoiceStateOff:
@@ -191,6 +211,6 @@ void UI::DrawConnectionState()
 		}
 	}
 
-	attrset(COLOR_PAIR(DEFAULT_TEXT));
+	attrset(COLOR_PAIR(DEFAULT_TEXT));*/
 	addch('.');
-}*/
+}

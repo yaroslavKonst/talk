@@ -10,6 +10,9 @@ public:
 
 	void Save();
 
+	String GetName();
+	void SetName(String value);
+
 	String GetServerAddress();
 	void SetServerAddress(String value);
 

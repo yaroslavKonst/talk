@@ -10,6 +10,7 @@ class ClientHandshake
 public:
 	ClientHandshake(
 		int fd,
+		String name,
 		const uint8_t *privateKey,
 		const uint8_t *publicKey,
 		const uint8_t *serverPublicKey);
@@ -51,6 +52,7 @@ private:
 
 	State _state;
 	int _fd;
+	String _name;
 	const uint8_t *_privateKey;
 	const uint8_t *_publicKey;
 	uint8_t _serverPublicKey[KEY_SIZE];

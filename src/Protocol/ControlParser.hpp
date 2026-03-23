@@ -16,6 +16,7 @@
 #define ERROR_INVALID_USER 104
 #define ERROR_USER_EXISTS 105
 #define ERROR_INVALID_IP 106
+#define ERROR_UNSUPPORTED_OPTION 107
 
 // Commands.
 #define COMMAND_SHUTDOWN 1
@@ -43,10 +44,10 @@ namespace CommandAddUser
 		int32_t Code;
 	};
 
-	bool ParseRequest(CowBuffer<uint8_t> buffer, Request &request);
+	bool ParseRequest(const CowBuffer<uint8_t> buffer, Request &request);
 	CowBuffer<uint8_t> BuildRequest(const Request &request);
 
-	bool ParseResponse(CowBuffer<uint8_t> buffer, Response &response);
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &response);
 	CowBuffer<uint8_t> BuildResponse(const Response &response);
 }
 
@@ -62,10 +63,10 @@ namespace CommandRemoveUser
 		int32_t Code;
 	};
 
-	bool ParseRequest(CowBuffer<uint8_t> buffer, Request &request);
+	bool ParseRequest(const CowBuffer<uint8_t> buffer, Request &request);
 	CowBuffer<uint8_t> BuildRequest(const Request &request);
 
-	bool ParseResponse(CowBuffer<uint8_t> buffer, Response &response);
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &response);
 	CowBuffer<uint8_t> BuildResponse(const Response &response);
 }
 
@@ -94,10 +95,10 @@ namespace CommandListUsers
 		CowBuffer<UserData> Data;
 	};
 
-	bool ParseRequest(CowBuffer<uint8_t> buffer, Request &request);
+	bool ParseRequest(const CowBuffer<uint8_t> buffer, Request &request);
 	CowBuffer<uint8_t> BuildRequest(const Request &request);
 
-	bool ParseResponse(CowBuffer<uint8_t> buffer, Response &response);
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &response);
 	CowBuffer<uint8_t> BuildResponse(const Response &response);
 }
 

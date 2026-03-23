@@ -6,6 +6,14 @@
 #include "../Common/File.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
+namespace General
+{
+	const char *Section = "General";
+
+	const char *Name = "Name";
+	const char *NameValue = "";
+}
+
 namespace Connection
 {
 	const char *Section = "Connection";
@@ -226,6 +234,16 @@ void Config::Save()
 	_configFile.Write();
 }
 
+String Config::GetName()
+{
+	return _configFile.Get(General::Section, General::Name);
+}
+
+void Config::SetName(String value)
+{
+	_configFile.Set(General::Section, General::Name, value);
+}
+
 String Config::GetServerAddress()
 {
 	return _configFile.Get(Connection::Section, Connection::Address);
@@ -262,6 +280,11 @@ void Config::Init()
 		CreateDirectory(
 			"storage/" +
 			DataToHex(_publicKey, KEY_SIZE));
+
+		{
+			using namespace General;
+			_configFile.Set(Section, Name, NameValue);
+		}
 
 		{
 			using namespace Connection;

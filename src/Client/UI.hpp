@@ -54,6 +54,7 @@ private:
 	int _rows;
 	int _columns;
 
+	void DrawUserData();
 	void DrawConnectionState();
 	void DrawVoiceState();
 };

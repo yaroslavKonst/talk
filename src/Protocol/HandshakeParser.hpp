@@ -2,6 +2,7 @@
 #define _HANDSHAKE_PARSER_HPP
 
 #include "../Common/CowBuffer.hpp"
+#include "../Common/MyString.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
 namespace Handshake
@@ -15,14 +16,9 @@ namespace Handshake
 
 namespace HandshakeSyn
 {
-	enum
-	{
-		Length = KEY_SIZE
-	};
-
 	struct Data
 	{
-		const uint8_t *Key;
+		String Name;
 	};
 
 	bool Parse(const CowBuffer<uint8_t> buffer, Data &result);

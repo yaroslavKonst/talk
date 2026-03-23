@@ -71,6 +71,10 @@ Multiplexer::Multiplexer(int channelCount)
 	_inputQueues = new BufferQueue[_channelCount];
 	_inProgressBuffers = new CowBuffer<uint8_t>[_channelCount];
 	_bytesToWrite = new uint64_t[_channelCount];
+
+	for (int i = 0; i < _channelCount; i++) {
+		_bytesToWrite[i] = 0;
+	}
 }
 
 Multiplexer::~Multiplexer()
@@ -154,6 +158,10 @@ Demultiplexer::Demultiplexer(int channelCount)
 	_bytesToRead = new uint64_t[_channelCount];
 
 	_inputSizeLimit = 1024 * 4;
+
+	for (int i = 0; i < _channelCount; i++) {
+		_bytesToRead[i] = 0;
+	}
 }
 
 Demultiplexer::~Demultiplexer()

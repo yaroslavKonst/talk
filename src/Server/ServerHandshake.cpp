@@ -7,6 +7,7 @@
 #include "../Protocol/HandshakeParser.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/UnixTime.hpp"
+#include "../Common/Log.hpp"
 #include "../Crypto/Crypto.hpp"
 
 ServerHandshake::ServerHandshake(
@@ -20,23 +21,26 @@ ServerHandshake::ServerHandshake(
 	SetTimestamp(GetUnixTime());
 
 	_fd = fd;
-	_state = State::WaitingSyn;
+	_state = State::WaitingSize;
 	_storage = storage;
 	_dispatcher = dispatcher;
 	_privateKey = privateKey;
 	_publicKey = publicKey;
 
 	_user = nullptr;
-	_reader = new StreamReader(fd, HandshakeSyn::Length + 1);
+	_reader = new StreamReader(fd, sizeof(int32_t) + 1);
 	_writer = nullptr;
 
 	_dispatcher->RegisterDescriptorProcessor(this);
 	_dispatcher->RegisterTimeProcessor(this);
+
+	Log("Login: New connection.");
 }
 
 ServerHandshake::~ServerHandshake()
 {
 	if (_fd != -1) {
+		Log("Login: Connection failed.");
 		shutdown(_fd, SHUT_RDWR);
 		close(_fd);
 		_fd = -1;
@@ -98,7 +102,9 @@ void ServerHandshake::ProcessRead()
 	delete _reader;
 	_reader = nullptr;
 
-	if (_state == State::WaitingSyn) {
+	if (_state == State::WaitingSize) {
+		ProcessSize(buffer);
+	} else if (_state == State::WaitingSyn) {
 		ProcessSyn(buffer);
 	} else if (_state == State::WaitingAck) {
 		ProcessAck(buffer);
@@ -141,32 +147,65 @@ void ServerHandshake::ProcessTimeEvent()
 	}
 
 	_storage->MarkSessionForRemoval(this);
+	Log("Login: Timeout.");
 }
 
-void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
+void ServerHandshake::ProcessSize(CowBuffer<uint8_t> buffer)
 {
-	if (buffer.Size() != HandshakeSyn::Length + 1) {
+	Log("Login: Size.");
+
+	if (buffer.Size() != sizeof(int32_t) + 1) {
+		Log("Login: Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
 	_inScramblerInit = buffer[0];
-	buffer = RemoveScrambler(buffer);
+	buffer = buffer.Slice(1, buffer.Size() - 1);
+
+	_inScramblerInit = ApplyScrambler(
+		buffer.Pointer(),
+		buffer.Size(),
+		_inScramblerInit);
+
+	int32_t nameLength = *buffer.SwitchType<int32_t>();
+
+	if (nameLength > 200 || nameLength <= 0) {
+		Log("Login: Invalid size.");
+		_storage->MarkSessionForRemoval(this);
+		return;
+	}
+
+	_nameSize = buffer;
+	_reader = new StreamReader(_fd, nameLength + 1);
+	_state = State::WaitingSyn;
+}
+
+void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
+{
+	Log("Login: Syn.");
+
+	_inScramblerInit = ApplyScrambler(
+		buffer.Pointer(),
+		buffer.Size(),
+		_inScramblerInit);
 
 	HandshakeSyn::Data data;
-	bool parseResult = HandshakeSyn::Parse(buffer, data);
+	bool parseResult = HandshakeSyn::Parse(_nameSize.Concat(buffer), data);
 
 	if (!parseResult) {
+		Log("Login: Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
-	if (!_storage->HasUser(data.Key)) {
+	if (!_storage->HasUser(data.Name)) {
+		Log("Login: Invalid user.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
-	_user = _storage->GetUser(data.Key);
+	_user = _storage->GetUser(data.Name);
 	_state = State::WaitingAck;
 
 	int64_t timestamp = GetUnixTime();
@@ -193,16 +232,29 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 
 	CowBuffer<uint8_t> responseData = HandshakeSynAck::Build(response);
 
-	responseData = ApplyScrambler(responseData);
-	_outScramblerInit = responseData[0];
+	GenerateRandomData(
+		sizeof(_outScramblerInit),
+		&_outScramblerInit,
+		false);
 
-	_writer = new StreamWriter(_fd, responseData);
+	CowBuffer<uint8_t> outScrambler(1);
+	outScrambler[0] = _outScramblerInit;
+
+	_outScramblerInit = ApplyScrambler(
+		responseData.Pointer(),
+		responseData.Size(),
+		_outScramblerInit);
+
+	_writer = new StreamWriter(_fd, outScrambler.Concat(responseData));
 	_reader = new StreamReader(_fd, HandshakeAck::Length);
 }
 
 void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 {
+	Log("Login: Ack.");
+
 	if (buffer.Size() != HandshakeAck::Length) {
+		Log("Login: Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -216,6 +268,7 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 	bool parseResult = HandshakeAck::Parse(buffer, data);
 
 	if (!parseResult) {
+		Log("Login: Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -230,6 +283,7 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 	CowBuffer<uint8_t> challenge = Decrypt(encryptedChallenge, _inES);
 
 	if (challenge.Size() != Handshake::ChallengeSize) {
+		Log("Login: Challenge failed.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -239,6 +293,7 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 		challenge.Pointer());
 
 	if (!validChallenge) {
+		Log("Login: Challenge failed.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -252,4 +307,6 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 
 	_fd = -1;
 	_storage->MarkSessionForRemoval(this);
+
+	Log("Login: Connecton accepted.");
 }

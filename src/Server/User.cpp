@@ -15,6 +15,8 @@ void User::CreateUser(String name, const uint8_t publicKey[KEY_SIZE])
 		THROW("User " + name + " already exists.");
 	}
 
+	CreateDirectory(root);
+
 	StorePublicKey(root, publicKey);
 }
 

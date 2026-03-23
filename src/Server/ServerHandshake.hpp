@@ -40,6 +40,7 @@ private:
 
 	enum class State
 	{
+		WaitingSize,
 		WaitingSyn,
 		WaitingAck
 	};
@@ -50,12 +51,14 @@ private:
 	const uint8_t *_privateKey;
 	const uint8_t *_publicKey;
 
+	void ProcessSize(CowBuffer<uint8_t> buffer);
 	void ProcessSyn(CowBuffer<uint8_t> buffer);
 	void ProcessAck(CowBuffer<uint8_t> buffer);
 
 	EncryptedStream _inES;
 	EncryptedStream _outES;
 	User *_user;
+	CowBuffer<uint8_t> _nameSize;
 
 	CowBuffer<uint8_t> _challenge;
 
@@ -73,8 +76,9 @@ public:
 	{ }
 
 	virtual void MarkSessionForRemoval(ServerHandshake *session) = 0;
-	virtual bool HasUser(const uint8_t key[KEY_SIZE]) = 0;
-	virtual User *GetUser(const uint8_t key[KEY_SIZE]) = 0;
+
+	virtual bool HasUser(String name) = 0;
+	virtual User *GetUser(String name) = 0;
 };
 
 #endif

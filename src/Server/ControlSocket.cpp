@@ -119,7 +119,7 @@ void ControlSocket::AddSession(int fd)
 	ControlNode *s = new ControlNode;
 	s->Remove = false;
 	s->Next = _controlSessions;
-	s->Session = new ControlSession(fd, this, _dispatcher);
+	s->Session = new ControlSession(fd, _users, this, _dispatcher);
 
 	_controlSessions = s;
 }

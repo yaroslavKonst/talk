@@ -276,11 +276,13 @@ void EventDispatcher::ProcessTime()
 			currentTime - node->Processor->GetTimestamp() >=
 			node->Processor->GetInterval();
 
+		TimeProcessorNode *nextNode = node->Next;
+
 		if (update) {
 			node->Processor->SetTimestamp(currentTime);
 			node->Processor->ProcessTimeEvent();
 		}
 
-		node = node->Next;
+		node = nextNode;
 	}
 }

@@ -1,5 +1,7 @@
 #include "ClientSession.hpp"
 
+#include "../Common/Exception.hpp"
+
 ClientSession::ClientSession(
 	int fd,
 	EncryptedStream &outES,
@@ -56,4 +58,5 @@ bool ClientSession::ProcessWrite()
 
 bool ClientSession::ProcessInput(CowBuffer<uint8_t> buffer)
 {
+	THROW("Not implemented.");
 }

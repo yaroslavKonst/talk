@@ -18,12 +18,9 @@ public:
 	~UserDB();
 
 	bool HasUser(String name);
-	bool HasUser(const uint8_t key[KEY_SIZE]) override;
-
 	User *GetUser(String name);
-	User *GetUser(const uint8_t key[KEY_SIZE]) override;
 
-	void AddUser(String name, const uint8_t key[KEY_SIZE]);
+	void AddUser(String name, const uint8_t *key);
 	void RemoveUser(String name);
 
 	int GetUserCount();
@@ -50,21 +47,7 @@ private:
 		bool operator==(const UserByName &u) const;
 	};
 
-	struct UserByKey
-	{
-		User *user;
-		const uint8_t *PublicKey;
-
-		UserByKey();
-		UserByKey(User *u);
-		UserByKey(const uint8_t *publicKey);
-
-		bool operator<(const UserByKey &u) const;
-		bool operator==(const UserByKey &u) const;
-	};
-
 	Tree<UserByName> _usersByName;
-	Tree<UserByKey> _usersByKey;
 
 	void LoadUserData();
 	void FreeUserData();

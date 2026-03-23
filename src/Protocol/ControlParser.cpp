@@ -3,7 +3,7 @@
 #include "../Crypto/CryptoDefinitions.hpp"
 
 bool CommandAddUser::ParseRequest(
-	CowBuffer<uint8_t> buffer,
+	const CowBuffer<uint8_t> buffer,
 	Request &request)
 {
 	int32_t command;
@@ -38,7 +38,7 @@ bool CommandAddUser::ParseRequest(
 
 	request.Name = String(buffer.SwitchType<char>(baseLength));
 
-	return false;
+	return true;
 }
 
 CowBuffer<uint8_t> CommandAddUser::BuildRequest(const Request &request)
@@ -62,7 +62,7 @@ CowBuffer<uint8_t> CommandAddUser::BuildRequest(const Request &request)
 }
 
 bool CommandAddUser::ParseResponse(
-	CowBuffer<uint8_t> buffer,
+	const CowBuffer<uint8_t> buffer,
 	Response &response)
 {
 	if (buffer.Size() != sizeof(response.Code)) {
@@ -81,7 +81,7 @@ CowBuffer<uint8_t> CommandAddUser::BuildResponse(const Response &response)
 }
 
 bool CommandRemoveUser::ParseRequest(
-	CowBuffer<uint8_t> buffer,
+	const CowBuffer<uint8_t> buffer,
 	Request &request)
 {
 	int32_t command;
@@ -137,7 +137,7 @@ CowBuffer<uint8_t> CommandRemoveUser::BuildRequest(const Request &request)
 }
 
 bool CommandRemoveUser::ParseResponse(
-	CowBuffer<uint8_t> buffer,
+	const CowBuffer<uint8_t> buffer,
 	Response &response)
 {
 	if (buffer.Size() != sizeof(response.Code)) {
@@ -156,7 +156,7 @@ CowBuffer<uint8_t> CommandRemoveUser::BuildResponse(const Response &response)
 }
 
 bool CommandListUsers::ParseRequest(
-	CowBuffer<uint8_t> buffer,
+	const CowBuffer<uint8_t> buffer,
 	Request &request)
 {
 	int32_t command;
@@ -185,7 +185,7 @@ CowBuffer<uint8_t> CommandListUsers::BuildRequest(const Request &request)
 }
 
 bool CommandListUsers::ParseResponse(
-	CowBuffer<uint8_t> buffer,
+	const CowBuffer<uint8_t> buffer,
 	Response &response)
 {
 	int32_t code;

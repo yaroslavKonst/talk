@@ -5,7 +5,6 @@
 #include "LoginScreen.hpp"
 //#include "AttachmentScreen.hpp"
 #include "TextColor.hpp"
-#include "../Protocol/ActiveSession.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Hex.hpp"
 #include "../Common/File.hpp"
@@ -61,8 +60,8 @@ void WorkScreen::RedrawFrames()
 	 *  Help
 	 */
 
-	const int h1Y = 2;
-	const int h2Y = 5;
+	const int h1Y = 4;
+	const int h2Y = 7;
 	const int h3Y = _rows - 9;
 	const int h4Y = _rows - 3;
 
