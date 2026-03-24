@@ -138,5 +138,5 @@ bool ServerSession::ProcessKeepAlive(const CowBuffer<uint8_t> buffer)
 
 void ServerSession::SessionLog(String message)
 {
-	Log("Session " + _storage->GetName() + ": " + message);
+	Log("Session of " + _storage->GetName() + ": " + message);
 }
