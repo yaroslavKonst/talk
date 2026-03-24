@@ -5,6 +5,7 @@
 #include "Config.hpp"
 #include "ListeningSocket.hpp"
 #include "ControlSocket.hpp"
+#include "GateSession.hpp"
 #include "../Common/EventDispatcher.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
@@ -22,6 +23,7 @@ private:
 	UserDB _users;
 	ListeningSocket _listeningSocket;
 	ControlSocket _controlSocket;
+	GateListeningSocket _gateSocket;
 
 	uint8_t _privateKey[KEY_SIZE];
 	uint8_t _publicKey[KEY_SIZE];

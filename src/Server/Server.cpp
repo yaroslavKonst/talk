@@ -11,7 +11,8 @@ Server::Server() :
 	_dispatcher(10000),
 	_users(&_dispatcher, &_config, _privateKey, _publicKey),
 	_listeningSocket(&_users, &_dispatcher, &_config),
-	_controlSocket(&_users, &_dispatcher, &_config, _publicKey)
+	_controlSocket(&_users, &_dispatcher, &_config, _publicKey),
+	_gateSocket(&_dispatcher, &_config)
 {
 	umask(077);
 	GetPassword();
@@ -28,9 +29,11 @@ int Server::Run()
 
 	_listeningSocket.OpenSocket();
 	_controlSocket.OpenSocket();
+	_gateSocket.OpenSocket();
 
 	_dispatcher.Run();
 
+	_gateSocket.CloseSocket();
 	_controlSocket.CloseSocket();
 	_listeningSocket.CloseSocket();
 

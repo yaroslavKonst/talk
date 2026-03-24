@@ -9,10 +9,14 @@
 #include "../Common/Exception.hpp"
 
 static const char *NetworkSection = "Network";
-static const char *IPv4Setting = "IPv4";
+static const char *IPv4Setting = "ClientIPv4";
 static const char *IPv4SettingValue = "0.0.0.0";
-static const char *PortSetting = "Port";
+static const char *PortSetting = "ClientPort";
 static const char *PortSettingValue = "6524";
+static const char *GateIPv4Setting = "GateIPv4";
+static const char *GateIPv4SettingValue = "0.0.0.0";
+static const char *GatePortSetting = "GatePort";
+static const char *GatePortSettingValue = "6525";
 
 static const char *LimitsSection = "Limits";
 static const char *MessageSizeLimitSetting = "MessageSize";
@@ -95,6 +99,16 @@ uint16_t Config::GetListeningPort()
 	return _listeningPort;
 }
 
+uint32_t Config::GetGateAddress()
+{
+	return _gateAddress;
+}
+
+uint16_t Config::GetGatePort()
+{
+	return _gatePort;
+}
+
 uint64_t Config::GetMessageSizeLimit()
 {
 	return _messageSizeLimit;
@@ -105,6 +119,14 @@ void Config::Init()
 	if (!FileExists(_configFile.GetPath())) {
 		_configFile.Set(NetworkSection, IPv4Setting, IPv4SettingValue);
 		_configFile.Set(NetworkSection, PortSetting, PortSettingValue);
+		_configFile.Set(
+			NetworkSection,
+			GateIPv4Setting,
+			GateIPv4SettingValue);
+		_configFile.Set(
+			NetworkSection,
+			GatePortSetting,
+			GatePortSettingValue);
 
 		_configFile.Set(
 			LimitsSection,
@@ -141,7 +163,8 @@ void Config::Validate()
 		_configFile.Get(NetworkSection, PortSetting).CStr());
 
 	if (port <= 0 || port > 65535) {
-		THROW("Port number must be positive integer less than 65535.");
+		THROW("Client port number must be positive integer less "
+			"than 65536.");
 	}
 
 	// Address.
@@ -152,6 +175,25 @@ void Config::Validate()
 
 	if (!res) {
 		THROW("Invalid IPv4 address.");
+	}
+
+	// Gate port.
+	int32_t gatePort = atoi(
+		_configFile.Get(NetworkSection, GatePortSetting).CStr());
+
+	if (gatePort <= 0 || gatePort > 65535) {
+		THROW("Gate port number must be positive integer less "
+			"than 65536.");
+	}
+
+	// Gate address.
+	struct in_addr gateAddr;
+	res = inet_aton(
+		_configFile.Get(NetworkSection, GateIPv4Setting).CStr(),
+		&gateAddr);
+
+	if (!res) {
+		THROW("Invalid gate IPv4 address.");
 	}
 
 	// MessageSizeLimit.
@@ -166,5 +208,7 @@ void Config::Validate()
 	// Writing new parameters.
 	_listeningAddress = addr.s_addr;
 	_listeningPort = port;
+	_gateAddress = gateAddr.s_addr;
+	_gatePort = gatePort;
 	_messageSizeLimit = messageSize;
 }

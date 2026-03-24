@@ -4,114 +4,185 @@
 
 #include "../ThirdParty/monocypher.h"
 
-bool Message::MessageID::operator==(const MessageID &id) const
+bool Message::GetHeader(const CowBuffer<uint8_t> message, Header &header)
 {
-	if (Timestamp != id.Timestamp || Index != id.Index) {
+	if (message.Size() < 1) {
 		return false;
 	}
 
-	if (crypto_verify32(Source, id.Source)) {
+	header.Type = message[0];
+
+	if (result.Type != (uint8_t)Type::PointToPoint) {
 		return false;
 	}
 
-	return !crypto_verify32(Destination, id.Destination);
+	uint64_t offset = 1;
+
+	int32_t sourceSize;
+
+	{
+		const CowBuffer<uint8_t> slice = message.Slice(
+			offset,
+			message.Size() - offset);
+
+		if (slice.Size() < sizeof(sourceSize)) {
+			return false;
+		}
+
+		sourceSize = *slice.SwitchType<int32_t>();
+		offset += sizeof(sourceSize);
+	}
+
+	if (sourceSize > 500) {
+		return false;
+	}
+
+	{
+		const CowBuffer<uint8_t> slice = message.Slice(
+			offset,
+			message.Size() - offset);
+
+		if (slice.Size() < sourceSize + 1) {
+			return false;
+		}
+
+		if (slice[sourceSize] != 0) {
+			return false;
+		}
+
+		header.Source = String(slice.SwitchType<char>());
+		offset += sourceSize + 1;
+	}
+
+	{
+		const CowBuffer<uint8_t> slice = message.Slice(
+			offset,
+			message.Size() - offset);
+
+		if (slice.Size() < KEY_SIZE) {
+			return false;
+		}
+
+		memcpy(header.SourceKey, slice.Pointer(), KEY_SIZE);
+		offset += KEY_SIZE;
+	}
+
+	int32_t destinationSize;
+
+	{
+		const CowBuffer<uint8_t> slice = message.Slice(
+			offset,
+			message.Size() - offset);
+
+		if (slice.Size() < sizeof(destinationSize)) {
+			return false;
+		}
+
+		destinationSize = *slice.SwitchType<int32_t>();
+		offset += sizeof(destinationSize);
+	}
+
+	if (destinationSize > 500) {
+		return false;
+	}
+
+	{
+		const CowBuffer<uint8_t> slice = message.Slice(
+			offset,
+			message.Size() - offset);
+
+		if (slice.Size() < destinationSize + 1) {
+			return false;
+		}
+
+		if (slice[destinationSize] != 0) {
+			return false;
+		}
+
+		header.Destination = String(slice.SwitchType<char>());
+		offset += destinationSize + 1;
+	}
+
+	{
+		const CowBuffer<uint8_t> slice = message.Slice(
+			offset,
+			message.Size() - offset);
+
+		if (slice.Size() < KEY_SIZE) {
+			return false;
+		}
+
+		memcpy(header.DestinationKey, slice.Pointer(), KEY_SIZE);
+		offset += KEY_SIZE;
+	}
+
+	{
+		const CowBuffer<uint8_t> slice = message.Slice(
+			offset,
+			message.Size() - offset);
+
+		if (slice.Size() < sizeof(header.Timestamp)) {
+			return false;
+		}
+
+		header.Timestamp = slice.SwitchType<int64_t>();
+		offset += sizeof(header.Timestamp);
+	}
+
+	{
+		const CowBuffer<uint8_t> slice = message.Slice(
+			offset,
+			message.Size() - offset);
+
+		if (slice.Size() < sizeof(header.Index)) {
+			return false;
+		}
+
+		header.Index = slice.SwitchType<int32_t>();
+		offset += sizeof(header.Index);
+	}
+
+	header.HeaderSize = offset;
+
+	return true;
 }
 
-bool Message::MessageID::operator<(const MessageID &id) const
+CowBuffer<uint8_t> Message::BuildHeader(const HeaderPointToPoint &header)
 {
-	if (Timestamp != id.Timestamp) {
-		return Timestamp < id.Timestamp;
-	}
+	CowBuffer<uint8_t> buffer(header.HeaderSize);
 
-	if (Index != id.Index) {
-		return Index < id.Index;
-	}
+	buffer[0] = (uint8_t)Type::PointToPoint;
 
-	for (int i = 0; i < KEY_SIZE; i++) {
-		if (Source[i] != id.Source[i]) {
-			return Source[i] < id.Source[i];
-		}
-	}
+	uint64_t offset = 1;
 
-	for (int i = 0; i < KEY_SIZE; i++) {
-		if (Destination[i] != id.Destination[i]) {
-			return Destination[i] < id.Destination[i];
-		}
-	}
+	*buffer.SwitchType<int32_t>(offset) = header.Source.Length();
+	offset += sizeof(int32_t);
 
-	return false;
-}
-
-bool Message::GetID(
-	const CowBuffer<uint8_t> message,
-	Message::MessageID &result)
-{
-	if (message.Size() < HeaderSize) {
-		return false;
-	}
-
-	result.Timestamp = *message.SwitchType<int64_t>(TimestampOffset);
-	result.Index = *message.SwitchType<int32_t>(IndexOffset);
-
-	memcpy(result.Source, message.Pointer(SourceOffset), KEY_SIZE);
 	memcpy(
-		result.Destination,
-		message.Pointer(DestinationOffset),
-		KEY_SIZE);
+		buffer.Pointer(offset),
+		header.Source.CStr(),
+		header.Source.Length() + 1);
+	offset += header.Source.Length() + 1;
 
-	return true;
-}
+	memcpy(buffer.Pointer(offset), header.SourceKey, KEY_SIZE);
+	offset += KEY_SIZE;
 
-bool Message::GetHeader(const CowBuffer<uint8_t> message, Header &result)
-{
-	if (message.Size() < HeaderSize) {
-		return false;
-	}
+	*buffer.SwitchType<int32_t>(offset) = header.Destination.Length();
+	offset += sizeof(int32_t);
 
-	result.Source = message.Pointer(SourceOffset);
-	result.Destination = message.Pointer(DestinationOffset);
-	result.Timestamp = *message.SwitchType<int64_t>(TimestampOffset);
-	result.Index = *message.SwitchType<int32_t>(IndexOffset);
-	return true;
-}
+	memcpy(
+		buffer.Pointer(offset),
+		header.Destination.CStr(),
+		header.Destination.Length() + 1);
+	offset += header.Destination.Length() + 1;
 
-bool Message::GetMessage(
-	const CowBuffer<uint8_t> message,
-	CowBuffer<uint8_t> &result)
-{
-	if (message.Size() <= HeaderSize) {
-		return false;
-	}
+	memcpy(buffer.Pointer(offset), header.DestinationKey, KEY_SIZE);
+	offset += KEY_SIZE;
 
-	result = message.Slice(HeaderSize, message.Size() - HeaderSize);
-	return true;
-}
+	*buffer.SwitchType<int64_t>(offset) = header.Timestamp;
+	offset += sizeof(header.Timestamp);
 
-CowBuffer<uint8_t> Message::BuildHeader(const Header &header)
-{
-	CowBuffer<uint8_t> result(HeaderSize);
+	*buffer.SwitchType<int32_t>(offset) = header.Index;
 
-	memcpy(result.Pointer(SourceOffset), header.Source, KEY_SIZE);
-	memcpy(result.Pointer(DestinationOffset), header.Destination, KEY_SIZE);
-	*result.SwitchType<int64_t>(TimestampOffset) = header.Timestamp;
-	*result.SwitchType<int32_t>(IndexOffset) = header.Index;
-	return result;
-}
-
-CowBuffer<uint8_t> Message::BuildHeader(const MessageID &header)
-{
-	CowBuffer<uint8_t> result(HeaderSize);
-
-	memcpy(result.Pointer(SourceOffset), header.Source, KEY_SIZE);
-	memcpy(result.Pointer(DestinationOffset), header.Destination, KEY_SIZE);
-	*result.SwitchType<int64_t>(TimestampOffset) = header.Timestamp;
-	*result.SwitchType<int32_t>(IndexOffset) = header.Index;
-	return result;
-}
-
-CowBuffer<uint8_t> Message::BuildMessage(
-	const CowBuffer<uint8_t> header,
-	const CowBuffer<uint8_t> message)
-{
-	return header.Concat(message);
+	return buffer;
 }

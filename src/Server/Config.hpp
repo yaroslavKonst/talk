@@ -26,6 +26,9 @@ public:
 	uint32_t GetListeningAddress();
 	uint16_t GetListeningPort();
 
+	uint32_t GetGateAddress();
+	uint16_t GetGatePort();
+
 	uint64_t GetMessageSizeLimit();
 
 private:
@@ -36,6 +39,9 @@ private:
 
 	uint32_t _listeningAddress;
 	uint16_t _listeningPort;
+
+	uint32_t _gateAddress;
+	uint16_t _gatePort;
 
 	uint64_t _messageSizeLimit;
 

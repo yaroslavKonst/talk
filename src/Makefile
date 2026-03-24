@@ -9,6 +9,7 @@ SERVER_MODULES =\
 	Server/Config.o \
 	Server/ServerHandshake.o \
 	Server/ServerSession.o \
+	Server/GateSession.o \
 	Protocol/HandshakeParser.o \
 	Protocol/SessionProtocol.o \
 	Protocol/SessionParser.o \
