@@ -9,7 +9,7 @@
 
 Server::Server() :
 	_dispatcher(10000),
-	_users(&_dispatcher, _privateKey, _publicKey),
+	_users(&_dispatcher, &_config, _privateKey, _publicKey),
 	_listeningSocket(&_users, &_dispatcher, &_config),
 	_controlSocket(&_users, &_dispatcher, _publicKey)
 {

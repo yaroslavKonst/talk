@@ -13,6 +13,7 @@ class UserDB :
 public:
 	UserDB(
 		EventDispatcher *dispatcher,
+		Config *config,
 		const uint8_t *privateKey,
 		const uint8_t *publicKey);
 	~UserDB();
@@ -33,6 +34,7 @@ public:
 
 private:
 	EventDispatcher *_dispatcher;
+	Config *_config;
 
 	struct UserByName
 	{

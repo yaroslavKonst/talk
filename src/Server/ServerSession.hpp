@@ -1,6 +1,7 @@
 #ifndef _SERVER_SESSION_HPP
 #define _SERVER_SESSION_HPP
 
+#include "Config.hpp"
 #include "../Protocol/SessionProtocol.hpp"
 #include "../Common/EventDispatcher.hpp"
 #include "../Common/StreamReader.hpp"
@@ -17,6 +18,7 @@ public:
 	ServerSession(
 		int fd,
 		ServerSessionStorage *storage,
+		Config* config,
 		EventDispatcher *dispatcher,
 		EncryptedStream *outES,
 		EncryptedStream *inES,
@@ -42,6 +44,7 @@ private:
 
 	int _fd;
 	ServerSessionStorage *_storage;
+	Config *_config;
 
 	EncryptedStream _inES;
 	EncryptedStream _outES;

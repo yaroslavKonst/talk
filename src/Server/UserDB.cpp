@@ -4,10 +4,12 @@
 
 UserDB::UserDB(
 	EventDispatcher *dispatcher,
+	Config *config,
 	const uint8_t *privateKey,
 	const uint8_t *publicKey)
 {
 	_dispatcher = dispatcher;
+	_config = config;
 
 	_privateKey = privateKey;
 	_publicKey = publicKey;
@@ -59,6 +61,9 @@ void UserDB::AddUser(String name, const uint8_t key[KEY_SIZE])
 	}
 
 	User::CreateUser(name, key);
+
+	User *user = new User(name, _dispatcher, _config);
+	_usersByName.AddEntry(user);
 }
 
 void UserDB::RemoveUser(String name)
@@ -201,7 +206,7 @@ void UserDB::LoadUserData()
 	CowBuffer<String> userNames = ListDirectory(root);
 
 	for (unsigned int i = 0; i < userNames.Size(); i++) {
-		User *user = new User(userNames[i], _dispatcher);
+		User *user = new User(userNames[i], _dispatcher, _config);
 		_usersByName.AddEntry(user);
 	}
 }

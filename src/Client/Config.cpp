@@ -8,40 +8,40 @@
 
 namespace General
 {
-	const char *Section = "General";
+	static const char *Section = "General";
 
-	const char *Name = "Name";
-	const char *NameValue = "";
+	static const char *Name = "Name";
+	static const char *NameValue = "";
 }
 
 namespace Connection
 {
-	const char *Section = "Connection";
+	static const char *Section = "Connection";
 
-	const char *Address = "ServerAddress";
-	const char *AddressValue = "";
+	static const char *Address = "ServerAddress";
+	static const char *AddressValue = "";
 
-	const char *Port = "ServerPort";
-	const char *PortValue = "6524";
+	static const char *Port = "ServerPort";
+	static const char *PortValue = "6524";
 
-	const char *Key = "ServerKey";
-	const char *KeyValue = "";
+	static const char *Key = "ServerKey";
+	static const char *KeyValue = "";
 }
 
 namespace WorkScreenControls
 {
-	const char *Section = "MainScreenControls";
+	static const char *Section = "MainScreenControls";
 
-	const char *Exit = "ExitProgram";
-	const char *ExitValue = "End";
+	static const char *Exit = "ExitProgram";
+	static const char *ExitValue = "End";
 
-	const char *Connect = "ConnectToServer";
-	const char *ConnectValue = "Home";
+	static const char *Connect = "ConnectToServer";
+	static const char *ConnectValue = "Home";
 }
 
 namespace LoginScreenControls
 {
-	const char *Section = "LoginScreenControls";
+	static const char *Section = "LoginScreenControls";
 
 	static const char *Up = "PreviousField";
 	static const char *UpValue = "Up";
@@ -58,10 +58,10 @@ namespace LoginScreenControls
 
 namespace NotificationControls
 {
-	const char *Section = "NotificationControls";
+	static const char *Section = "NotificationControls";
 
-	const char *Confirm = "ConfirmNotification";
-	const char *ConfirmValue = "y";
+	static const char *Confirm = "ConfirmNotification";
+	static const char *ConfirmValue = "y";
 }
 
 static int ParseKey(String key)

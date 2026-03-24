@@ -26,9 +26,10 @@ void User::RemoveUser(String name)
 	THROW("Not implemented.");
 }
 
-User::User(String name, EventDispatcher *dispatcher)
+User::User(String name, EventDispatcher *dispatcher, Config *config)
 {
 	_dispatcher = dispatcher;
+	_config = config;
 
 	_root = "storage/users/" + name;
 
@@ -74,6 +75,7 @@ void User::AddSession(
 	s->Session = new ServerSession(
 		fd,
 		this,
+		_config,
 		_dispatcher,
 		outES,
 		inES,

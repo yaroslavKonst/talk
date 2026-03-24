@@ -13,6 +13,8 @@ public:
 	String GetListeningAddress();
 	String GetListeningPort();
 
+	String GetMessageSizeLimit();
+
 private:
 	IniFile _configFile;
 

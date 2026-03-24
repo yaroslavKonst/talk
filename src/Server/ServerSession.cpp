@@ -1,16 +1,19 @@
 #include "ServerSession.hpp"
 
 #include <unistd.h>
+#include <cstdlib>
 #include <sys/socket.h>
 
 #include "User.hpp"
 #include "../Protocol/SessionParser.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Log.hpp"
+#include "../Common/Exception.hpp"
 
 ServerSession::ServerSession(
 	int fd,
 	ServerSessionStorage *storage,
+	Config *config,
 	EventDispatcher *dispatcher,
 	EncryptedStream *outES,
 	EncryptedStream *inES,
@@ -23,6 +26,7 @@ ServerSession::ServerSession(
 	_dispatcher = dispatcher;
 	_fd = fd;
 	_storage = storage;
+	_config = config;
 
 	_inES = *inES;
 	_outES = *outES;
@@ -33,6 +37,14 @@ ServerSession::ServerSession(
 		&_inES,
 		outScramblerInit,
 		inScramblerInit);
+
+	int64_t messageSizeLimit = atoll(_config->GetMessageSizeLimit().CStr());
+
+	if (messageSizeLimit <= 0) {
+		THROW("Message size limit must be positive integer.");
+	}
+
+	_protocol->SetInputSizeLimit(messageSizeLimit);
 
 	_dispatcher->RegisterDescriptorProcessor(this);
 	_dispatcher->RegisterTimeProcessor(this);

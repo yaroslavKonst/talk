@@ -13,7 +13,7 @@ public:
 	static void CreateUser(String name, const uint8_t publicKey[KEY_SIZE]);
 	static void RemoveUser(String name);
 
-	User(String name, EventDispatcher *dispatcher);
+	User(String name, EventDispatcher *dispatcher, Config *config);
 	~User();
 
 	const uint8_t *GetPublicKey()
@@ -38,6 +38,7 @@ public:
 
 private:
 	EventDispatcher *_dispatcher;
+	Config *_config;
 
 	struct UserSession
 	{
