@@ -12,7 +12,8 @@ class ServerSessionStorage;
 
 class ServerSession :
 	public DescriptorEventProcessor,
-	public TimeEventProcessor
+	public TimeEventProcessor,
+	public ConfigUser
 {
 public:
 	ServerSession(
@@ -25,6 +26,8 @@ public:
 		uint8_t outScramblerInit,
 		uint8_t inScramblerInit);
 	~ServerSession();
+
+	void ReloadConfig() override;
 
 	int GetDescriptor() override
 	{

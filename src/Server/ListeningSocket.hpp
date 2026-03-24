@@ -5,7 +5,9 @@
 #include "Config.hpp"
 #include "../Common/EventDispatcher.hpp"
 
-class ListeningSocket : public DescriptorEventProcessor
+class ListeningSocket :
+	public DescriptorEventProcessor,
+	public ConfigUser
 {
 public:
 	ListeningSocket(
@@ -13,6 +15,8 @@ public:
 		EventDispatcher *dispatcher,
 		Config *config);
 	~ListeningSocket();
+
+	void ReloadConfig() override;
 
 	int GetDescriptor() override
 	{

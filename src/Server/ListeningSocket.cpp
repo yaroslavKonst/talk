@@ -17,11 +17,21 @@ ListeningSocket::ListeningSocket(
 	_users = users;
 	_config = config;
 	_socketFd = -1;
+
+	_config->RegisterConfigUser(this);
 }
 
 ListeningSocket::~ListeningSocket()
 {
+	_config->UnregisterConfigUser(this);
+
 	CloseSocket();
+}
+
+void ListeningSocket::ReloadConfig()
+{
+	CloseSocket();
+	OpenSocket();
 }
 
 void ListeningSocket::ProcessRead()
@@ -55,22 +65,12 @@ void ListeningSocket::ProcessWrite()
 
 void ListeningSocket::OpenSocket()
 {
-	uint16_t port = atoi(_config->GetListeningPort().CStr());
-
-	if (port == 0) {
-		THROW("Invalid port number.");
-	}
+	uint16_t port = _config->GetListeningPort();
 
 	struct sockaddr_in addr;
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(port);
-	int res = inet_aton(
-		_config->GetListeningAddress().CStr(),
-		&addr.sin_addr);
-
-	if (!res) {
-		THROW("Invalid IPv4 address.");
-	}
+	addr.sin_addr.s_addr = _config->GetListeningAddress();
 
 	_socketFd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -79,7 +79,7 @@ void ListeningSocket::OpenSocket()
 	}
 
 	int reuseAddr = 1;
-	res = setsockopt(
+	int res = setsockopt(
 		_socketFd,
 		SOL_SOCKET,
 		SO_REUSEADDR,

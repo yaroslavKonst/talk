@@ -14,8 +14,11 @@ public:
 	ControlSocket(
 		UserDB *users,
 		EventDispatcher *dispatcher,
+		Config *config,
 		const uint8_t *publicKey);
 	~ControlSocket();
+
+	void ReloadConfig() override;
 
 	int GetDescriptor() override
 	{
@@ -52,6 +55,7 @@ private:
 	int _socketFd;
 	UserDB *_users;
 	EventDispatcher *_dispatcher;
+	Config *_config;
 
 	struct ControlNode
 	{

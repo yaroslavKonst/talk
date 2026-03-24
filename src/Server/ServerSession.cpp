@@ -38,16 +38,11 @@ ServerSession::ServerSession(
 		outScramblerInit,
 		inScramblerInit);
 
-	int64_t messageSizeLimit = atoll(_config->GetMessageSizeLimit().CStr());
-
-	if (messageSizeLimit <= 0) {
-		THROW("Message size limit must be positive integer.");
-	}
-
-	_protocol->SetInputSizeLimit(messageSizeLimit);
+	_protocol->SetInputSizeLimit(_config->GetMessageSizeLimit());
 
 	_dispatcher->RegisterDescriptorProcessor(this);
 	_dispatcher->RegisterTimeProcessor(this);
+	_config->RegisterConfigUser(this);
 
 	SessionLog("Start session.");
 
@@ -57,6 +52,7 @@ ServerSession::~ServerSession()
 {
 	SessionLog("End session.");
 
+	_config->UnregisterConfigUser(this);
 	_dispatcher->UnregisterDescriptorProcessor(this);
 	_dispatcher->UnregisterTimeProcessor(this);
 
@@ -67,6 +63,11 @@ ServerSession::~ServerSession()
 		close(_fd);
 		_fd = -1;
 	}
+}
+
+void ServerSession::ReloadConfig()
+{
+	_protocol->SetInputSizeLimit(_config->GetMessageSizeLimit());
 }
 
 bool ServerSession::RequestRead()

@@ -1,6 +1,12 @@
 #include "Config.hpp"
 
+#include <cstdlib>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include "../Common/File.hpp"
+#include "../Common/Exception.hpp"
 
 static const char *NetworkSection = "Network";
 static const char *IPv4Setting = "IPv4";
@@ -24,27 +30,74 @@ static const char *FailBanBanTimeSettingValue = "86400";
 
 Config::Config() : _configFile("talkd.conf")
 {
+	_listeningAddress = 0;
+	_listeningPort = 0;
+	_messageSizeLimit = 0;
+
+	_confUsers = nullptr;
+
 	Init();
+}
+
+Config::~Config()
+{
+	while (_confUsers) {
+		ConfUser *tmp = _confUsers;
+		_confUsers = _confUsers->Next;
+		delete tmp;
+	}
 }
 
 void Config::Reload()
 {
 	_configFile.Reload();
+	Validate();
+
+	ConfUser *node = _confUsers;
+
+	while (node) {
+		node->User->ReloadConfig();
+		node = node->Next;
+	}
 }
 
-String Config::GetListeningAddress()
+void Config::RegisterConfigUser(ConfigUser *user)
 {
-	return _configFile.Get(NetworkSection, IPv4Setting);
+	ConfUser *node = new ConfUser;
+	node->Next = _confUsers;
+	node->User = user;
+
+	_confUsers = node;
 }
 
-String Config::GetListeningPort()
+void Config::UnregisterConfigUser(ConfigUser *user)
 {
-	return _configFile.Get(NetworkSection, PortSetting);
+	ConfUser **u = &_confUsers;
+
+	while (*u) {
+		if ((*u)->User == user) {
+			ConfUser *tmp = *u;
+			*u = (*u)->Next;
+			delete tmp;
+		} else {
+			u = &(*u)->Next;
+		}
+	}
 }
 
-String Config::GetMessageSizeLimit()
+uint32_t Config::GetListeningAddress()
 {
-	return _configFile.Get(LimitsSection, MessageSizeLimitSetting);
+	return _listeningAddress;
+}
+
+uint16_t Config::GetListeningPort()
+{
+	return _listeningPort;
+}
+
+uint64_t Config::GetMessageSizeLimit()
+{
+	return _messageSizeLimit;
 }
 
 void Config::Init()
@@ -77,4 +130,41 @@ void Config::Init()
 
 		_configFile.Write();
 	}
+
+	Validate();
+}
+
+void Config::Validate()
+{
+	// Port.
+	int32_t port = atoi(
+		_configFile.Get(NetworkSection, PortSetting).CStr());
+
+	if (port <= 0 || port > 65535) {
+		THROW("Port number must be positive integer less than 65535.");
+	}
+
+	// Address.
+	struct in_addr addr;
+	int res = inet_aton(
+		_configFile.Get(NetworkSection, IPv4Setting).CStr(),
+		&addr);
+
+	if (!res) {
+		THROW("Invalid IPv4 address.");
+	}
+
+	// MessageSizeLimit.
+	int64_t messageSize = atoll(_configFile.Get(
+		LimitsSection,
+		MessageSizeLimitSetting).CStr());
+
+	if (messageSize <= 0) {
+		THROW("Message size limit must be positive integer.");
+	}
+
+	// Writing new parameters.
+	_listeningAddress = addr.s_addr;
+	_listeningPort = port;
+	_messageSizeLimit = messageSize;
 }

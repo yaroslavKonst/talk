@@ -186,6 +186,9 @@ void ControlSession::Process(const CowBuffer<uint8_t> buffer)
 	case COMMAND_GET_PUBLIC_KEY:
 		ProcessGetKeyCommand();
 		break;
+	case COMMAND_RELOAD_CONFIG:
+		ProcessReloadConfigCommand();
+		break;
 	case COMMAND_ADD_USER:
 		ProcessAddUserCommand(buffer);
 		break;
@@ -240,6 +243,24 @@ void ControlSession::ProcessGetKeyCommand()
 	memcpy(key.Pointer(), _storage->GetPublicKey(), KEY_SIZE);
 
 	SendResponse(code.Concat(key));
+}
+
+void ControlSession::ProcessReloadConfigCommand()
+{
+	Log("Control: Reloading configuration.");
+
+	CowBuffer<uint8_t> code(sizeof(int32_t));
+
+	try {
+		_storage->ReloadConfig();
+		*code.SwitchType<int32_t>() = OK;
+		Log("Control: Reloaded successfully.");
+	} catch (Exception &ex) {
+		*code.SwitchType<int32_t>() = ERROR;
+		Log("Control: Reloading error: " + ex.Message());
+	}
+
+	SendResponse(code);
 }
 
 void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> buffer)

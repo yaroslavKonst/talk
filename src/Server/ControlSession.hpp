@@ -46,6 +46,7 @@ private:
 	void ProcessUnknownCommand(int32_t command);
 	void ProcessShutdownCommand();
 	void ProcessGetKeyCommand();
+	void ProcessReloadConfigCommand();
 	void ProcessAddUserCommand(CowBuffer<uint8_t> buffer);
 	void ProcessRemoveUserCommand(CowBuffer<uint8_t> buffer);
 	void ProcessListUsersCommand(CowBuffer<uint8_t> buffer);
@@ -59,6 +60,7 @@ public:
 
 	virtual void MarkSessionForRemoval(ControlSession *session) = 0;
 	virtual const uint8_t *GetPublicKey() = 0;
+	virtual void ReloadConfig() = 0;
 };
 
 #endif
