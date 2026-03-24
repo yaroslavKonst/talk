@@ -1,7 +1,7 @@
 #ifndef _ACTIVE_SESSION_HPP
 #define _ACTIVE_SESSION_HPP
 
-#include "../Message/Message.hpp"
+//#include "../Message/Message.hpp"
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
 
@@ -40,7 +40,7 @@ namespace CommandKeepAlive
 	CowBuffer<uint8_t> BuildCommand(const Command &data);
 }
 
-namespace CommandTextMessage
+/*namespace CommandTextMessage
 {
 	struct Command
 	{
@@ -158,6 +158,6 @@ namespace CommandVoiceData
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
 	CowBuffer<uint8_t> BuildCommand(const Command &data);
-}
+}*/
 
 #endif

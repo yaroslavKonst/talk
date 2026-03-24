@@ -194,9 +194,9 @@ bool Demultiplexer::AddData(CowBuffer<uint8_t> data)
 			return false;
 		}
 
-		uint64_t size = *data.SwitchType<uint64_t>(1);
+		uint64_t size = *data.SwitchType<uint64_t>();
 
-		if (size > _inputSizeLimit) {
+		if (size > _inputSizeLimit || !size) {
 			return false;
 		}
 

@@ -16,6 +16,7 @@ class ServerHandshake :
 public:
 	ServerHandshake(
 		int fd,
+		int32_t ip,
 		ServerHandshakeStorage *storage,
 		EventDispatcher *dispatcher,
 		const uint8_t *privateKey,
@@ -47,6 +48,7 @@ private:
 
 	State _state;
 	int _fd;
+	int32_t _ip;
 	ServerHandshakeStorage *_storage;
 	const uint8_t *_privateKey;
 	const uint8_t *_publicKey;
@@ -67,6 +69,8 @@ private:
 
 	StreamReader *_reader;
 	StreamWriter *_writer;
+
+	void HandshakeLog(String name, String message);
 };
 
 class ServerHandshakeStorage

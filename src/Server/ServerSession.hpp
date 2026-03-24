@@ -48,7 +48,11 @@ private:
 
 	SessionProtocol *_protocol;
 
-	void ProcessInput(CowBuffer<uint8_t> buffer);
+	bool ProcessInput(const CowBuffer<uint8_t> buffer);
+
+	bool ProcessKeepAlive(const CowBuffer<uint8_t> buffer);
+
+	void SessionLog(String message);
 };
 
 class ServerSessionStorage
@@ -58,6 +62,8 @@ public:
 	{ }
 
 	virtual void MarkSessionForRemoval(ServerSession *session) = 0;
+
+	virtual String GetName() = 0;
 };
 
 #endif

@@ -104,4 +104,6 @@ inline bool IsSpace(char c)
 	return c == ' ' || c == '\n' || c == '\t' || c == '\r';
 }
 
+String IPToString(int32_t ip);
+
 #endif

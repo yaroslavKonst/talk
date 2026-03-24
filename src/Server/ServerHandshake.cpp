@@ -12,6 +12,7 @@
 
 ServerHandshake::ServerHandshake(
 	int fd,
+	int32_t ip,
 	ServerHandshakeStorage *storage,
 	EventDispatcher *dispatcher,
 	const uint8_t *privateKey,
@@ -21,6 +22,7 @@ ServerHandshake::ServerHandshake(
 	SetTimestamp(GetUnixTime());
 
 	_fd = fd;
+	_ip = ip;
 	_state = State::WaitingSize;
 	_storage = storage;
 	_dispatcher = dispatcher;
@@ -34,16 +36,20 @@ ServerHandshake::ServerHandshake(
 	_dispatcher->RegisterDescriptorProcessor(this);
 	_dispatcher->RegisterTimeProcessor(this);
 
-	Log("Login: New connection.");
+	HandshakeLog("", "New connection.");
 }
 
 ServerHandshake::~ServerHandshake()
 {
 	if (_fd != -1) {
-		Log("Login: Connection failed.");
+		HandshakeLog(
+			_user ? _user->GetName() : "",
+			"Handshake failed.");
 		shutdown(_fd, SHUT_RDWR);
 		close(_fd);
 		_fd = -1;
+	} else {
+		HandshakeLog(_user->GetName(), "Handshake success.");
 	}
 
 	if (_reader) {
@@ -147,15 +153,13 @@ void ServerHandshake::ProcessTimeEvent()
 	}
 
 	_storage->MarkSessionForRemoval(this);
-	Log("Login: Timeout.");
+	HandshakeLog(_user ? _user->GetName() : "", "Timeout.");
 }
 
 void ServerHandshake::ProcessSize(CowBuffer<uint8_t> buffer)
 {
-	Log("Login: Size.");
-
 	if (buffer.Size() != sizeof(int32_t) + 1) {
-		Log("Login: Protocol violation.");
+		HandshakeLog("", "Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -171,7 +175,7 @@ void ServerHandshake::ProcessSize(CowBuffer<uint8_t> buffer)
 	int32_t nameLength = *buffer.SwitchType<int32_t>();
 
 	if (nameLength > 200 || nameLength <= 0) {
-		Log("Login: Invalid size.");
+		HandshakeLog("", "Invalid size.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -183,8 +187,6 @@ void ServerHandshake::ProcessSize(CowBuffer<uint8_t> buffer)
 
 void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 {
-	Log("Login: Syn.");
-
 	_inScramblerInit = ApplyScrambler(
 		buffer.Pointer(),
 		buffer.Size(),
@@ -194,13 +196,13 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 	bool parseResult = HandshakeSyn::Parse(_nameSize.Concat(buffer), data);
 
 	if (!parseResult) {
-		Log("Login: Protocol violation.");
+		HandshakeLog("", "Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
 	if (!_storage->HasUser(data.Name)) {
-		Log("Login: Invalid user.");
+		HandshakeLog(data.Name, "Invalid user.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -251,10 +253,8 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 
 void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 {
-	Log("Login: Ack.");
-
 	if (buffer.Size() != HandshakeAck::Length) {
-		Log("Login: Protocol violation.");
+		HandshakeLog(_user->GetName(), "Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -268,7 +268,7 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 	bool parseResult = HandshakeAck::Parse(buffer, data);
 
 	if (!parseResult) {
-		Log("Login: Protocol violation.");
+		HandshakeLog(_user->GetName(), "Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -283,7 +283,7 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 	CowBuffer<uint8_t> challenge = Decrypt(encryptedChallenge, _inES);
 
 	if (challenge.Size() != Handshake::ChallengeSize) {
-		Log("Login: Challenge failed.");
+		HandshakeLog(_user->GetName(), "Challenge failed.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -293,10 +293,12 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 		challenge.Pointer());
 
 	if (!validChallenge) {
-		Log("Login: Challenge failed.");
+		HandshakeLog(_user->GetName(), "Challenge failed.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
+
+	HandshakeLog(_user->GetName(), "Challenge accepted.");
 
 	_user->AddSession(
 		_fd,
@@ -307,6 +309,15 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 
 	_fd = -1;
 	_storage->MarkSessionForRemoval(this);
+}
 
-	Log("Login: Connecton accepted.");
+void ServerHandshake::HandshakeLog(String name, String message)
+{
+	String text = "Login from " + IPToString(_ip);
+
+	if (name.Length()) {
+		text += ", " + name;
+	}
+
+	Log(text + ": " + message);
 }

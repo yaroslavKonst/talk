@@ -45,7 +45,7 @@ void ListeningSocket::ProcessRead()
 
 	MakeNonblocking(fd);
 
-	_users->AddSession(fd);
+	_users->AddSession(fd, addr.sin_addr.s_addr);
 }
 
 void ListeningSocket::ProcessWrite()

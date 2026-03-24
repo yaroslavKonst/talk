@@ -96,6 +96,8 @@ void WorkScreen::RedrawFrames()
 
 	move(h3Y, v1X);
 	addch(ACS_LTEE);
+
+	move(4, 0);
 }
 
 void WorkScreen::RedrawContactList()

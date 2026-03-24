@@ -11,6 +11,7 @@ SERVER_MODULES =\
 	Server/ServerSession.o \
 	Protocol/HandshakeParser.o \
 	Protocol/SessionProtocol.o \
+	Protocol/SessionParser.o \
 	Protocol/ControlParser.o \
 	Common/EventDispatcher.o \
 	Common/MyString.o \
@@ -52,6 +53,7 @@ CLIENT_MODULES=\
 	Client/NotificationSystem.o \
 	Protocol/HandshakeParser.o \
 	Protocol/SessionProtocol.o \
+	Protocol/SessionParser.o \
 	Common/MyString.o \
 	Common/Version.o \
 	Common/SignalHandling.o \

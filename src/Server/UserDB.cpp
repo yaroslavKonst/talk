@@ -108,7 +108,7 @@ CowBuffer<String> UserDB::ListUsers()
 	return data;
 }
 
-void UserDB::AddSession(int fd)
+void UserDB::AddSession(int fd, int32_t ip)
 {
 	StartupSession *s = new StartupSession;
 
@@ -116,6 +116,7 @@ void UserDB::AddSession(int fd)
 	s->Remove = false;
 	s->Session = new ServerHandshake(
 		fd,
+		ip,
 		this,
 		_dispatcher,
 		_privateKey,

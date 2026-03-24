@@ -4,7 +4,9 @@
 #include <sys/socket.h>
 
 #include "User.hpp"
+#include "../Protocol/SessionParser.hpp"
 #include "../Common/UnixTime.hpp"
+#include "../Common/Log.hpp"
 
 ServerSession::ServerSession(
 	int fd,
@@ -34,10 +36,15 @@ ServerSession::ServerSession(
 
 	_dispatcher->RegisterDescriptorProcessor(this);
 	_dispatcher->RegisterTimeProcessor(this);
+
+	SessionLog("Start session.");
+
 }
 
 ServerSession::~ServerSession()
 {
+	SessionLog("End session.");
+
 	_dispatcher->UnregisterDescriptorProcessor(this);
 	_dispatcher->UnregisterTimeProcessor(this);
 
@@ -75,7 +82,11 @@ void ServerSession::ProcessRead()
 		return;
 	}
 
-	ProcessInput(_protocol->Receive());
+	success = ProcessInput(_protocol->Receive());
+
+	if (!success) {
+		_storage->MarkSessionForRemoval(this);
+	}
 }
 
 void ServerSession::ProcessWrite()
@@ -94,6 +105,38 @@ void ServerSession::ProcessTimeEvent()
 	_storage->MarkSessionForRemoval(this);
 }
 
-void ServerSession::ProcessInput(CowBuffer<uint8_t> buffer)
+bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 {
+	if (buffer.Size() < sizeof(int32_t)) {
+		SessionLog("Protocol violation.");
+		return false;
+	}
+
+	int32_t command = *buffer.SwitchType<int32_t>();
+
+	switch (command) {
+	case SESSION_COMMAND_KEEP_ALIVE:
+		return ProcessKeepAlive(buffer);
+	default:
+		SessionLog("Unknown command.");
+		return false;
+	}
+}
+
+bool ServerSession::ProcessKeepAlive(const CowBuffer<uint8_t> buffer)
+{
+	CommandKeepAlive::Command request;
+	bool parseResult = CommandKeepAlive::ParseCommand(buffer, request);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_protocol->Send(buffer, 0);
+	return true;
+}
+
+void ServerSession::SessionLog(String message)
+{
+	Log("Session " + _storage->GetName() + ": " + message);
 }

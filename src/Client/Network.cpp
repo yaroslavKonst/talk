@@ -51,6 +51,8 @@ bool Network::RequestWrite()
 
 void Network::ProcessRead()
 {
+	SetTimestamp(GetUnixTime());
+
 	if (_handshake) {
 		bool success = _handshake->ProcessRead();
 
@@ -93,6 +95,8 @@ void Network::ProcessRead()
 
 void Network::ProcessWrite()
 {
+	SetTimestamp(GetUnixTime());
+
 	if (_handshake) {
 		bool success = _handshake->ProcessWrite();
 
@@ -135,6 +139,16 @@ void Network::ProcessWrite()
 
 void Network::ProcessTimeEvent()
 {
+	bool kaSuccess = false;
+
+	if (_session) {
+		kaSuccess = _session->InitKeepAlive();
+	}
+
+	if (kaSuccess) {
+		return;
+	}
+
 	CloseConnection();
 	_root->Ui->Notify("Connection lost due to timeout.");
 }

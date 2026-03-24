@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-#include "../Message/Message.hpp"
+//#include "../Message/Message.hpp"
 
 bool CommandKeepAlive::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
@@ -30,7 +30,7 @@ CowBuffer<uint8_t> CommandKeepAlive::BuildCommand(const Command &data)
 	return result;
 }
 
-int32_t CommandTextMessage::ParseCommand(
+/*int32_t CommandTextMessage::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)
 {
@@ -394,4 +394,4 @@ CowBuffer<uint8_t> CommandVoiceData::BuildCommand(const Command &data)
 	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
 	*commandBuffer.SwitchType<int32_t>() = SESSION_COMMAND_VOICE_DATA;
 	return commandBuffer.Concat(data.VoiceData);
-}
+}*/

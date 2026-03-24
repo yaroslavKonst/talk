@@ -20,6 +20,8 @@ public:
 	bool ProcessRead();
 	bool ProcessWrite();
 
+	bool InitKeepAlive();
+
 private:
 	int _fd;
 	EncryptedStream _outES;
@@ -27,7 +29,13 @@ private:
 
 	SessionProtocol *_protocol;
 
-	bool ProcessInput(CowBuffer<uint8_t> buffer);
+	int64_t _keepAliveTimestamp;
+
+	bool ProcessInput(const CowBuffer<uint8_t> buffer);
+
+	bool ProcessKeepAlive(const CowBuffer<uint8_t> buffer);
+
+	void SendKeepAlive();
 };
 
 #endif

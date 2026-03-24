@@ -180,24 +180,24 @@ void ControlSession::Process(const CowBuffer<uint8_t> buffer)
 	int32_t command = *buffer.SwitchType<int32_t>();
 
 	switch (command) {
-		case COMMAND_SHUTDOWN:
-			ProcessShutdownCommand();
-			break;
-		case COMMAND_GET_PUBLIC_KEY:
-			ProcessGetKeyCommand();
-			break;
-		case COMMAND_ADD_USER:
-			ProcessAddUserCommand(buffer);
-			break;
-		case COMMAND_REMOVE_USER:
-			ProcessRemoveUserCommand(buffer);
-			break;
-		case COMMAND_LIST_USERS:
-			ProcessListUsersCommand(buffer);
-			break;
-		default:
-			ProcessUnknownCommand(command);
-			break;
+	case COMMAND_SHUTDOWN:
+		ProcessShutdownCommand();
+		break;
+	case COMMAND_GET_PUBLIC_KEY:
+		ProcessGetKeyCommand();
+		break;
+	case COMMAND_ADD_USER:
+		ProcessAddUserCommand(buffer);
+		break;
+	case COMMAND_REMOVE_USER:
+		ProcessRemoveUserCommand(buffer);
+		break;
+	case COMMAND_LIST_USERS:
+		ProcessListUsersCommand(buffer);
+		break;
+	default:
+		ProcessUnknownCommand(command);
+		break;
 	}
 
 	_reader = new StreamReader(_fd, sizeof(_requestSize));
