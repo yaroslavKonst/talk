@@ -24,7 +24,7 @@ static const char *MessageSizeLimitSettingValue = "1073741824";
 
 static const char *FailBanSection = "FailBan";
 static const char *FailBanEnabledSetting = "Enabled";
-static const char *FailBanEnabledSettingValue = "No";
+static const char *FailBanEnabledSettingValue = "Yes";
 static const char *FailBanTriesSetting = "AllowedTries";
 static const char *FailBanTriesSettingValue = "5";
 static const char *FailBanCooldownSetting = "CooldownInterval";

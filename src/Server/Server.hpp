@@ -1,12 +1,8 @@
 #ifndef _SERVER_HPP
 #define _SERVER_HPP
 
-#include "UserDB.hpp"
-#include "Config.hpp"
-#include "ListeningSocket.hpp"
-#include "ControlSocket.hpp"
-#include "GateSession.hpp"
-#include "../Common/EventDispatcher.hpp"
+#include <cstdint>
+
 #include "../Crypto/CryptoDefinitions.hpp"
 
 class Server
@@ -18,13 +14,6 @@ public:
 	int Run();
 
 private:
-	EventDispatcher _dispatcher;
-	Config _config;
-	UserDB _users;
-	ListeningSocket _listeningSocket;
-	ControlSocket _controlSocket;
-	GateListeningSocket _gateSocket;
-
 	uint8_t _privateKey[KEY_SIZE];
 	uint8_t _publicKey[KEY_SIZE];
 

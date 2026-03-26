@@ -3,8 +3,10 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "Root.hpp"
 #include "Network.hpp"
 #include "UI.hpp"
+#include "ChatList.hpp"
 #include "../Common/SignalHandling.hpp"
 #include "../Common/Exception.hpp"
 #include "../Crypto/Crypto.hpp"
@@ -26,20 +28,25 @@ Client::~Client()
 
 int Client::Run()
 {
-	_root.PrivateKey = _privateKey;
-	_root.PublicKey = _publicKey;
+	Root root;
+
+	root.PrivateKey = _privateKey;
+	root.PublicKey = _publicKey;
 
 	EventDispatcher dispatcher(2000);
-	_root.Dispatcher = &dispatcher;
+	root.Dispatcher = &dispatcher;
 
 	Config config(_publicKey);
-	_root.Conf = &config;
+	root.Conf = &config;
 
-	Network network(&_root);
-	_root.Network = &network;
+	Network network(&root);
+	root.Network = &network;
 
-	UI ui(&_root);
-	_root.Ui = &ui;
+	ChatList chats(&root);
+	root.Messages = &chats;
+
+	UI ui(&root);
+	root.Ui = &ui;
 
 	dispatcher.Run();
 

@@ -4,15 +4,15 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+#include "ListeningSocket.hpp"
+#include "ControlSocket.hpp"
+#include "GateSession.hpp"
 #include "../Common/SignalHandling.hpp"
+#include "../Common/Log.hpp"
+#include "../Common/EventDispatcher.hpp"
 #include "../Crypto/Crypto.hpp"
 
-Server::Server() :
-	_dispatcher(10000),
-	_users(&_dispatcher, &_config, _privateKey, _publicKey),
-	_listeningSocket(&_users, &_dispatcher, &_config),
-	_controlSocket(&_users, &_dispatcher, &_config, _publicKey),
-	_gateSocket(&_dispatcher, &_config)
+Server::Server()
 {
 	umask(077);
 	GetPassword();
@@ -21,21 +21,32 @@ Server::Server() :
 Server::~Server()
 {
 	WipeKeys();
+
+	Log("Core: Shutdown.");
 }
 
 int Server::Run()
 {
+	Log("Core: Startup.");
+
 	DisableSigPipe();
 
-	_listeningSocket.OpenSocket();
-	_controlSocket.OpenSocket();
-	_gateSocket.OpenSocket();
+	EventDispatcher dispatcher(10000);
+	Config config;
+	UserDB users(&dispatcher, &config, _privateKey, _publicKey);
+	ListeningSocket listeningSocket(&users, &dispatcher, &config);
+	ControlSocket controlSocket(&users, &dispatcher, &config, _publicKey);
+	GateListeningSocket gateSocket(&dispatcher, &config);
 
-	_dispatcher.Run();
+	listeningSocket.OpenSocket();
+	controlSocket.OpenSocket();
+	gateSocket.OpenSocket();
 
-	_gateSocket.CloseSocket();
-	_controlSocket.CloseSocket();
-	_listeningSocket.CloseSocket();
+	dispatcher.Run();
+
+	gateSocket.CloseSocket();
+	controlSocket.CloseSocket();
+	listeningSocket.CloseSocket();
 
 	return 0;
 }
@@ -146,6 +157,3 @@ void Server::WipeKeys()
 	crypto_wipe(_privateKey, KEY_SIZE);
 	crypto_wipe(_publicKey, KEY_SIZE);
 }
-
-
-

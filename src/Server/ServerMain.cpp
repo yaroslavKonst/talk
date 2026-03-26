@@ -10,6 +10,8 @@
 #include "../Common/UnixTime.hpp"
 #include "../Common/File.hpp"
 #include "../Common/Version.hpp"
+#include "../Common/Exception.hpp"
+#include "../Common/Log.hpp"
 
 static int OpenLog()
 {
@@ -115,10 +117,10 @@ int main(int argc, char **argv)
 			if (!strcmp(argv[1], "--noD")) {
 				daemonize = false;
 			} else {
-				return 1;
+				THROW("Unknown argument.");
 			}
 		} else if (argc != 1) {
-			return 1;
+			THROW("Invalid argument number.");
 		}
 
 		Server server;
@@ -130,7 +132,7 @@ int main(int argc, char **argv)
 		return server.Run();
 	}
 	catch (Exception &ex) {
-		printf("%s\n", ex.Message().CStr());
+		Log("Fatal: " + ex.Message());
 	}
 
 	return 100;
