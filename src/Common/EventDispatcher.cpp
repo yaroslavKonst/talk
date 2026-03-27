@@ -49,7 +49,15 @@ void EventDispatcher::Run()
 	while (_work) {
 		PreparePollFds();
 
-		int64_t interval = _quantProcessorFirst ? 0 : _idleInterval;
+		int64_t interval;
+
+		if (_quantProcessorFirst) {
+			interval = 0;
+		} else if (_timeProcessors) {
+			interval = _idleInterval;
+		} else {
+			interval = -1;
+		}
 
 		int pollRes = poll(_pollFds, _maxFds, interval);
 
@@ -58,7 +66,8 @@ void EventDispatcher::Run()
 				continue;
 			}
 
-			THROW("Error on poll.");
+			THROW(String("Error on poll: ") +
+				strerror(errno) + ".");
 		}
 
 		ProcessPollFds();
@@ -123,6 +132,7 @@ void EventDispatcher::UnregisterDescriptorProcessor(
 				sizeof(*_pollFds));
 		}
 
+		_pollProcessors[_maxFds - 1] = nullptr;
 		--_maxFds;
 	}
 }

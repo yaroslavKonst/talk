@@ -4,7 +4,7 @@ INSTALL_DIR = /usr/local/bin
 export CC = gcc -Wall -O3 -g
 export CXX = g++ -Wall -O3 -g
 export OBJ_FLAG = -c
-export STATIC_FLAG = #-static
+export STATIC_FLAG = -static
 
 .PHONY: all server client clean install installserver installclient tests
 
