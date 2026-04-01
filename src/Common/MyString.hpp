@@ -9,6 +9,7 @@ public:
 	String();
 	String(const String &s);
 	String(const char *s);
+	String(const char *s, int length);
 	~String();
 
 	void Clear();

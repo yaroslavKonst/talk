@@ -32,7 +32,7 @@ void PrintHelp()
 	printf("  %s\n", UserSection);
 	printf("    %s\n", AddUserCommand);
 	printf("    %s\n", RemoveUserCommand);
-	printf("    %s\n\n", ListUsersCommand);
+	printf("    %s [key]\n\n", ListUsersCommand);
 
 	printf("  %s\n", IPSection);
 	printf("    %s\n", ListBannedIPCommand);
@@ -124,6 +124,8 @@ static CowBuffer<uint8_t> RequestListUsers(int argc, char **argv)
 	for (int i = 3; i < argc; i++) {
 		if (String(argv[i]) == "key") {
 			request.Flags |= CommandListUsers::ShowKeys;
+		} else {
+			THROW(String("Unknown option: ") + argv[i] + ".");
 		}
 	}
 

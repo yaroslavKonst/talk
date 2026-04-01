@@ -41,6 +41,24 @@ String::String(const char *s)
 	_data->Data[length] = 0;
 }
 
+String::String(const char *s, int length)
+{
+	if (!s || length <= 0) {
+		_data = 0;
+		Clear();
+		return;
+	}
+
+	_data = new Data;
+	_data->RefCount = 1;
+	_data->Length = length;
+	_data->Reserved = length + 1;
+	_data->Data = new char[length + 1];
+
+	memcpy(_data->Data, s, length);
+	_data->Data[length] = 0;
+}
+
 String::~String()
 {
 	FreeRef();

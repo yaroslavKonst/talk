@@ -55,8 +55,8 @@ static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
 		bool writeSuccess = writer->Write();
 
 		if (!writeSuccess) {
-			printf("Failed to send request.\n");
-			return CowBuffer<uint8_t>();
+			delete writer;
+			THROW("Failed to send request.");
 		}
 	} while (!writer->WritingEnd());
 
@@ -68,7 +68,7 @@ static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
 		bool readSuccess = reader->Read();
 
 		if (!readSuccess) {
-			printf("Failed to get response size.\n");
+			delete reader;
 			return CowBuffer<uint8_t>();
 		}
 	} while (!reader->ReadingEnd());
@@ -82,8 +82,8 @@ static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
 		bool readSuccess = reader->Read();
 
 		if (!readSuccess) {
-			printf("Failed to get response.\n");
-			return CowBuffer<uint8_t>();
+			delete reader;
+			THROW("Failed to get response.");
 		}
 	} while (!reader->ReadingEnd());
 

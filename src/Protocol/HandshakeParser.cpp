@@ -18,26 +18,24 @@ bool HandshakeSyn::Parse(const CowBuffer<uint8_t> buffer, Data &result)
 		return false;
 	}
 
-	if (buffer.Size() != sizeof(nameLength) + nameLength + 1) {
+	if (buffer.Size() != sizeof(nameLength) + nameLength) {
 		return false;
 	}
 
-	if (buffer[sizeof(nameLength) + nameLength] != 0) {
-		return false;
-	}
-
-	result.Name = buffer.SwitchType<char>(sizeof(nameLength));
+	result.Name = String(
+		buffer.SwitchType<char>(sizeof(nameLength)),
+		nameLength);
 	return true;
 }
 
 CowBuffer<uint8_t> HandshakeSyn::Build(const Data &data)
 {
-	CowBuffer<uint8_t> result(sizeof(int32_t) + data.Name.Length() + 1);
+	CowBuffer<uint8_t> result(sizeof(int32_t) + data.Name.Length());
 	*result.SwitchType<int32_t>() = data.Name.Length();
 	memcpy(
 		result.Pointer(sizeof(int32_t)),
 		data.Name.CStr(),
-		data.Name.Length() + 1);
+		data.Name.Length());
 	return result;
 }
 

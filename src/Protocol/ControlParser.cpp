@@ -28,15 +28,13 @@ bool CommandAddUser::ParseRequest(
 		return false;
 	}
 
-	if (buffer.Size() != baseLength + nameLength + 1) {
+	if (buffer.Size() != baseLength + nameLength) {
 		return false;
 	}
 
-	if (buffer[baseLength + nameLength] != 0) {
-		return false;
-	}
-
-	request.Name = String(buffer.SwitchType<char>(baseLength));
+	request.Name = String(
+		buffer.SwitchType<char>(baseLength),
+		nameLength);
 
 	return true;
 }
@@ -48,7 +46,7 @@ CowBuffer<uint8_t> CommandAddUser::BuildRequest(const Request &request)
 
 	CowBuffer<uint8_t> buffer(
 		sizeof(command) + KEY_SIZE + sizeof(nameLength) +
-		nameLength + 1);
+		nameLength);
 
 	*buffer.SwitchType<int32_t>() = command;
 	memcpy(buffer.Pointer(sizeof(command)), request.Key, KEY_SIZE);
@@ -56,7 +54,7 @@ CowBuffer<uint8_t> CommandAddUser::BuildRequest(const Request &request)
 	memcpy(
 		buffer.Pointer(sizeof(command) + KEY_SIZE + sizeof(nameLength)),
 		request.Name.CStr(),
-		request.Name.Length() + 1);
+		request.Name.Length());
 
 	return buffer;
 }
@@ -105,16 +103,12 @@ bool CommandRemoveUser::ParseRequest(
 		return false;
 	}
 
-	if (buffer.Size() != baseSize + nameLength + 1)
+	if (buffer.Size() != baseSize + nameLength)
 	{
 		return false;
 	}
 
-	if (buffer[baseSize + nameLength] != 0) {
-		return false;
-	}
-
-	String name(buffer.SwitchType<char>(baseSize));
+	String name(buffer.SwitchType<char>(baseSize), nameLength);
 	request.Name = name;
 	return true;
 }
@@ -125,14 +119,14 @@ CowBuffer<uint8_t> CommandRemoveUser::BuildRequest(const Request &request)
 	int32_t nameLength = request.Name.Length();
 
 	CowBuffer<uint8_t> buffer(sizeof(command) + sizeof(nameLength) +
-		request.Name.Length() + 1);
+		request.Name.Length());
 
 	*buffer.SwitchType<int32_t>() = command;
 	*buffer.SwitchType<int32_t>(sizeof(command)) = nameLength;
 	memcpy(
 		buffer.Pointer(sizeof(command) + sizeof(nameLength)),
 		request.Name.CStr(),
-		request.Name.Length() + 1);
+		request.Name.Length());
 	return buffer;
 }
 
@@ -223,45 +217,42 @@ bool CommandListUsers::ParseResponse(
 	uint64_t offset = baseSize;
 
 	for (int32_t i = 0; i < userCount; i++) {
-		CowBuffer<uint8_t> slice = buffer.Slice(
+		const CowBuffer<uint8_t> sliceName = buffer.Slice(
 			offset,
 			buffer.Size() - offset);
 
 		int32_t nameLength;
 
-		if (slice.Size() < sizeof(nameLength)) {
+		if (sliceName.Size() < sizeof(nameLength)) {
 			return false;
 		}
 
-		nameLength = *slice.SwitchType<int32_t>();
+		nameLength = *sliceName.SwitchType<int32_t>();
 
 		if (nameLength > 200 || nameLength <= 0) {
 			return false;
 		}
 
-		if (slice.Size() < sizeof(nameLength) + nameLength + 1) {
+		if (sliceName.Size() < sizeof(nameLength) + nameLength) {
 			return false;
 		}
 
-		if (slice[sizeof(nameLength) + nameLength] != 0) {
-			return false;
-		}
+		userData[i].Name = String(
+			sliceName.SwitchType<char>(sizeof(nameLength)),
+			nameLength);
 
-		userData[i].Name =
-			String(slice.SwitchType<char>(sizeof(nameLength)));
+		offset += sizeof(nameLength) + nameLength;
 
-		offset += sizeof(nameLength) + nameLength + 1;
-
-		slice = buffer.Slice(
+		const CowBuffer<uint8_t> sliceKey = buffer.Slice(
 			offset,
 			buffer.Size() - offset);
 
 		if (flags & ShowKeys) {
-			if (slice.Size() < KEY_SIZE) {
+			if (sliceKey.Size() < KEY_SIZE) {
 				return false;
 			}
 
-			userData[i].Key = slice.Pointer();
+			userData[i].Key = sliceKey.Pointer();
 			offset += KEY_SIZE;
 		} else {
 			userData[i].Key = nullptr;
@@ -284,7 +275,7 @@ CowBuffer<uint8_t> CommandListUsers::BuildResponse(const Response &response)
 
 	for (int32_t i = 0 ; i < userCount; i++) {
 		bufferSize +=
-			sizeof(int32_t) + response.Data[i].Name.Length() + 1;
+			sizeof(int32_t) + response.Data[i].Name.Length();
 
 		if (response.Flags & ShowKeys) {
 			bufferSize += KEY_SIZE;
@@ -307,9 +298,9 @@ CowBuffer<uint8_t> CommandListUsers::BuildResponse(const Response &response)
 		memcpy(
 			buffer.Pointer(offset),
 			response.Data[i].Name.CStr(),
-			response.Data[i].Name.Length() + 1);
+			response.Data[i].Name.Length());
 
-		offset += response.Data[i].Name.Length() + 1;
+		offset += response.Data[i].Name.Length();
 
 		if (response.Flags & ShowKeys) {
 			memcpy(

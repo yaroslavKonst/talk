@@ -32,6 +32,9 @@ static void PrintError(int32_t code)
 	case ERROR_INVALID_IP:
 		printf("Invalid IP address.\n");
 		break;
+	case ERROR_UNSUPPORTED_OPTION:
+		printf("Unsupported option.\n");
+		break;
 	default:
 		printf("Unknown error code.\n");
 		break;
@@ -90,40 +93,31 @@ static int ProcessGetKey(const CowBuffer<uint8_t> response)
 
 static int ProcessListUsers(CowBuffer<uint8_t> response)
 {
-	int32_t code;
+	CommandListUsers::Response data;
+	bool parseResult = CommandListUsers::ParseResponse(response, data);
 
-	if (response.Size() < sizeof(code)) {
-		printf("Response is too short.\n");
+	if (!parseResult) {
+		printf("Response has invalid format. Parsing failed.\n");
 		return 1;
 	}
 
-	code = *response.SwitchType<int32_t>();
-
-	if (code != OK) {
-		PrintError(code);
+	if (data.Code != OK) {
+		PrintError(data.Code);
 		return 1;
 	}
 
-	response = response.Slice(sizeof(code), response.Size() - sizeof(code));
+	for (unsigned int i = 0; i < data.Data.Size(); i++) {
+		printf("%s\n", data.Data[i].Name.CStr());
 
-	const int32_t entrySize = KEY_SIZE + 55;
-	int32_t userCount;
+		if (data.Flags) {
+			if (data.Flags & CommandListUsers::ShowKeys) {
+				String keyHex =
+					DataToHex(data.Data[i].Key, KEY_SIZE);
+				printf("%s\n", keyHex.CStr());
+			}
 
-	if (response.Size() < sizeof(userCount)) {
-		printf("Response does not contain user count.\n");
-		return 1;
-	}
-
-	userCount = *response.SwitchType<int32_t>();
-
-	for (int i = 0; i < userCount; i++) {
-		String name(response.SwitchType<char>(
-			sizeof(userCount) + entrySize * i + KEY_SIZE));
-		String key = DataToHex(
-			response.Pointer(sizeof(userCount) + entrySize * i),
-			KEY_SIZE);
-
-		printf("%s\n%s\n\n", name.CStr(), key.CStr());
+			printf("\n");
+		}
 	}
 
 	return 0;
