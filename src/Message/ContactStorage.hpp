@@ -28,6 +28,8 @@ public:
 	String GetNextContact(String name);
 	String GetPreviousContact(String name);
 
+	void AddNewContact(String name);
+
 private:
 	String _root;
 

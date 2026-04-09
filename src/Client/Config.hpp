@@ -123,6 +123,26 @@ public:
 		return _keyNames[(int)Keys::ContactDown];
 	}
 
+	int ContactEnterKey()
+	{
+		return _keys[(int)Keys::ContactEnter];
+	}
+
+	String ContactEnterName()
+	{
+		return _keyNames[(int)Keys::ContactEnter];
+	}
+
+	int ContactNewKey()
+	{
+		return _keys[(int)Keys::ContactNew];
+	}
+
+	String ContactNewName()
+	{
+		return _keyNames[(int)Keys::ContactNew];
+	}
+
 	int NotificationConfirmKey()
 	{
 		return _keys[(int)Keys::NotificationConfirm];
@@ -171,6 +191,8 @@ private:
 		ContactBack,
 		ContactUp,
 		ContactDown,
+		ContactEnter,
+		ContactNew,
 
 		VoiceStart,
 		VoiceEnd,

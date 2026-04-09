@@ -10,6 +10,10 @@ Contact::Contact(String name, String path)
 	_name = name;
 	_path = path;
 
+	if (!FileExists(path)) {
+		CreateDirectory(path);
+	}
+
 	CowBuffer<String> keyList = ListDirectory(path);
 	_keys = CowBuffer<CowBuffer<uint8_t>>(keyList.Size());
 
@@ -143,6 +147,18 @@ String ContactStorage::GetPreviousContact(String name)
 	}
 
 	return entry->Key.Name;
+}
+
+void ContactStorage::AddNewContact(String name)
+{
+	Contact *contact = new Contact(
+		name,
+		_root + "/" + name);
+
+	ContactNode node;
+	node.Cont = contact;
+	node.Name = name;
+	_contacts.AddEntry(node);
 }
 
 bool ContactStorage::ContactNode::operator<(const ContactNode &node) const

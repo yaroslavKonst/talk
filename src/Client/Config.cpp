@@ -18,66 +18,72 @@ namespace Connection
 {
 	static const char *Section = "Connection";
 
-	static const char *Address = "ServerAddress";
+	static const char *Address = "Server Address";
 	static const char *AddressValue = "";
 
-	static const char *Port = "ServerPort";
+	static const char *Port = "Server Port";
 	static const char *PortValue = "6524";
 
-	static const char *Key = "ServerKey";
+	static const char *Key = "Server Key";
 	static const char *KeyValue = "";
 }
 
 namespace WorkScreenControls
 {
-	static const char *Section = "MainScreenControls";
+	static const char *Section = "Main Screen Controls";
 
-	static const char *Exit = "ExitProgram";
+	static const char *Exit = "Exit Program";
 	static const char *ExitValue = "End";
 
-	static const char *Connect = "ConnectToServer";
+	static const char *Connect = "Connect To Server";
 	static const char *ConnectValue = "Home";
 
-	static const char *Contact = "ManageContacts";
+	static const char *Contact = "Manage Contacts";
 	static const char *ContactValue = "Ctrl-C";
 }
 
 namespace LoginScreenControls
 {
-	static const char *Section = "LoginScreenControls";
+	static const char *Section = "Login Screen Controls";
 
-	static const char *Up = "PreviousField";
+	static const char *Up = "Previous Field";
 	static const char *UpValue = "Up";
 
-	static const char *Down = "NextField";
+	static const char *Down = "Next Field";
 	static const char *DownValue = "Down";
 
-	static const char *Back = "ExitLoginScreen";
+	static const char *Back = "Exit Login Screen";
 	static const char *BackValue = "End";
 
-	static const char *Connect = "ConnectToServer";
+	static const char *Connect = "Connect To Server";
 	static const char *ConnectValue = "Enter";
 }
 
 namespace ContactScreenControls
 {
-	static const char *Section = "ContactScreenControls";
+	static const char *Section = "Contact Screen Controls";
 
-	static const char *Back = "ExitContactScreen";
+	static const char *Back = "Exit Contact Screen";
 	static const char *BackValue = "End";
 
-	static const char *Up = "PreviousContact";
+	static const char *Up = "Previous Contact";
 	static const char *UpValue = "Up";
 
-	static const char *Down = "NextContact";
+	static const char *Down = "Next Contact";
 	static const char *DownValue = "Down";
+
+	static const char *Enter = "Enter";
+	static const char *EnterValue = "Enter";
+
+	static const char *New = "New Contact";
+	static const char *NewValue = "Ctrl-N";
 }
 
 namespace NotificationControls
 {
-	static const char *Section = "NotificationControls";
+	static const char *Section = "Notification Controls";
 
-	static const char *Confirm = "ConfirmNotification";
+	static const char *Confirm = "Confirm Notification";
 	static const char *ConfirmValue = "y";
 }
 
@@ -334,6 +340,8 @@ void Config::Init()
 			_configFile.Set(Section, Back, BackValue);
 			_configFile.Set(Section, Down, DownValue);
 			_configFile.Set(Section, Up, UpValue);
+			_configFile.Set(Section, Enter, EnterValue);
+			_configFile.Set(Section, New, NewValue);
 		}
 
 		{
@@ -383,6 +391,10 @@ void Config::LoadControls()
 			_configFile.Get(Section, Up);
 		_keyNames[(int)Keys::ContactDown] =
 			_configFile.Get(Section, Down);
+		_keyNames[(int)Keys::ContactEnter] =
+			_configFile.Get(Section, Enter);
+		_keyNames[(int)Keys::ContactNew] =
+			_configFile.Get(Section, New);
 	}
 
 	{

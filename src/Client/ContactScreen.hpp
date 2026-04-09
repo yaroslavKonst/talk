@@ -3,6 +3,7 @@
 
 #include "Screen.hpp"
 #include "Root.hpp"
+#include "UiHelpers.hpp"
 #include "../Message/ContactStorage.hpp"
 
 class ContactScreen : public Screen
@@ -20,6 +21,21 @@ private:
 
 	String _currentContact;
 	void RedrawContactList();
+
+	Screen *ProcessListEvent(int event);
+
+	enum class Mode
+	{
+		List,
+		Add,
+		Manage
+	};
+
+	Mode _mode;
+
+	UiHelpers::TextBox _newContactName;
+	void DrawAddWindow();
+	Screen *ProcessAddEvent(int event);
 };
 
 #endif
