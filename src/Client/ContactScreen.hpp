@@ -36,6 +36,9 @@ private:
 	UiHelpers::TextBox _newContactName;
 	void DrawAddWindow();
 	Screen *ProcessAddEvent(int event);
+
+	void DrawManageWindow();
+	Screen *ProcessManageEvent(int event);
 };
 
 #endif

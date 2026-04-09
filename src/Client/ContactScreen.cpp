@@ -34,6 +34,8 @@ void ContactScreen::Redraw()
 
 	if (_mode == Mode::Add) {
 		DrawAddWindow();
+	} else if (_mode == Mode::Manage) {
+		DrawManageWindow();
 	}
 }
 
@@ -43,6 +45,8 @@ Screen *ContactScreen::ProcessEvent(int event)
 		return ProcessListEvent(event);
 	} else if (_mode == Mode::Add) {
 		return ProcessAddEvent(event);
+	} else if (_mode == Mode::Manage) {
+		return ProcessManageEvent(event);
 	}
 
 	return this;
@@ -104,8 +108,19 @@ Screen *ContactScreen::ProcessListEvent(int event)
 		return this;
 	}
 
+	if (event == _root->Conf->ContactEnterKey()) {
+		if (!_currentContact.Length()) {
+			_root->Ui->Notify("No contacts. Nothing to do.");
+			return this;
+		}
+
+		_mode = Mode::Manage;
+		return this;
+	}
+
 	if (event == _root->Conf->ContactNewKey()) {
 		_mode = Mode::Add;
+		return this;
 	}
 
 	return this;
@@ -158,6 +173,11 @@ Screen *ContactScreen::ProcessAddEvent(int event)
 			return this;
 		}
 
+		if (_contacts->GetContact(_newContactName.Text)) {
+			_root->Ui->Notify("Contact already exists.");
+			return this;
+		}
+
 		_contacts->AddNewContact(_newContactName.Text);
 		_currentContact = _newContactName.Text;
 		_newContactName.Text = "";
@@ -169,6 +189,33 @@ Screen *ContactScreen::ProcessAddEvent(int event)
 		_newContactName.ProcessChar(event);
 	} else {
 		_root->Ui->Notify("Invalid character.");
+	}
+
+	return this;
+}
+
+void ContactScreen::DrawManageWindow()
+{
+	UiHelpers::ClearScreen(
+		6,
+		_rows - 2,
+		1,
+		_columns - 2);
+
+	UiHelpers::DrawFrame(
+		7,
+		_rows - 3,
+		2,
+		_columns - 3,
+		"Manage " + _currentContact,
+		COLOR_PAIR(YELLOW_TEXT));
+}
+
+Screen *ContactScreen::ProcessManageEvent(int event)
+{
+	if (event == _root->Conf->ContactBackKey()) {
+		_mode = Mode::List;
+		return this;
 	}
 
 	return this;

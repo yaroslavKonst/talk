@@ -161,6 +161,17 @@ void ContactStorage::AddNewContact(String name)
 	_contacts.AddEntry(node);
 }
 
+Contact *ContactStorage::GetContact(String name)
+{
+	Tree<ContactNode>::Entry *entry = _contacts.FindEntry(name);
+
+	if (!entry) {
+		return nullptr;
+	}
+
+	return entry->Key.Cont;
+}
+
 bool ContactStorage::ContactNode::operator<(const ContactNode &node) const
 {
 	return Name < node.Name;

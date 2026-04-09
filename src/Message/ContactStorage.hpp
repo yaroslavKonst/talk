@@ -29,6 +29,7 @@ public:
 	String GetPreviousContact(String name);
 
 	void AddNewContact(String name);
+	Contact *GetContact(String name);
 
 private:
 	String _root;

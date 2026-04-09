@@ -45,6 +45,11 @@ LoginScreen::LoginScreen(Root *root)
 
 void LoginScreen::Redraw()
 {
+	for (int i = 0; i < _columns; i++) {
+		move(4, i);
+		addch(ACS_HLINE);
+	}
+
 	String helpString =
 		"Exit: " + _root->Conf->LoginBackName() +
 		" | Next: " + _root->Conf->LoginDownName() + "/" +
@@ -52,7 +57,7 @@ void LoginScreen::Redraw()
 		" | Previous: " + _root->Conf->LoginUpName() +
 		" | Connect: " + _root->Conf->LoginConnectName();
 
-	move(4, 0);
+	move(5, 0);
 	addstr(helpString.CStr());
 
 	_ip.SetCaptionPosition(_rows / 2 - 2, 4);
