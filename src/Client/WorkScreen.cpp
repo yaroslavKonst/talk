@@ -3,6 +3,7 @@
 #include <curses.h>
 
 #include "LoginScreen.hpp"
+#include "ContactScreen.hpp"
 //#include "AttachmentScreen.hpp"
 #include "TextColor.hpp"
 #include "../Common/UnixTime.hpp"
@@ -32,6 +33,10 @@ Screen *WorkScreen::ProcessEvent(int event)
 		return new LoginScreen(_root);
 	}
 
+	if (event == _root->Conf->WorkContactKey()) {
+		return new ContactScreen(_root);
+	}
+
 	if (event == _root->Conf->WorkExitKey()) {
 		return nullptr;
 	}
@@ -41,11 +46,12 @@ Screen *WorkScreen::ProcessEvent(int event)
 
 void WorkScreen::RedrawFrames()
 {
-	/*  ConnectionStatus
+	/*  Login
+	 *  PublicKey
+	 *  ConnectionStatus
 	 *  VoiceStatus
 	 *  ----------------------------------
 	 *  CurrentContactName
-	 *  CurrentContactKey
 	 *  ----------------------------------
 	 *  ContactList | CurrentChatMessages
 	 *              |
@@ -61,7 +67,7 @@ void WorkScreen::RedrawFrames()
 	 */
 
 	const int h1Y = 4;
-	const int h2Y = 7;
+	const int h2Y = 6;
 	const int h3Y = _rows - 9;
 	const int h4Y = _rows - 3;
 

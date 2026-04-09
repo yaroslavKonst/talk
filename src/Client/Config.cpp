@@ -37,6 +37,9 @@ namespace WorkScreenControls
 
 	static const char *Connect = "ConnectToServer";
 	static const char *ConnectValue = "Home";
+
+	static const char *Contact = "ManageContacts";
+	static const char *ContactValue = "Ctrl-C";
 }
 
 namespace LoginScreenControls
@@ -56,6 +59,20 @@ namespace LoginScreenControls
 	static const char *ConnectValue = "Enter";
 }
 
+namespace ContactScreenControls
+{
+	static const char *Section = "ContactScreenControls";
+
+	static const char *Back = "ExitContactScreen";
+	static const char *BackValue = "End";
+
+	static const char *Up = "PreviousContact";
+	static const char *UpValue = "Up";
+
+	static const char *Down = "NextContact";
+	static const char *DownValue = "Down";
+}
+
 namespace NotificationControls
 {
 	static const char *Section = "NotificationControls";
@@ -66,6 +83,10 @@ namespace NotificationControls
 
 static int ParseKey(String key)
 {
+	if (!key.Length()) {
+		THROW("Key name is empty.");
+	}
+
 	if (key.Length() == 1) {
 		if (key.CStr()[0] < ' ' || key.CStr()[0] > '~') {
 			THROW("Invalid character " + key + ".");
@@ -297,6 +318,7 @@ void Config::Init()
 			using namespace WorkScreenControls;
 			_configFile.Set(Section, Exit, ExitValue);
 			_configFile.Set(Section, Connect, ConnectValue);
+			_configFile.Set(Section, Contact, ContactValue);
 		}
 
 		{
@@ -305,6 +327,13 @@ void Config::Init()
 			_configFile.Set(Section, Down, DownValue);
 			_configFile.Set(Section, Back, BackValue);
 			_configFile.Set(Section, Connect, ConnectValue);
+		}
+
+		{
+			using namespace ContactScreenControls;
+			_configFile.Set(Section, Back, BackValue);
+			_configFile.Set(Section, Down, DownValue);
+			_configFile.Set(Section, Up, UpValue);
 		}
 
 		{
@@ -330,6 +359,8 @@ void Config::LoadControls()
 		_keyNames[(int)Keys::WorkExit] = _configFile.Get(Section, Exit);
 		_keyNames[(int)Keys::WorkConnect] =
 			_configFile.Get(Section, Connect);
+		_keyNames[(int)Keys::WorkContact] =
+			_configFile.Get(Section, Contact);
 	}
 
 	{
@@ -342,6 +373,16 @@ void Config::LoadControls()
 			_configFile.Get(Section, Back);
 		_keyNames[(int)Keys::LoginConnect] =
 			_configFile.Get(Section, Connect);
+	}
+
+	{
+		using namespace ContactScreenControls;
+		_keyNames[(int)Keys::ContactBack] =
+			_configFile.Get(Section, Back);
+		_keyNames[(int)Keys::ContactUp] =
+			_configFile.Get(Section, Up);
+		_keyNames[(int)Keys::ContactDown] =
+			_configFile.Get(Section, Down);
 	}
 
 	{

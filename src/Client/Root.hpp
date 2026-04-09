@@ -12,6 +12,7 @@ struct Root
 	UIEventProcessor *Ui;
 	EventDispatcher *Dispatcher;
 	Config *Conf;
+	MessageEventProcessor *Messages;
 
 	const uint8_t *PrivateKey;
 	const uint8_t *PublicKey;

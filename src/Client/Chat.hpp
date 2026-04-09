@@ -1,39 +1,17 @@
 #ifndef _CHAT_HPP
 #define _CHAT_HPP
 
-#include "NotificationSystem.hpp"
-#include "../Protocol/ClientSession.hpp"
-#include "../Message/MessageStorage.hpp"
-#include "../Message/AttributeStorage.hpp"
+#include "Root.hpp"
+#include "../Message/Message.hpp"
 #include "../Common/Tree.hpp"
-
-struct MessageContents
-{
-	String Text;
-	CowBuffer<uint8_t> Attachment;
-
-	bool IsEmpty() const
-	{
-		return !Text.Length() && !Attachment.Size();
-	}
-
-	// Parser.
-	enum EntryType
-	{
-		EntryTypeText = 1,
-		EntryTypeData = 2
-	};
-
-	CowBuffer<uint8_t> Build() const;
-	void Parse(const CowBuffer<uint8_t> data);
-};
+#include "../Crypto/Crypto.hpp"
 
 class MessageDecryptor
 {
 public:
 	MessageDecryptor(
 		const CowBuffer<uint8_t> *message,
-		MessageContents *contents);
+		Message::Contents *contents);
 
 	void Run();
 	bool End();
@@ -44,7 +22,7 @@ private:
 
 	CowBuffer<uint8_t> _decryptedPart;
 
-	MessageContents *_contents;
+	Message::Contents *_contents;
 
 	CryptoStreamReader _streamReader;
 };
@@ -53,7 +31,7 @@ class MessageEncryptor
 {
 public:
 	MessageEncryptor(
-		const MessageContents *contents,
+		const Message::Contents *contents,
 		CowBuffer<uint8_t> *message);
 
 	void Run();
@@ -65,54 +43,37 @@ private:
 
 	CowBuffer<uint8_t> _encryptedPart;
 
-	MessageContents *_contents;
+	Message::Contents *_contents;
+
+	CryptoStreamWriter _streamWriter;
 };
 
 class MessageDescriptor : public QuantEventProcessor
 {
 public:
-	MessageDescriptor(
-		MessageStorage *msgStorage,
-		AttributeStorage *attrStorage,
-		Root *root);
+	MessageDescriptor(Root *root);
 
-	Message::MessageID ID;
-	CowBuffer<uint8_t> Message;
+	Message::HeaderPointToPoint ID;
 
-	bool Read;
-	bool Sent;
-	bool SendFailure;
-	bool SendInProcess;
+	int32_t Flags;
 
-	MessageContents DecryptedData;
-
-	void SetRead(bool value);
-	void SetSent(bool value);
-	void SetSendFailure(bool value);
+	Message::Contents Contents;
 
 	MessageDecryptor *Dec;
-	MessageEncryptor *Enc;
 
 	void ProcessQuant() override;
 
 private:
-	MessageStorage *_messageStorage;
-	AttributeStorage *_attributeStorage;
 	Root *_root;
-
-	void SaveAttributes();
 };
 
 class Chat
 {
 public:
-	Chat(Root *root, const uint8_t *peerKey, int64_t *latestReceiveTime);
+	Chat(
+		Root *root,
+		String peerName);
 	~Chat();
-
-	const uint8_t *GetPeerKey()
-	{
-		return _peerKey;
-	}
 
 	bool HasUnread();
 
@@ -159,13 +120,6 @@ private:
 
 	Root *_root;
 
-	const uint8_t *_peerKey;
-
-	MessageStorage _messageStorage;
-	AttributeStorage _attributeStorage;
-
-	int64_t *_latestReceiveTime;
-
 	Tree<MessageContainer> _messages;
 	Tree<MessageContainer>::Entry *_currentMessage;
 
@@ -173,19 +127,17 @@ private:
 	void UnloadMessages();
 
 	CowBuffer<uint8_t> EncryptMessage(
-		const MessageContents messageContents,
+		const Message::Contents messageContents,
 		const uint8_t *senderKey,
 		const uint8_t *receiverKey,
 		int64_t timestamp,
 		int32_t index);
-	MessageContents DecryptMessage(CowBuffer<uint8_t> message);
+	Message::Contents DecryptMessage(CowBuffer<uint8_t> message);
 
-	int _utf8ExpectedSize;
-	String _utf8Buffer;
-
-	String _draft;
-	String _draftSuffix;
+	CowBuffer<String> _draftText;
 	CowBuffer<uint8_t> _draftAttachment;
+
+	MessageEncryptor *_enc;
 };
 
 #endif

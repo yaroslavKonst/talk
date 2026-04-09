@@ -1,6 +1,7 @@
 #ifndef _PROCESSORS_HPP
 #define _PROCESSORS_HPP
 
+#include "../Message/ContactStorage.hpp"
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
 
@@ -10,6 +11,10 @@
 class MessageEventProcessor
 {
 public:
+	virtual ~MessageEventProcessor()
+	{ }
+
+	virtual ContactStorage *GetContactStorage() = 0;
 };
 
 // Voice chat.

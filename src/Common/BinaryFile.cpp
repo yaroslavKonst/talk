@@ -4,13 +4,19 @@
 #include <fcntl.h>
 #include <errno.h>
 
-BinaryFile::BinaryFile(String path, bool create)
+BinaryFile::BinaryFile(String path, bool create, bool trunc)
 {
+	int flags = O_RDWR;
+
 	if (create) {
-		_fd = open(path.CStr(), O_RDWR | O_CREAT, 0600);
-	} else {
-		_fd = open(path.CStr(), O_RDWR);
+		flags |= O_CREAT;
 	}
+
+	if (trunc) {
+		flags |= O_TRUNC;
+	}
+
+	_fd = open(path.CStr(), flags, 0600);
 
 	if (_fd == -1) {
 		THROW("Failed to open file " + path + ".");

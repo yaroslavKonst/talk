@@ -3,11 +3,13 @@
 
 #include "ServerSession.hpp"
 #include "../Common/MyString.hpp"
+#include "../Common/ObjectStorage.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
 class User :
 	public ServerSessionStorage,
-	public QuantEventProcessor
+	public QuantEventProcessor,
+	public ObjectStorageUser
 {
 public:
 	static void CreateUser(String name, const uint8_t publicKey[KEY_SIZE]);
@@ -36,9 +38,16 @@ public:
 
 	void ProcessQuant() override;
 
+	void ProcessRequestedObject(
+		const ObjectStorage::ID &id,
+		const CowBuffer<uint8_t> buffer) override;
+	void NotifyWriteCompleted(const ObjectStorage::ID &id) override;
+
 private:
 	EventDispatcher *_dispatcher;
 	Config *_config;
+
+	ObjectStorage _objectStorage;
 
 	struct UserSession
 	{

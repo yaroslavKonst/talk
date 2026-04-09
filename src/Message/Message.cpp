@@ -4,7 +4,25 @@
 
 #include "../ThirdParty/monocypher.h"
 
-bool Message::GetHeader(const CowBuffer<uint8_t> message, Header &header)
+Message::Type Message::GetMessageType(const CowBuffer<uint8_t> message)
+{
+	if (message.Size() < 1) {
+		return Type::Invalid;
+	}
+
+	switch (message[0]) {
+	case Type::PointToPoint:
+		return Type::PointToPoint;
+	case Type::Group:
+		return Type::Group;
+	default:
+		return type::Invalid;
+	}
+}
+
+bool Message::ParseHeader(
+	const CowBuffer<uint8_t> message,
+	HeaderPointToPoint &header)
 {
 	if (message.Size() < 1) {
 		return false;
@@ -42,16 +60,12 @@ bool Message::GetHeader(const CowBuffer<uint8_t> message, Header &header)
 			offset,
 			message.Size() - offset);
 
-		if (slice.Size() < sourceSize + 1) {
+		if (slice.Size() < sourceSize) {
 			return false;
 		}
 
-		if (slice[sourceSize] != 0) {
-			return false;
-		}
-
-		header.Source = String(slice.SwitchType<char>());
-		offset += sourceSize + 1;
+		header.Source = String(slice.SwitchType<char>(), sourceSize);
+		offset += sourceSize;
 	}
 
 	{
@@ -91,16 +105,14 @@ bool Message::GetHeader(const CowBuffer<uint8_t> message, Header &header)
 			offset,
 			message.Size() - offset);
 
-		if (slice.Size() < destinationSize + 1) {
+		if (slice.Size() < destinationSize) {
 			return false;
 		}
 
-		if (slice[destinationSize] != 0) {
-			return false;
-		}
-
-		header.Destination = String(slice.SwitchType<char>());
-		offset += destinationSize + 1;
+		header.Destination = String(
+			slice.SwitchType<char>(),
+			destinationSize);
+		offset += destinationSize;
 	}
 
 	{
@@ -140,6 +152,24 @@ bool Message::GetHeader(const CowBuffer<uint8_t> message, Header &header)
 
 		header.Index = slice.SwitchType<int32_t>();
 		offset += sizeof(header.Index);
+	}
+
+	{
+		const CowBuffer<uint8_t> slice = message.Slice(
+			offset,
+			message.Size() - offset);
+
+		if (slice.Size() < sizeof(header.MessageSize)) {
+			return false;
+		}
+
+		header.MessageSize = *slice.SwitchType<uint64_t>();
+
+		if (header.MessageSize < CRYPTO_HEADER_SIZE) {
+			return false;
+		}
+
+		offset += sizeof(header.MessageSize);
 	}
 
 	header.HeaderSize = offset;
@@ -183,6 +213,9 @@ CowBuffer<uint8_t> Message::BuildHeader(const HeaderPointToPoint &header)
 	offset += sizeof(header.Timestamp);
 
 	*buffer.SwitchType<int32_t>(offset) = header.Index;
+	offset += sizeof(header.Index);
+
+	*buffer.SwitchType<uint64_t>(offset) = header.MessageSize;
 
 	return buffer;
 }

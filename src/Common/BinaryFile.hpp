@@ -10,7 +10,7 @@
 class BinaryFile
 {
 public:
-	BinaryFile(String path, bool create);
+	BinaryFile(String path, bool create, bool trunc = false);
 	~BinaryFile();
 
 	uint64_t Size();

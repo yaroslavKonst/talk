@@ -26,7 +26,8 @@ void User::RemoveUser(String name)
 	THROW("Not implemented.");
 }
 
-User::User(String name, EventDispatcher *dispatcher, Config *config)
+User::User(String name, EventDispatcher *dispatcher, Config *config) :
+	_objectStorage("storage/users/" + name + "/storage", dispatcher)
 {
 	_dispatcher = dispatcher;
 	_config = config;
@@ -42,6 +43,8 @@ User::User(String name, EventDispatcher *dispatcher, Config *config)
 	_timeQuantRequested = false;
 
 	LoadPublicKey();
+
+	_objectStorage.SetUser(this);
 }
 
 User::~User()
@@ -120,6 +123,16 @@ void User::ProcessQuant()
 	}
 
 	_timeQuantRequested = false;
+}
+
+void User::ProcessRequestedObject(
+	const ObjectStorage::ID &id,
+	const CowBuffer<uint8_t> buffer)
+{
+}
+
+void User::NotifyWriteCompleted(const ObjectStorage::ID &id)
+{
 }
 
 void User::LoadPublicKey()

@@ -7,106 +7,78 @@
 #include "../Message/Message.hpp"
 
 ChatList::ChatList(Root *root) :
-	_contactList(session->PublicKey)
+	_contactStorage("storage/" + DataToHex(root->PublicKey, KEY_SIZE)),
+	_objectStorage(
+		"storage/" + DataToHex(root->PublicKey, KEY_SIZE) + "/storage",
+		root->Dispatcher)
 {
-	_latestReceiveTime = 0;
-
 	_root = root;
 	_currentChat = nullptr;
+	_currentChatIsActive = false;
 
-	if (_chatCount) {
-		_chatList = new Chat*[_chatCount];
-
-		for (int i = 0; i < _chatCount; i++) {
-			_chatList[i] = new Chat(
-				_root,
-				_contactList.GetContactKey(i),
-				_notificationSystem,
-				&_latestReceiveTime,
-				_controls);
-			_chatList[i]->SetPeerName(
-				_contactList.GetNameForPresentation(i));
-		}
-	}
+	LoadChats();
 }
 
 ChatList::~ChatList()
 {
-	if (_chatList) {
-		for (int i = 0; i < _chatCount; i++) {
-			delete _chatList[i];
-		}
+	UnloadChats();
+}
 
-		delete[] _chatList;
-		_chatList = nullptr;
-	}
+ContactStorage *ChatList::GetContactStorage()
+{
+	return &_contactStorage;
 }
 
 Chat *ChatList::GetCurrentChat()
 {
-	if (!_chatCount) {
+	if (!_currentChat) {
 		return nullptr;
 	}
 
-	return _chatList[_currentChat];
+	return _currentChat->Key.GetChat();
 }
 
 void ChatList::SwitchUp()
 {
-	--_currentChat;
+	if (!_currentChat) {
+		_currentChat = _chats.FindBiggest();
+		return;
+	}
 
-	if (_currentChat < 0) {
-		_currentChat = 0;
+	Tree<ChatContainer>::Entry *newChat = _chats.Previous(_currentChat);
+
+	if (newChat) {
+		_currentChat = newChat;
 	}
 }
 
 void ChatList::SwitchDown()
 {
-	++_currentChat;
-
-	if (_currentChat >= _chatCount) {
-		_currentChat = _chatCount - 1;
+	if (!_currentChat) {
+		_currentChat = _chats.FindSmallest();
+		return;
 	}
 
-	if (_currentChat < 0) {
-		_currentChat = 0;
+	Tree<ChatContainer>::Entry *newChat = _chats.Next(_currentChat);
+
+	if (newChat) {
+		_currentChat = newChat;
 	}
 }
 
-void ChatList::UpdateUserData(const uint8_t *key, String name)
+void ChatList::Activate()
 {
-	_contactList.AddContact(key, name);
-
-	if (_contactList.GetContactCount() != _chatCount) {
-		Chat **list = new Chat*[_chatCount + 1];
-
-		if (_chatList) {
-			for (int i = 0; i < _chatCount; i++) {
-				list[i] = _chatList[i];
-			}
-
-			delete[] _chatList;
-		}
-
-		_chatList = list;
-		++_chatCount;
-
-		_chatList[_chatCount - 1] = new Chat(
-			_session,
-			_contactList.GetContactKey(_chatCount - 1),
-			_notificationSystem,
-			&_latestReceiveTime,
-			_controls);
-		_chatList[_chatCount - 1]->SetPeerName(
-			_contactList.GetNameForPresentation(_chatCount - 1));
-	} else {
-		int index = GetUserIndexByKey(key);
-		_chatList[index]->SetPeerName(
-			_contactList.GetNameForPresentation(index));
+	if (_currentChat) {
+		_currentChatIsActive = true;
 	}
 }
 
-void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
+void ChatList::Deactivate()
+{
+	_currentChatIsActive = false;
+}
+
+/*void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
 {
 	Message::Header header;
 	bool res = Message::GetHeader(message, header);
@@ -132,26 +104,12 @@ void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
 
 	UpdateUserData(peerKey, "");
 	_chatList[_chatCount - 1]->DeliverMessage(message);
+}*/
+
+void ChatList::LoadChats()
+{
 }
 
-String ChatList::GetUserNameByKey(const uint8_t *key)
+void ChatList::UnloadChats()
 {
-	for (int i = 0; i < _contactList.GetContactCount(); i++) {
-		if (!crypto_verify32(key, _contactList.GetContactKey(i))) {
-			return _contactList.GetNameForPresentation(i);
-		}
-	}
-
-	return DataToHex(key, KEY_SIZE);
-}
-
-int ChatList::GetUserIndexByKey(const uint8_t *key)
-{
-	for (int i = 0; i < _contactList.GetContactCount(); i++) {
-		if (!crypto_verify32(key, _contactList.GetContactKey(i))) {
-			return i;
-		}
-	}
-
-	THROW("Contact not found.");
 }

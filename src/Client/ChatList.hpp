@@ -4,25 +4,15 @@
 #include "Root.hpp"
 #include "Chat.hpp"
 #include "../Message/ContactStorage.hpp"
-
-class ChatContainer
-{
-public:
-	ChatContainer(const uint8_t *peerKey, Chat *chat);
-
-	bool operator==(const ChatContainer &container) const;
-	bool operator<(const ChatContainer &container) const;
-
-private:
-	const uint8_t *_peerKey;
-	Chat *_chat;
-};
+#include "../Common/ObjectStorage.hpp"
 
 class ChatList : public MessageEventProcessor
 {
 public:
 	ChatList(Root *root);
 	~ChatList();
+
+	ContactStorage *GetContactStorage();
 
 	Chat *GetCurrentChat();
 
@@ -31,21 +21,37 @@ public:
 	void Activate();
 	void Deactivate();
 
-	void UpdateUserData(const uint8_t *key, String name);
-	void DeliverMessage(CowBuffer<uint8_t> message);
-
-	String GetUserNameByKey(const uint8_t *key);
-	int GetUserIndexByKey(const uint8_t *key);
-
 private:
 	Root *_root;
+
+	class ChatContainer
+	{
+	public:
+		ChatContainer(String peerName, Chat *chat);
+
+		Chat *GetChat()
+		{
+			return _chat;
+		}
+
+		bool operator==(const ChatContainer &container) const;
+		bool operator<(const ChatContainer &container) const;
+
+	private:
+		String _peerName;
+		Chat *_chat;
+	};
 
 	Tree<ChatContainer> _chats;
 	Tree<ChatContainer>::Entry *_currentChat;
 
-	ContactStorage _contactList;
+	ContactStorage _contactStorage;
+	ObjectStorage _objectStorage;
 
-	int64_t _latestReceiveTime;
+	bool _currentChatIsActive;
+
+	void LoadChats();
+	void UnloadChats();
 };
 
 #endif

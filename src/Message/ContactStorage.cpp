@@ -1,157 +1,185 @@
 #include "ContactStorage.hpp"
 
-#include <cstring>
-
-#include "../Common/Hex.hpp"
-#include "../Common/BinaryFile.hpp"
 #include "../Common/File.hpp"
-#include "../ThirdParty/monocypher.h"
+#include "../Common/BinaryFile.hpp"
+#include "../Common/Hex.hpp"
+#include "../Crypto/CryptoDefinitions.hpp"
 
-ContactStorage::ContactStorage(const uint8_t *ownerKey)
+Contact::Contact(String name, String path)
 {
-	_ownerKey = ownerKey;
+	_name = name;
+	_path = path;
 
-	_contactList = nullptr;
-	_contactCount = 0;
+	CowBuffer<String> keyList = ListDirectory(path);
+	_keys = CowBuffer<CowBuffer<uint8_t>>(keyList.Size());
+
+	for (unsigned long keyIdx = 0; keyIdx < keyList.Size(); keyIdx++) {
+		CowBuffer<uint8_t> key(KEY_SIZE);
+		HexToData(keyList[keyIdx], key.Pointer());
+
+		BinaryFile file(path + "/" + keyList[keyIdx], false);
+		uint8_t verified;
+		file.Read(&verified, 1, 0);
+
+		_keys[keyIdx] = key;
+		_verifiedKeys[keyIdx] = verified;
+	}
+}
+
+ContactStorage::ContactStorage(String root)
+{
+	_root = root + "/contacts";
+
+	if (!FileExists(_root)) {
+		CreateDirectory(_root);
+	}
 
 	LoadContacts();
 }
 
-ContactStorage::~ContactStorage()
+String ContactStorage::GetFirstContact()
 {
-	FreeContacts();
+	Tree<ContactNode>::Entry *entry = _contacts.FindSmallest();
+
+	if (!entry) {
+		return "";
+	}
+
+	return entry->Key.Name;
 }
 
-void ContactStorage::AddContact(const uint8_t *peerKey, String name)
+CowBuffer<String> ContactStorage::GetContactRange(String center, int size)
 {
-	String path = "storage";
-	CreateDirectory(path);
-	path += "/" + DataToHex(_ownerKey, KEY_SIZE);
-	CreateDirectory(path);
-	path += "/contacts";
-	CreateDirectory(path);
-	path += "/" + DataToHex(peerKey, KEY_SIZE);
+	Tree<ContactNode>::Entry *low = _contacts.FindEntry(center);
 
-	if (FileExists(path)) {
-		UpdateContact(peerKey, name);
-		return;
+	if (!low) {
+		return CowBuffer<String>();
 	}
 
-	Contact **list = new Contact*[_contactCount + 1];
+	Tree<ContactNode>::Entry *high = low;
 
-	for (int i = 0; i < _contactCount; i++) {
-		list[i] = _contactList[i];
-	}
+	int s = 1;
 
-	++_contactCount;
+	bool goUp = false;
+	bool prevUpSuccess = true;
+	bool prevDownSuccess = true;
 
-	list[_contactCount - 1] = new Contact;
-	memcpy(list[_contactCount - 1]->Key, peerKey, KEY_SIZE);
-	list[_contactCount - 1]->Name = name;
+	while (s < size) {
+		Tree<ContactNode>::Entry *e;
 
-	if (_contactList) {
-		delete[] _contactList;
-	}
+		if (goUp) {
+			e = _contacts.Previous(low);
 
-	_contactList = list;
+			if (e) {
+				low = e;
+				++s;
+				prevUpSuccess = true;
+			} else {
+				prevUpSuccess = false;
 
-	BinaryFile file(path, true);
-	file.Write<char>(name.CStr(), name.Length(), 0);
-}
+				if (!prevDownSuccess) {
+					break;
+				}
+			}
+		} else {
+			e = _contacts.Next(high);
 
-void ContactStorage::UpdateContact(const uint8_t *peerKey, String name)
-{
-	int contactIndex;
+			if (e) {
+				high = e;
+				++s;
+				prevDownSuccess = true;
+			} else {
+				prevDownSuccess = false;
 
-	for (contactIndex = 0; contactIndex < _contactCount; contactIndex++) {
-		bool match = !crypto_verify32(
-			peerKey,
-			_contactList[contactIndex]->Key);
-
-		if (match) {
-			break;
+				if (!prevUpSuccess) {
+					break;
+				}
+			}
 		}
+
+		goUp = !goUp;
 	}
 
-	if (contactIndex == _contactCount) {
-		THROW("Tried to update not existing user.");
+	CowBuffer<String> result(s);
+
+	while (s > 0) {
+		--s;
+		result[s] = high->Key.Name;
+		high = _contacts.Previous(high);
 	}
 
-	_contactList[contactIndex]->Name = name;
-
-	String path = "storage/" + DataToHex(_ownerKey, KEY_SIZE) +
-		"/contacts/" + DataToHex(peerKey, KEY_SIZE);
-
-	BinaryFile file(path, false);
-	file.Clear();
-	file.Write<char>(name.CStr(), name.Length(), 0);
+	return result;
 }
 
-int ContactStorage::GetContactCount()
+String ContactStorage::GetNextContact(String name)
 {
-	return _contactCount;
-}
+	Tree<ContactNode>::Entry *entry = _contacts.FindEntry(name);
 
-const uint8_t *ContactStorage::GetContactKey(int index)
-{
-	return _contactList[index]->Key;
-}
-
-String ContactStorage::GetName(int index)
-{
-	return _contactList[index]->Name;
-}
-
-String ContactStorage::GetNameForPresentation(int index)
-{
-	if (_contactList[index]->Name.Length() > 0) {
-		return _contactList[index]->Name;
+	if (!entry) {
+		return "";
 	}
 
-	return DataToHex(_contactList[index]->Key, KEY_SIZE);
+	entry = _contacts.Next(entry);
+
+	if (!entry) {
+		return "";
+	}
+
+	return entry->Key.Name;
+}
+
+String ContactStorage::GetPreviousContact(String name)
+{
+	Tree<ContactNode>::Entry *entry = _contacts.FindEntry(name);
+
+	if (!entry) {
+		return "";
+	}
+
+	entry = _contacts.Previous(entry);
+
+	if (!entry) {
+		return "";
+	}
+
+	return entry->Key.Name;
+}
+
+bool ContactStorage::ContactNode::operator<(const ContactNode &node) const
+{
+	return Name < node.Name;
+}
+
+bool ContactStorage::ContactNode::operator==(const ContactNode &node) const
+{
+	return Name == node.Name;
 }
 
 void ContactStorage::LoadContacts()
 {
-	String path = "storage/" + DataToHex(_ownerKey, KEY_SIZE) +
-		"/contacts";
+	CowBuffer<String> contactList = ListDirectory(_root);
 
-	if (!FileExists(path)) {
-		return;
-	}
+	for (unsigned long conIdx = 0; conIdx < contactList.Size(); conIdx++) {
+		Contact *contact = new Contact(
+			contactList[conIdx],
+			_root + "/" + contactList[conIdx]);
 
-	CowBuffer<String> entries = ListDirectory(path);
-
-	_contactCount = entries.Size();
-	_contactList = new Contact*[_contactCount];
-
-	for (int i = 0; i < _contactCount; i++) {
-		_contactList[i] = new Contact;
-
-		HexToData(entries[i], _contactList[i]->Key);
-
-		BinaryFile file(path + "/" + entries[i], false);
-
-		if (file.Size() > 0) {
-			char *nameBuffer = new char[file.Size() + 1];
-			file.Read<char>(nameBuffer, file.Size(), 0);
-			nameBuffer[file.Size()] = 0;
-			_contactList[i]->Name = nameBuffer;
-			delete[] nameBuffer;
-		}
+		ContactNode node;
+		node.Cont = contact;
+		node.Name = contactList[conIdx];
+		_contacts.AddEntry(node);
 	}
 }
 
-void ContactStorage::FreeContacts()
+void ContactStorage::UnloadContacts()
 {
-	if (!_contactList) {
-		return;
-	}
+	Tree<ContactNode>::Entry *entry = _contacts.FindSmallest();
 
-	for (int i = 0; i < _contactCount; i++) {
-		delete _contactList[i];
-	}
+	while (entry) {
+		delete entry->Key.Cont;
 
-	delete[] _contactList;
-	_contactList = 0;
+		Tree<ContactNode>::Entry *next = _contacts.Next(entry);
+		_contacts.RemoveEntry(entry);
+		entry = next;
+	}
 }

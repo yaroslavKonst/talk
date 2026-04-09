@@ -3,7 +3,6 @@
 
 #include "Root.hpp"
 #include "Screen.hpp"
-#include "ControlStorage.hpp"
 #include "NotificationSystem.hpp"
 #include "../Common/Exception.hpp"
 

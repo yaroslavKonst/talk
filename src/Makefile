@@ -24,6 +24,7 @@ SERVER_MODULES =\
 	Common/Version.o \
 	Common/StreamReader.o \
 	Common/StreamWriter.o \
+	Common/ObjectStorage.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
@@ -44,6 +45,7 @@ CLIENT_MODULES=\
 	Client/Root.o \
 	Client/Config.o \
 	Client/Network.o \
+	Client/ChatList.o \
 	Client/ClientHandshake.o \
 	Client/ClientSession.o \
 	Client/UI.o \
@@ -51,19 +53,23 @@ CLIENT_MODULES=\
 	Client/Screen.o \
 	Client/WorkScreen.o \
 	Client/LoginScreen.o \
+	Client/ContactScreen.o \
 	Client/NotificationSystem.o \
 	Protocol/HandshakeParser.o \
 	Protocol/SessionProtocol.o \
 	Protocol/SessionParser.o \
+	Message/ContactStorage.o \
 	Common/MyString.o \
 	Common/Version.o \
 	Common/SignalHandling.o \
 	Common/IniFile.o \
+	Common/BinaryFile.o \
 	Common/File.o \
 	Common/EventDispatcher.o \
 	Common/UnixTime.o \
 	Common/StreamReader.o \
 	Common/StreamWriter.o \
+	Common/ObjectStorage.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 

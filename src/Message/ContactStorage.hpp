@@ -1,41 +1,61 @@
 #ifndef _CONTACT_STORAGE_HPP
 #define _CONTACT_STORAGE_HPP
 
-#include <cstdint>
+#include "../Common/CowBuffer.hpp"
+#include "../Common/Tree.hpp"
 
-#include "../Common/MyString.hpp"
-#include "../Crypto/CryptoDefinitions.hpp"
+class Contact
+{
+public:
+	Contact(String name, String path);
+
+private:
+	String _name; // name@host
+	CowBuffer<CowBuffer<uint8_t>> _keys;
+	CowBuffer<bool> _verifiedKeys;
+
+	String _path;
+};
 
 class ContactStorage
 {
 public:
-	ContactStorage(const uint8_t *ownerKey);
-	~ContactStorage();
+	ContactStorage(String root);
 
-	void AddContact(const uint8_t *peerKey, String name);
-	void UpdateContact(const uint8_t *peerKey, String name);
+	String GetFirstContact();
+	CowBuffer<String> GetContactRange(String center, int size);
 
-	int GetContactCount();
-
-	const uint8_t *GetContactKey(int index);
-
-	String GetName(int index);
-	String GetNameForPresentation(int index);
+	String GetNextContact(String name);
+	String GetPreviousContact(String name);
 
 private:
-	const uint8_t *_ownerKey;
+	String _root;
 
-	struct Contact
+	struct ContactNode
 	{
-		uint8_t Key[KEY_SIZE];
+		Contact *Cont;
 		String Name;
+
+		bool operator<(const ContactNode &node) const;
+		bool operator==(const ContactNode &node) const;
+
+		ContactNode()
+		{
+			Cont = nullptr;
+			Name = "";
+		}
+
+		ContactNode(String name)
+		{
+			Cont = nullptr;
+			Name = name;
+		}
 	};
 
-	Contact **_contactList;
-	int _contactCount;
+	Tree<ContactNode> _contacts;
 
 	void LoadContacts();
-	void FreeContacts();
+	void UnloadContacts();
 };
 
 #endif

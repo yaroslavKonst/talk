@@ -2,7 +2,6 @@
 #define _NOTIFICATION_SYSTEM_HPP
 
 #include "Root.hpp"
-#include "ControlStorage.hpp"
 #include "../Common/MyString.hpp"
 
 class NotificationSystem

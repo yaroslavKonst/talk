@@ -43,6 +43,16 @@ public:
 		return _keyNames[(int)Keys::WorkConnect];
 	}
 
+	int WorkContactKey()
+	{
+		return _keys[(int)Keys::WorkContact];
+	}
+
+	String WorkContactName()
+	{
+		return _keyNames[(int)Keys::WorkContact];
+	}
+
 	int LoginBackKey()
 	{
 		return _keys[(int)Keys::LoginBack];
@@ -83,6 +93,36 @@ public:
 		return _keyNames[(int)Keys::LoginConnect];
 	}
 
+	int ContactBackKey()
+	{
+		return _keys[(int)Keys::ContactBack];
+	}
+
+	String ContactBackName()
+	{
+		return _keyNames[(int)Keys::ContactBack];
+	}
+
+	int ContactUpKey()
+	{
+		return _keys[(int)Keys::ContactUp];
+	}
+
+	String ContactUpName()
+	{
+		return _keyNames[(int)Keys::ContactUp];
+	}
+
+	int ContactDownKey()
+	{
+		return _keys[(int)Keys::ContactDown];
+	}
+
+	String ContactDownName()
+	{
+		return _keyNames[(int)Keys::ContactDown];
+	}
+
 	int NotificationConfirmKey()
 	{
 		return _keys[(int)Keys::NotificationConfirm];
@@ -102,50 +142,55 @@ private:
 
 	enum class Keys
 	{
-		WorkExit = 0,
-		WorkConnect = 1,
+		WorkExit,
+		WorkConnect,
+		WorkContact,
 
-		WorkListSelect = 2,
-		WorkListUp = 3,
-		WorkListDown = 4,
-		WorkListUpdate = 5,
+		WorkListSelect,
+		WorkListUp,
+		WorkListDown,
+		WorkListUpdate,
 
-		WorkChatType = 6,
-		WorkChatUp = 7,
-		WorkChatDown = 8,
-		WorkChatBack = 9,
-		WorkChatExtract = 10,
+		WorkChatType,
+		WorkChatUp,
+		WorkChatDown,
+		WorkChatBack,
+		WorkChatExtract,
 
-		WorkTypeSend = 11,
-		WorkTypeAttach = 12,
-		WorkTypeBack = 13,
-		WorkCursorLeft = 14,
-		WorkCursorRight = 15,
+		WorkTypeSend,
+		WorkTypeAttach,
+		WorkTypeBack,
+		WorkCursorLeft,
+		WorkCursorRight,
 
-		LoginBack = 16,
-		LoginUp = 17,
-		LoginDown = 18,
-		LoginConnect = 19,
+		LoginBack,
+		LoginUp,
+		LoginDown,
+		LoginConnect,
 
-		VoiceStart = 20,
-		VoiceEnd = 21,
-		VoiceMute = 22,
-		VoiceEnterSettings = 23,
-		VoiceExitSettings = 24,
-		VoiceVolumeInc = 25,
-		VoiceVolumeDec = 26,
-		VoiceSilenceInc = 27,
-		VoiceSilenceDec = 28,
-		VoiceFilterUp = 29,
-		VoiceFilterDown = 30,
-		VoiceAccept = 31,
-		VoiceDecline = 32,
+		ContactBack,
+		ContactUp,
+		ContactDown,
 
-		AttachBack = 33,
-		AttachClear = 34,
-		AttachProceed = 35,
+		VoiceStart,
+		VoiceEnd,
+		VoiceMute,
+		VoiceEnterSettings,
+		VoiceExitSettings,
+		VoiceVolumeInc,
+		VoiceVolumeDec,
+		VoiceSilenceInc,
+		VoiceSilenceDec,
+		VoiceFilterUp,
+		VoiceFilterDown,
+		VoiceAccept,
+		VoiceDecline,
 
-		NotificationConfirm = 36
+		AttachBack,
+		AttachClear,
+		AttachProceed,
+
+		NotificationConfirm
 	};
 
 	int _keys[(int)Keys::NotificationConfirm + 1];
