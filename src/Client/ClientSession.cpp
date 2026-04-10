@@ -5,12 +5,15 @@
 #include "../Common/UnixTime.hpp"
 
 ClientSession::ClientSession(
+	Root *root,
 	int fd,
 	EncryptedStream &outES,
 	EncryptedStream &inES,
 	uint8_t outScramblerInit,
 	uint8_t inScramblerInit)
 {
+	_root = root;
+
 	_fd = fd;
 	_inES = inES;
 	_outES = outES;
@@ -23,6 +26,8 @@ ClientSession::ClientSession(
 		&_inES,
 		outScramblerInit,
 		inScramblerInit);
+
+	RequestHostName();
 }
 
 ClientSession::~ClientSession()
@@ -81,6 +86,8 @@ bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 	switch (command) {
 	case SESSION_COMMAND_KEEP_ALIVE:
 		return ProcessKeepAlive(buffer);
+	case SESSION_COMMAND_GET_HOST_NAME:
+		return ProcessGetHostName(buffer);
 	default:
 		return false;
 	}
@@ -111,4 +118,24 @@ void ClientSession::SendKeepAlive()
 	request.Timestamp = _keepAliveTimestamp;
 
 	_protocol->Send(CommandKeepAlive::BuildCommand(request), 0);
+}
+
+void ClientSession::RequestHostName()
+{
+	_protocol->Send(CommandGetHostName::BuildCommand(), 0);
+}
+
+bool ClientSession::ProcessGetHostName(const CowBuffer<uint8_t> buffer)
+{
+	CommandGetHostName::Response response;
+	bool parseResult = CommandGetHostName::ParseResponse(buffer, response);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_root->Conf->SetHostName(response.Name);
+	_root->Conf->Save();
+	_root->Ui->Redraw();
+	return true;
 }

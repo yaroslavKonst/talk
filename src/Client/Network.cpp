@@ -62,19 +62,7 @@ void Network::ProcessRead()
 			return;
 		}
 
-		if (_handshake->ConnectionSuccessful()) {
-			_session = new ClientSession(
-				_fd,
-				_handshake->GetOutES(),
-				_handshake->GetInES(),
-				_handshake->GetOutScramblerInit(),
-				_handshake->GetInScramblerInit());
-
-			delete _handshake;
-			_handshake = nullptr;
-			_root->Ui->Redraw();
-		}
-
+		CheckHandshake();
 		return;
 	}
 
@@ -106,19 +94,7 @@ void Network::ProcessWrite()
 			return;
 		}
 
-		if (_handshake->ConnectionSuccessful()) {
-			_session = new ClientSession(
-				_fd,
-				_handshake->GetOutES(),
-				_handshake->GetInES(),
-				_handshake->GetOutScramblerInit(),
-				_handshake->GetInScramblerInit());
-
-			delete _handshake;
-			_handshake = nullptr;
-			_root->Ui->Redraw();
-		}
-
+		CheckHandshake();
 		return;
 	}
 
@@ -186,6 +162,23 @@ void Network::StartConnection(int fd, const uint8_t *serverKey)
 
 	_root->Dispatcher->RegisterDescriptorProcessor(this);
 	_root->Dispatcher->RegisterTimeProcessor(this);
+}
+
+void Network::CheckHandshake()
+{
+	if (_handshake->ConnectionSuccessful()) {
+		_session = new ClientSession(
+			_root,
+			_fd,
+			_handshake->GetOutES(),
+			_handshake->GetInES(),
+			_handshake->GetOutScramblerInit(),
+			_handshake->GetInScramblerInit());
+
+		delete _handshake;
+		_handshake = nullptr;
+		_root->Ui->Redraw();
+	}
 }
 
 void Network::CloseConnection()

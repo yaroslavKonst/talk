@@ -9,6 +9,8 @@
 #include "../Common/Exception.hpp"
 
 static const char *NetworkSection = "Network";
+static const char *HostNameSetting = "HostName";
+static const char *HostNameSettingValue = "localhost";
 static const char *IPv4Setting = "ClientIPv4";
 static const char *IPv4SettingValue = "0.0.0.0";
 static const char *PortSetting = "ClientPort";
@@ -114,9 +116,18 @@ uint64_t Config::GetMessageSizeLimit()
 	return _messageSizeLimit;
 }
 
+String Config::GetHostName()
+{
+	return _hostName;
+}
+
 void Config::Init()
 {
 	if (!FileExists(_configFile.GetPath())) {
+		_configFile.Set(
+			NetworkSection,
+			HostNameSetting,
+			HostNameSettingValue);
 		_configFile.Set(NetworkSection, IPv4Setting, IPv4SettingValue);
 		_configFile.Set(NetworkSection, PortSetting, PortSettingValue);
 		_configFile.Set(
@@ -205,10 +216,14 @@ void Config::Validate()
 		THROW("Message size limit must be positive integer.");
 	}
 
+	// Host name.
+	String hostName = _configFile.Get(NetworkSection, HostNameSetting);
+
 	// Writing new parameters.
 	_listeningAddress = addr.s_addr;
 	_listeningPort = port;
 	_gateAddress = gateAddr.s_addr;
 	_gatePort = gatePort;
 	_messageSizeLimit = messageSize;
+	_hostName = hostName;
 }

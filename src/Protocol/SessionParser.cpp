@@ -30,6 +30,54 @@ CowBuffer<uint8_t> CommandKeepAlive::BuildCommand(const Command &data)
 	return result;
 }
 
+CowBuffer<uint8_t> CommandGetHostName::BuildCommand()
+{
+	CowBuffer<uint8_t> buffer(sizeof(int32_t));
+	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_GET_HOST_NAME;
+	return buffer;
+}
+
+bool CommandGetHostName::ParseResponse(
+	const CowBuffer<uint8_t> buffer,
+	Response &result)
+{
+	if (buffer.Size() < sizeof(int32_t) * 2) {
+		return false;
+	}
+
+	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t nameLength = *buffer.SwitchType<int32_t>(sizeof(command));
+
+	if (command != SESSION_COMMAND_GET_HOST_NAME) {
+		return false;
+	}
+
+	if (nameLength <= 0 || nameLength > 200) {
+		return false;
+	}
+
+	if (buffer.Size() != sizeof(int32_t) * 2 + nameLength) {
+		return false;
+	}
+
+	result.Name = String(
+		buffer.SwitchType<char>(sizeof(int32_t) * 2),
+		nameLength);
+	return true;
+}
+
+CowBuffer<uint8_t> CommandGetHostName::BuildResponse(const Response &data)
+{
+	CowBuffer<uint8_t> buffer(sizeof(int32_t) * 2 + data.Name.Length());
+	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_GET_HOST_NAME;
+	*buffer.SwitchType<int32_t>(sizeof(int32_t)) = data.Name.Length();
+	memcpy(
+		buffer.Pointer(sizeof(int32_t) * 2),
+		data.Name.CStr(),
+		data.Name.Length());
+	return buffer;
+}
+
 /*int32_t CommandTextMessage::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)

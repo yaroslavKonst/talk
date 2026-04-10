@@ -57,6 +57,7 @@ private:
 	bool ProcessInput(const CowBuffer<uint8_t> buffer);
 
 	bool ProcessKeepAlive(const CowBuffer<uint8_t> buffer);
+	bool ProcessGetHostName();
 
 	void SessionLog(String message);
 };

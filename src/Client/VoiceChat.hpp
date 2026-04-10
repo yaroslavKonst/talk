@@ -2,7 +2,6 @@
 #define _VOICE_CHAT_HPP
 
 #include "Root.hpp"
-#include "ControlStorage.hpp"
 #include "../Audio/Audio.hpp"
 #include "../Crypto/Crypto.hpp"
 #include "../Common/IniFile.hpp"

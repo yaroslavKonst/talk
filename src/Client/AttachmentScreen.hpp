@@ -4,7 +4,6 @@
 #include "Root.hpp"
 #include "Screen.hpp"
 #include "Chat.hpp"
-#include "ControlStorage.hpp"
 
 class AttachmentScreen : public Screen
 {

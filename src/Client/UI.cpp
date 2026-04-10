@@ -136,7 +136,18 @@ void UI::DrawUserData()
 		addstr(_root->Conf->GetName().CStr());
 	} else {
 		attrset(COLOR_PAIR(RED_TEXT));
-		addstr("not specified.");
+		addstr("not specified");
+		attrset(COLOR_PAIR(DEFAULT_TEXT));
+	}
+
+	String hostName = _root->Conf->GetHostName();
+
+	if (hostName.Length() > 0) {
+		addch('@');
+		addstr(hostName.CStr());
+	} else {
+		attrset(COLOR_PAIR(RED_TEXT));
+		addstr(" (host name is not specified)");
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 	}
 

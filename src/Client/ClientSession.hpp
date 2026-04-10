@@ -1,6 +1,7 @@
 #ifndef _CLIENT_SESSION_HPP
 #define _CLIENT_SESSION_HPP
 
+#include "Root.hpp"
 #include "../Protocol/SessionProtocol.hpp"
 #include "../Crypto/Crypto.hpp"
 
@@ -8,6 +9,7 @@ class ClientSession
 {
 public:
 	ClientSession(
+		Root *root,
 		int _fd,
 		EncryptedStream &outES,
 		EncryptedStream &inES,
@@ -23,6 +25,8 @@ public:
 	bool InitKeepAlive();
 
 private:
+	Root *_root;
+
 	int _fd;
 	EncryptedStream _outES;
 	EncryptedStream _inES;
@@ -34,8 +38,10 @@ private:
 	bool ProcessInput(const CowBuffer<uint8_t> buffer);
 
 	bool ProcessKeepAlive(const CowBuffer<uint8_t> buffer);
-
 	void SendKeepAlive();
+
+	void RequestHostName();
+	bool ProcessGetHostName(const CowBuffer<uint8_t> buffer);
 };
 
 #endif

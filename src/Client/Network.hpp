@@ -38,6 +38,7 @@ private:
 	ClientHandshake *_handshake;
 	ClientSession *_session;
 
+	void CheckHandshake();
 	void CloseConnection();
 };
 

@@ -13,6 +13,9 @@ public:
 	String GetName();
 	void SetName(String value);
 
+	String GetHostName();
+	void SetHostName(String value);
+
 	String GetServerAddress();
 	void SetServerAddress(String value);
 

@@ -31,6 +31,8 @@ public:
 
 	uint64_t GetMessageSizeLimit();
 
+	String GetHostName();
+
 private:
 	IniFile _configFile;
 
@@ -44,6 +46,8 @@ private:
 	uint16_t _gatePort;
 
 	uint64_t _messageSizeLimit;
+
+	String _hostName;
 
 	struct ConfUser
 	{

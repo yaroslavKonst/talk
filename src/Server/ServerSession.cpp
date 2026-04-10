@@ -68,6 +68,7 @@ ServerSession::~ServerSession()
 void ServerSession::ReloadConfig()
 {
 	_protocol->SetInputSizeLimit(_config->GetMessageSizeLimit());
+	ProcessGetHostName();
 }
 
 bool ServerSession::RequestRead()
@@ -130,6 +131,8 @@ bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 	switch (command) {
 	case SESSION_COMMAND_KEEP_ALIVE:
 		return ProcessKeepAlive(buffer);
+	case SESSION_COMMAND_GET_HOST_NAME:
+		return ProcessGetHostName();
 	default:
 		SessionLog("Unknown command.");
 		return false;
@@ -144,6 +147,16 @@ bool ServerSession::ProcessKeepAlive(const CowBuffer<uint8_t> buffer)
 	if (!parseResult) {
 		return false;
 	}
+
+	_protocol->Send(buffer, 0);
+	return true;
+}
+
+bool ServerSession::ProcessGetHostName()
+{
+	CommandGetHostName::Response response;
+	response.Name = _config->GetHostName();
+	CowBuffer<uint8_t> buffer = CommandGetHostName::BuildResponse(response);
 
 	_protocol->Send(buffer, 0);
 	return true;

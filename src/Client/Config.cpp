@@ -12,6 +12,9 @@ namespace General
 
 	static const char *Name = "Name";
 	static const char *NameValue = "";
+
+	static const char *HostName = "Host Name";
+	static const char *HostNameValue = "";
 }
 
 namespace Connection
@@ -271,6 +274,16 @@ void Config::SetName(String value)
 	_configFile.Set(General::Section, General::Name, value);
 }
 
+String Config::GetHostName()
+{
+	return _configFile.Get(General::Section, General::HostName);
+}
+
+void Config::SetHostName(String value)
+{
+	_configFile.Set(General::Section, General::HostName, value);
+}
+
 String Config::GetServerAddress()
 {
 	return _configFile.Get(Connection::Section, Connection::Address);
@@ -311,6 +324,7 @@ void Config::Init()
 		{
 			using namespace General;
 			_configFile.Set(Section, Name, NameValue);
+			_configFile.Set(Section, HostName, HostNameValue);
 		}
 
 		{
