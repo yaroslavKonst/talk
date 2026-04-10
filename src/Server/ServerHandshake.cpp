@@ -181,7 +181,7 @@ void ServerHandshake::ProcessSize(CowBuffer<uint8_t> buffer)
 	}
 
 	_nameSize = buffer;
-	_reader = new StreamReader(_fd, nameLength + 1);
+	_reader = new StreamReader(_fd, nameLength);
 	_state = State::WaitingSyn;
 }
 
