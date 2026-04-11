@@ -1,7 +1,7 @@
 #ifndef _PROCESSORS_HPP
 #define _PROCESSORS_HPP
 
-#include "../Message/ContactStorage.hpp"
+#include "ContactStorage.hpp"
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
 #include "../Common/ObjectStorage.hpp"

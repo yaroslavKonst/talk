@@ -4,7 +4,7 @@
 #include "Screen.hpp"
 #include "Root.hpp"
 #include "UiHelpers.hpp"
-#include "../Message/ContactStorage.hpp"
+#include "ContactStorage.hpp"
 
 class ContactScreen : public Screen
 {

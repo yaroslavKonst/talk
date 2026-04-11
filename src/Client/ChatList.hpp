@@ -3,7 +3,7 @@
 
 #include "Root.hpp"
 #include "Chat.hpp"
-#include "../Message/ContactStorage.hpp"
+#include "ContactStorage.hpp"
 #include "../Common/ObjectStorage.hpp"
 
 class ChatList : public MessageEventProcessor

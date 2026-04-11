@@ -55,10 +55,10 @@ CLIENT_MODULES=\
 	Client/LoginScreen.o \
 	Client/ContactScreen.o \
 	Client/NotificationSystem.o \
+	Client/ContactStorage.o \
 	Protocol/HandshakeParser.o \
 	Protocol/SessionProtocol.o \
 	Protocol/SessionParser.o \
-	Message/ContactStorage.o \
 	Common/MyString.o \
 	Common/Version.o \
 	Common/SignalHandling.o \
