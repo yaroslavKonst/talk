@@ -24,6 +24,7 @@ public:
 
 	String GetFirstContact();
 	CowBuffer<String> GetContactRange(String center, int size);
+	bool HasContact(String name);
 
 	String GetNextContact(String name);
 	String GetPreviousContact(String name);

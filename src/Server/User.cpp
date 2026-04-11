@@ -187,9 +187,7 @@ void User::StorePublicKey(
 
 void User::AddNewObject(const CowBuffer<uint8_t> object)
 {
-	ObjectStorage::ID itemId(GetHash(
-		object,
-		(int)ObjectStorage::Constants::IDSize).Pointer());
+	ObjectStorage::ID itemId = _objectStorage.GetFreeID(object);
 
 	_objectStorage.WriteObject(itemId, object);
 

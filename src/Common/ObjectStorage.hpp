@@ -40,6 +40,7 @@ public:
 	bool HasRef(String refName);
 	ID GetRef(String refName);
 	void SetRef(String refName, const ID &id);
+	ID GetFreeID(const CowBuffer<uint8_t> object);
 
 	bool HasObject(const ID &id);
 	CowBuffer<uint8_t> ReadObject(const ID &id);

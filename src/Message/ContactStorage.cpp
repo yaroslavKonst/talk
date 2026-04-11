@@ -119,6 +119,12 @@ CowBuffer<String> ContactStorage::GetContactRange(String center, int size)
 	return result;
 }
 
+bool ContactStorage::HasContact(String name)
+{
+	Tree<ContactNode>::Entry *entry = _contacts.FindEntry(name);
+	return entry;
+}
+
 String ContactStorage::GetNextContact(String name)
 {
 	Tree<ContactNode>::Entry *entry = _contacts.FindEntry(name);
@@ -155,6 +161,10 @@ String ContactStorage::GetPreviousContact(String name)
 
 void ContactStorage::AddNewContact(String name)
 {
+	if (HasContact(name)) {
+		return;
+	}
+
 	Contact *contact = new Contact(
 		name,
 		_root + "/" + name);

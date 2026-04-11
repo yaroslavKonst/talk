@@ -91,7 +91,10 @@ CowBuffer<uint8_t> ApplyScrambler(CowBuffer<uint8_t> data);
 CowBuffer<uint8_t> RemoveScrambler(CowBuffer<uint8_t> data);
 uint8_t ApplyScrambler(uint8_t *data, unsigned long length, uint8_t init);
 
-CowBuffer<uint8_t> GetHash(CowBuffer<uint8_t> buffer, int hashSize);
+CowBuffer<uint8_t> GetHash(const CowBuffer<uint8_t> buffer, int hashSize);
+CowBuffer<uint8_t> GetHash(
+	const CowBuffer<CowBuffer<uint8_t>> buffers,
+	int hashSize);
 
 class CryptoStreamReader
 {

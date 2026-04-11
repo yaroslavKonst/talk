@@ -357,7 +357,7 @@ CowBuffer<uint8_t> RemoveScrambler(CowBuffer<uint8_t> data)
 	return data.Slice(1, data.Size() - 1);
 }
 
-CowBuffer<uint8_t> GetHash(CowBuffer<uint8_t> buffer, int hashSize)
+CowBuffer<uint8_t> GetHash(const CowBuffer<uint8_t> buffer, int hashSize)
 {
 	CowBuffer<uint8_t> hash(hashSize);
 
@@ -367,6 +367,24 @@ CowBuffer<uint8_t> GetHash(CowBuffer<uint8_t> buffer, int hashSize)
 		buffer.Pointer(),
 		buffer.Size());
 
+	return hash;
+}
+
+CowBuffer<uint8_t> GetHash(
+	const CowBuffer<CowBuffer<uint8_t>> buffers,
+	int hashSize)
+{
+	CowBuffer<uint8_t> hash(hashSize);
+
+	crypto_blake2b_ctx ctx;
+	crypto_blake2b_init(&ctx, hashSize);
+
+	for (uint64_t i = 0; i < buffers.Size(); i++) {
+		const CowBuffer<uint8_t> buffer = buffers[i];
+		crypto_blake2b_update(&ctx, buffer.Pointer(), buffer.Size());
+	}
+
+	crypto_blake2b_final(&ctx, hash.Pointer());
 	return hash;
 }
 

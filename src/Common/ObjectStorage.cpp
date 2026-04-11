@@ -6,6 +6,7 @@
 #include "File.hpp"
 #include "BinaryFile.hpp"
 #include "Hex.hpp"
+#include "../Crypto/Crypto.hpp"
 
 #define OBJECT_PREFIX "objects"
 #define REFS_PREFIX "refs"
@@ -106,6 +107,28 @@ void ObjectStorage::SetRef(String refName, const ID &id)
 
 	BinaryFile file(path, true);
 	file.Write<uint8_t>(id.GetValue(), (int)Constants::IDSize, 0);
+}
+
+ObjectStorage::ID ObjectStorage::GetFreeID(const CowBuffer<uint8_t> object)
+{
+	ID id(GetHash(object, (int)Constants::IDSize).Pointer());
+
+	if (!HasObject(id)) {
+		return id;
+	}
+
+	CowBuffer<CowBuffer<uint8_t>> pair(2);
+	pair[0] = object;
+	pair[1] = CowBuffer<uint8_t>(8);
+
+	for (;;) {
+		GenerateRandomData(pair[1].Size(), pair[1].Pointer(), false);
+		id.SetValue(GetHash(pair, (int)Constants::IDSize).Pointer());
+
+		if (!HasObject(id)) {
+			return id;
+		}
+	}
 }
 
 bool ObjectStorage::HasObject(const ID &id)
