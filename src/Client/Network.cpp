@@ -164,6 +164,16 @@ void Network::StartConnection(int fd, const uint8_t *serverKey)
 	_root->Dispatcher->RegisterTimeProcessor(this);
 }
 
+bool Network::AddContact(String name)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->AddContact(name);
+	return true;
+}
+
 void Network::CheckHandshake()
 {
 	if (_handshake->ConnectionSuccessful()) {

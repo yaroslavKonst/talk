@@ -43,6 +43,13 @@ public:
 		const CowBuffer<uint8_t> buffer) override;
 	void NotifyWriteCompleted(const ObjectStorage::ID &id) override;
 
+	void AddContact(String name) override;
+
+	ObjectStorage *GetObjectStorage() override
+	{
+		return &_objectStorage;
+	}
+
 private:
 	EventDispatcher *_dispatcher;
 	Config *_config;
@@ -68,6 +75,8 @@ private:
 	static void StorePublicKey(
 		String root,
 		const uint8_t publicKey[KEY_SIZE]);
+
+	void AddNewObject(const CowBuffer<uint8_t> object);
 };
 
 #endif

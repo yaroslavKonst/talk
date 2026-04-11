@@ -21,6 +21,9 @@ public:
 	void Activate();
 	void Deactivate();
 
+	ObjectStorage::ID GetKnownID() override;
+	void SetKnownID(const ObjectStorage::ID &id) override;
+
 private:
 	Root *_root;
 

@@ -19,11 +19,14 @@ public:
 	class ID
 	{
 	public:
+		ID();
 		ID(const uint8_t *value);
 		ID(const ID &id);
 
 		const uint8_t *GetValue() const;
 		void SetValue(const uint8_t *value);
+
+		bool IsZero() const;
 
 	private:
 		uint8_t _data[(int)Constants::IDSize];
@@ -38,6 +41,7 @@ public:
 	ID GetRef(String refName);
 	void SetRef(String refName, const ID &id);
 
+	bool HasObject(const ID &id);
 	CowBuffer<uint8_t> ReadObject(const ID &id);
 	void WriteObject(const ID &id, const CowBuffer<uint8_t> buffer);
 	void UpdateObject(

@@ -4,6 +4,7 @@
 //#include "../Message/Message.hpp"
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
+#include "../Common/ObjectStorage.hpp"
 
 #define SESSION_COMMAND_KEEP_ALIVE 1
 #define SESSION_COMMAND_SEND_MESSAGE 2
@@ -11,6 +12,10 @@
 #define SESSION_COMMAND_LIST_USERS 4
 #define SESSION_COMMAND_GET_UPDATE 5
 #define SESSION_COMMAND_GET_HOST_NAME 6
+#define SESSION_COMMAND_ADD_CONTACT 7
+#define SESSION_COMMAND_UPDATE_CONTACT_KEY 8
+#define SESSION_COMMAND_REQUEST_ID 9
+#define SESSION_COMMAND_UPDATE_ID 10
 
 #define SESSION_RESPONSE_OK 200
 #define SESSION_RESPONSE_ERROR 100
@@ -58,6 +63,54 @@ namespace CommandGetHostName
 	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
 	CowBuffer<uint8_t> BuildResponse(const Response &data);
 };
+
+namespace CommandAddContact
+{
+	struct Command
+	{
+		String ContactName;
+	};
+
+	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
+	CowBuffer<uint8_t> BuildCommand(const Command &command);
+}
+
+namespace CommandRequestID
+{
+	struct Response
+	{
+		ObjectStorage::ID Id;
+	};
+
+	CowBuffer<uint8_t> BuildCommand();
+
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
+	CowBuffer<uint8_t> BuildResponse(const Response &data);
+}
+
+namespace CommandUpdateID
+{
+	struct Command
+	{
+		ObjectStorage::ID Id;
+	};
+
+	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
+	CowBuffer<uint8_t> BuildCommand(const Command &command);
+}
+
+namespace CommandUpdateContactKey
+{
+	struct Command
+	{
+		String ContactName;
+		const uint8_t *Key;
+		int8_t Validated;
+	};
+
+	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
+	CowBuffer<uint8_t> BuildCommand(const Command &command);
+}
 
 /*namespace CommandSendMessage
 {

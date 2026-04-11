@@ -10,6 +10,11 @@
 #define OBJECT_PREFIX "objects"
 #define REFS_PREFIX "refs"
 
+ObjectStorage::ID::ID()
+{
+	memset(_data, 0, (int)ObjectStorage::Constants::IDSize);
+}
+
 ObjectStorage::ID::ID(const uint8_t *value)
 {
 	memcpy(_data, value, (int)ObjectStorage::Constants::IDSize);
@@ -28,6 +33,17 @@ const uint8_t *ObjectStorage::ID::GetValue() const
 void ObjectStorage::ID::SetValue(const uint8_t *value)
 {
 	memcpy(_data, value, (int)ObjectStorage::Constants::IDSize);
+}
+
+bool ObjectStorage::ID::IsZero() const
+{
+	for (int i = 0; i < (int)ObjectStorage::Constants::IDSize; i++) {
+		if (_data[i]) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 ObjectStorage::ObjectStorage(String rootPath, EventDispatcher *dispatcher)
@@ -79,7 +95,7 @@ ObjectStorage::ID ObjectStorage::GetRef(String refName)
 
 	BinaryFile file(path, false);
 	uint8_t value[(int)Constants::IDSize];
-	file.Read(value, (int)Constants::IDSize, 0);
+	file.Read<uint8_t>(value, (int)Constants::IDSize, 0);
 
 	return ID(value);
 }
@@ -89,7 +105,13 @@ void ObjectStorage::SetRef(String refName, const ID &id)
 	String path = _rootPath + "/" + REFS_PREFIX + "/" + refName;
 
 	BinaryFile file(path, true);
-	file.Write(id.GetValue(), (int)Constants::IDSize, 0);
+	file.Write<uint8_t>(id.GetValue(), (int)Constants::IDSize, 0);
+}
+
+bool ObjectStorage::HasObject(const ID &id)
+{
+	String path = GetPathForID(id, false);
+	return FileExists(path);
 }
 
 CowBuffer<uint8_t> ObjectStorage::ReadObject(const ID &id)
@@ -98,7 +120,7 @@ CowBuffer<uint8_t> ObjectStorage::ReadObject(const ID &id)
 
 	BinaryFile file(path, false);
 	CowBuffer<uint8_t> result(file.Size());
-	file.Read(result.Pointer(), result.Size(), 0);
+	file.Read<uint8_t>(result.Pointer(), result.Size(), 0);
 	return result;
 }
 
@@ -107,7 +129,7 @@ void ObjectStorage::WriteObject(const ID &id, CowBuffer<uint8_t> buffer)
 	String path = GetPathForID(id, true);
 
 	BinaryFile file(path, true, true);
-	file.Write(buffer.Pointer(), buffer.Size(), 0);
+	file.Write<uint8_t>(buffer.Pointer(), buffer.Size(), 0);
 }
 
 void ObjectStorage::UpdateObject(
@@ -118,7 +140,7 @@ void ObjectStorage::UpdateObject(
 	String path = GetPathForID(id, true);
 
 	BinaryFile file(path, true);
-	file.Write(buffer.Pointer(), buffer.Size(), offset);
+	file.Write<uint8_t>(buffer.Pointer(), buffer.Size(), offset);
 }
 
 void ObjectStorage::RequestObjectRead(const ID &id)

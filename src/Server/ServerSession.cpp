@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 
 #include "User.hpp"
+#include "ObjectType.hpp"
 #include "../Protocol/SessionParser.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Log.hpp"
@@ -38,6 +39,8 @@ ServerSession::ServerSession(
 		outScramblerInit,
 		inScramblerInit);
 
+	_objectTransmissionActive = false;
+
 	_protocol->SetInputSizeLimit(_config->GetMessageSizeLimit());
 
 	_dispatcher->RegisterDescriptorProcessor(this);
@@ -46,6 +49,7 @@ ServerSession::ServerSession(
 
 	SessionLog("Start session.");
 
+	SendObjects();
 }
 
 ServerSession::~ServerSession()
@@ -119,6 +123,13 @@ void ServerSession::ProcessTimeEvent()
 	_storage->MarkSessionForRemoval(this);
 }
 
+void ServerSession::SendObjects()
+{
+	if (!_objectTransmissionActive) {
+		InitObjectTransmission();
+	}
+}
+
 bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 {
 	if (buffer.Size() < sizeof(int32_t)) {
@@ -133,6 +144,10 @@ bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessKeepAlive(buffer);
 	case SESSION_COMMAND_GET_HOST_NAME:
 		return ProcessGetHostName();
+	case SESSION_COMMAND_ADD_CONTACT:
+		return ProcessAddContact(buffer);
+	case SESSION_COMMAND_REQUEST_ID:
+		return ProcessRequestID(buffer);
 	default:
 		SessionLog("Unknown command.");
 		return false;
@@ -154,6 +169,8 @@ bool ServerSession::ProcessKeepAlive(const CowBuffer<uint8_t> buffer)
 
 bool ServerSession::ProcessGetHostName()
 {
+	SessionLog("Requested host name.");
+
 	CommandGetHostName::Response response;
 	response.Name = _config->GetHostName();
 	CowBuffer<uint8_t> buffer = CommandGetHostName::BuildResponse(response);
@@ -162,7 +179,126 @@ bool ServerSession::ProcessGetHostName()
 	return true;
 }
 
+bool ServerSession::ProcessAddContact(const CowBuffer<uint8_t> buffer)
+{
+	CommandAddContact::Command command;
+	bool parseResult = CommandAddContact::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	SessionLog("Requested add contact " + command.ContactName + ".");
+
+	_storage->AddContact(command.ContactName);
+	return true;
+}
+
+void ServerSession::InitObjectTransmission()
+{
+	if (_objectTransmissionActive) {
+		return;
+	}
+
+	_objectTransmissionActive = true;
+	SendIDRequest();
+}
+
+void ServerSession::ObjectTransmissionStep(const ObjectStorage::ID &id)
+{
+	ObjectStorage *objectStorage = _storage->GetObjectStorage();
+
+	if (!objectStorage->HasRef(ROOT_REF)) {
+		_objectTransmissionActive = false;
+		return;
+	}
+
+	ObjectStorage::ID requiredObjectId;
+
+	if (!objectStorage->HasObject(id)) {
+		requiredObjectId = objectStorage->GetRef(ROOT_REF);
+	} else {
+		CowBuffer<uint8_t> object = objectStorage->ReadObject(id);
+		requiredObjectId.SetValue(object.Pointer(sizeof(int32_t)));
+	}
+
+	if (requiredObjectId.IsZero()) {
+		_objectTransmissionActive = false;
+		return;
+	}
+
+	CowBuffer<uint8_t> object = objectStorage->ReadObject(requiredObjectId);
+	SendObject(object);
+	SendID(requiredObjectId);
+	SendIDRequest();
+}
+
+void ServerSession::SendIDRequest()
+{
+	SessionLog("Sent ID request.");
+	_protocol->Send(CommandRequestID::BuildCommand(), 1);
+}
+
+void ServerSession::SendID(const ObjectStorage::ID &id)
+{
+	SessionLog("Sent ID update.");
+	CommandUpdateID::Command command;
+	command.Id = id;
+
+	_protocol->Send(CommandUpdateID::BuildCommand(command), 1);
+}
+
+bool ServerSession::ProcessRequestID(const CowBuffer<uint8_t> buffer)
+{
+	SessionLog("Received ID.");
+	
+	if (!_objectTransmissionActive) {
+		return false;
+	}
+
+	CommandRequestID::Response response;
+	bool parseResult = CommandRequestID::ParseResponse(buffer, response);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	ObjectTransmissionStep(response.Id);
+	return true;
+}
+
+void ServerSession::SendObject(const CowBuffer<uint8_t> object)
+{
+	int32_t objectType = *object.SwitchType<int32_t>();
+
+	switch (objectType) {
+	case (int)ObjectType::NewContact:
+		SendAddContact(object);
+		break;
+	}
+}
+
+void ServerSession::SendAddContact(const CowBuffer<uint8_t> object)
+{
+	String contactName(
+		object.SwitchType<char>(
+			sizeof(int32_t) +
+			(int)ObjectStorage::Constants::IDSize),
+		object.Size() - sizeof(int32_t) -
+			(int)ObjectStorage::Constants::IDSize);
+
+	CommandAddContact::Command command;
+	command.ContactName = contactName;
+
+	SessionLog("Sent add contact " + contactName + ".");
+
+	_protocol->Send(CommandAddContact::BuildCommand(command), 1);
+}
+
 void ServerSession::SessionLog(String message)
 {
-	Log("Session of " + _storage->GetName() + ": " + message);
+	uint64_t sessionIndex = (uint64_t)this;
+
+	Log("Session " + ToString(sessionIndex) + " of " +
+		_storage->GetName() + ": " + message);
 }

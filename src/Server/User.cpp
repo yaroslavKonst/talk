@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "ObjectType.hpp"
 #include "../Common/File.hpp"
 #include "../Common/BinaryFile.hpp"
 #include "../Common/Exception.hpp"
@@ -135,6 +136,36 @@ void User::NotifyWriteCompleted(const ObjectStorage::ID &id)
 {
 }
 
+void User::AddContact(String name)
+{
+	int32_t objectType = (int)ObjectType::NewContact;
+
+	CowBuffer<uint8_t> object(
+		sizeof(objectType) +
+		(int)ObjectStorage::Constants::IDSize +
+		name.Length());
+
+	*object.SwitchType<int32_t>() = objectType;
+	memset(
+		object.Pointer(sizeof(int32_t)),
+		0,
+		(int)ObjectStorage::Constants::IDSize);
+	memcpy(
+		object.Pointer(sizeof(int32_t) +
+			(int)ObjectStorage::Constants::IDSize),
+		name.CStr(),
+		name.Length());
+
+	AddNewObject(object);
+
+	UserSession *s = _sessions;
+
+	while (s) {
+		s->Session->SendObjects();
+		s = s->Next;
+	}
+}
+
 void User::LoadPublicKey()
 {
 	BinaryFile file(_root + "/key", false);
@@ -143,7 +174,7 @@ void User::LoadPublicKey()
 		THROW("Invalid public key size for user " + _name + ".");
 	}
 
-	file.Read(_publicKey, KEY_SIZE, 0);
+	file.Read<uint8_t>(_publicKey, KEY_SIZE, 0);
 }
 
 void User::StorePublicKey(
@@ -151,5 +182,35 @@ void User::StorePublicKey(
 	const uint8_t publicKey[KEY_SIZE])
 {
 	BinaryFile file(root + "/key", true);
-	file.Write(publicKey, KEY_SIZE, 0);
+	file.Write<uint8_t>(publicKey, KEY_SIZE, 0);
+}
+
+void User::AddNewObject(const CowBuffer<uint8_t> object)
+{
+	ObjectStorage::ID itemId(GetHash(
+		object,
+		(int)ObjectStorage::Constants::IDSize).Pointer());
+
+	_objectStorage.WriteObject(itemId, object);
+
+	if (_objectStorage.HasRef(HEAD_REF)) {
+		ObjectStorage::ID prevItem = _objectStorage.GetRef(HEAD_REF);
+
+		CowBuffer<uint8_t> idValueBuffer(
+			(int)ObjectStorage::Constants::IDSize);
+
+		memcpy(
+			idValueBuffer.Pointer(),
+			itemId.GetValue(),
+			idValueBuffer.Size());
+
+		_objectStorage.UpdateObject(
+			prevItem,
+			idValueBuffer,
+			sizeof(int32_t));
+	} else {
+		_objectStorage.SetRef(ROOT_REF, itemId);
+	}
+
+	_objectStorage.SetRef(HEAD_REF, itemId);
 }

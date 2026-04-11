@@ -4,7 +4,11 @@
 
 #include "TextColor.hpp"
 #include "../Common/Hex.hpp"
+#include "../Common/File.hpp"
+#include "../Common/BinaryFile.hpp"
 #include "../Message/Message.hpp"
+
+#define STORED_OBJECT_ID "/server_ref"
 
 ChatList::ChatList(Root *root) :
 	_contactStorage("storage/" + DataToHex(root->PublicKey, KEY_SIZE)),
@@ -76,6 +80,34 @@ void ChatList::Activate()
 void ChatList::Deactivate()
 {
 	_currentChatIsActive = false;
+}
+
+ObjectStorage::ID ChatList::GetKnownID()
+{
+	String path = "storage/" +
+		DataToHex(_root->PublicKey, KEY_SIZE) + STORED_OBJECT_ID;
+
+	if (!FileExists(path)) {
+		return ObjectStorage::ID();
+	}
+
+	CowBuffer<uint8_t> id((int)ObjectStorage::Constants::IDSize);
+
+	BinaryFile file(path, false);
+	file.Read<uint8_t>(id.Pointer(), id.Size(), 0);
+	return ObjectStorage::ID(id.Pointer());
+}
+
+void ChatList::SetKnownID(const ObjectStorage::ID &id)
+{
+	String path = "storage/" +
+		DataToHex(_root->PublicKey, KEY_SIZE) + STORED_OBJECT_ID;
+
+	BinaryFile file(path, true);
+	file.Write<uint8_t>(
+		id.GetValue(),
+		(int)ObjectStorage::Constants::IDSize,
+		0);
 }
 
 /*void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)

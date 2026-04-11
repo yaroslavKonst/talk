@@ -179,6 +179,13 @@ Screen *LoginScreen::ProcessEvent(int event)
 
 Screen *LoginScreen::ProcessConnection()
 {
+	if (_root->Network->ConnectionActive() ||
+		_root->Network->HandshakeActive())
+	{
+		_root->Ui->Notify("Connection is already established.");
+		return this;
+	}
+
 	if (_serverKeyHex.Text.Length() != KEY_SIZE * 2) {
 		_root->Ui->Notify("Invalid server key length.");
 		return this;

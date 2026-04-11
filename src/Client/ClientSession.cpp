@@ -75,6 +75,14 @@ bool ClientSession::InitKeepAlive()
 	return true;
 }
 
+void ClientSession::AddContact(String name)
+{
+	CommandAddContact::Command command;
+	command.ContactName = name;
+
+	_protocol->Send(CommandAddContact::BuildCommand(command), 0);
+}
+
 bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 {
 	if (buffer.Size() < sizeof(int32_t)) {
@@ -88,6 +96,12 @@ bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessKeepAlive(buffer);
 	case SESSION_COMMAND_GET_HOST_NAME:
 		return ProcessGetHostName(buffer);
+	case SESSION_COMMAND_ADD_CONTACT:
+		return ProcessAddContact(buffer);
+	case SESSION_COMMAND_REQUEST_ID:
+		return ProcessRequestID();
+	case SESSION_COMMAND_UPDATE_ID:
+		return ProcessUpdateID(buffer);
 	default:
 		return false;
 	}
@@ -137,5 +151,42 @@ bool ClientSession::ProcessGetHostName(const CowBuffer<uint8_t> buffer)
 	_root->Conf->SetHostName(response.Name);
 	_root->Conf->Save();
 	_root->Ui->Redraw();
+	return true;
+}
+
+bool ClientSession::ProcessAddContact(const CowBuffer<uint8_t> buffer)
+{
+	CommandAddContact::Command command;
+	bool parseResult = CommandAddContact::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_root->Messages->GetContactStorage()->AddNewContact(
+		command.ContactName);
+	_root->Ui->Redraw();
+	return true;
+}
+
+bool ClientSession::ProcessRequestID()
+{
+	CommandRequestID::Response response;
+	response.Id = _root->Messages->GetKnownID();
+
+	_protocol->Send(CommandRequestID::BuildResponse(response), 1);
+	return true;
+}
+
+bool ClientSession::ProcessUpdateID(const CowBuffer<uint8_t> buffer)
+{
+	CommandUpdateID::Command command;
+	bool parseResult = CommandUpdateID::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_root->Messages->SetKnownID(command.Id);
 	return true;
 }

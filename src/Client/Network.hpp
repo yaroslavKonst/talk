@@ -30,6 +30,7 @@ public:
 	bool HandshakeActive() override;
 
 	void StartConnection(int fd, const uint8_t *serverKey) override;
+	bool AddContact(String name) override;
 
 private:
 	int _fd;

@@ -23,7 +23,7 @@ Contact::Contact(String name, String path)
 
 		BinaryFile file(path + "/" + keyList[keyIdx], false);
 		uint8_t verified;
-		file.Read(&verified, 1, 0);
+		file.Read<uint8_t>(&verified, 1, 0);
 
 		_keys[keyIdx] = key;
 		_verifiedKeys[keyIdx] = verified;
@@ -57,7 +57,11 @@ CowBuffer<String> ContactStorage::GetContactRange(String center, int size)
 	Tree<ContactNode>::Entry *low = _contacts.FindEntry(center);
 
 	if (!low) {
-		return CowBuffer<String>();
+		low = _contacts.FindSmallest();
+
+		if (!low) {
+			return CowBuffer<String>();
+		}
 	}
 
 	Tree<ContactNode>::Entry *high = low;

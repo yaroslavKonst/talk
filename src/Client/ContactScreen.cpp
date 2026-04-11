@@ -60,6 +60,10 @@ void ContactScreen::RedrawContactList()
 		_currentContact,
 		size);
 
+	if (!_currentContact.Length() && names.Size()) {
+		_currentContact = names[0];
+	}
+
 	int currentContactPosition = 7;
 
 	for (unsigned int i = 0; i < names.Size(); i++) {
@@ -178,8 +182,15 @@ Screen *ContactScreen::ProcessAddEvent(int event)
 			return this;
 		}
 
-		_contacts->AddNewContact(_newContactName.Text);
-		_currentContact = _newContactName.Text;
+		bool requestSuccess = _root->Network->AddContact(
+			_newContactName.Text);
+
+		if (!requestSuccess) {
+			_root->Ui->Notify(
+				"Failed to add new contact. No connection.");
+			return this;
+		}
+
 		_newContactName.Text = "";
 		_mode = Mode::List;
 		return this;

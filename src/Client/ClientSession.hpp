@@ -23,6 +23,7 @@ public:
 	bool ProcessWrite();
 
 	bool InitKeepAlive();
+	void AddContact(String name);
 
 private:
 	Root *_root;
@@ -42,6 +43,9 @@ private:
 
 	void RequestHostName();
 	bool ProcessGetHostName(const CowBuffer<uint8_t> buffer);
+	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);
+	bool ProcessRequestID();
+	bool ProcessUpdateID(const CowBuffer<uint8_t> buffer);
 };
 
 #endif

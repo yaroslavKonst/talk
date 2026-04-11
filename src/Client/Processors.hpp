@@ -4,6 +4,7 @@
 #include "../Message/ContactStorage.hpp"
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
+#include "../Common/ObjectStorage.hpp"
 
 // Processors are objects that can process events of certain types.
 
@@ -15,6 +16,8 @@ public:
 	{ }
 
 	virtual ContactStorage *GetContactStorage() = 0;
+	virtual ObjectStorage::ID GetKnownID() = 0;
+	virtual void SetKnownID(const ObjectStorage::ID &id) = 0;
 };
 
 // Voice chat.
@@ -52,6 +55,7 @@ public:
 	virtual bool HandshakeActive() = 0;
 
 	virtual void StartConnection(int fd, const uint8_t *serverKey) = 0;
+	virtual bool AddContact(String name) = 0;
 };
 
 // UI.

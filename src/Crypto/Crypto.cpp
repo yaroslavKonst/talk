@@ -357,6 +357,19 @@ CowBuffer<uint8_t> RemoveScrambler(CowBuffer<uint8_t> data)
 	return data.Slice(1, data.Size() - 1);
 }
 
+CowBuffer<uint8_t> GetHash(CowBuffer<uint8_t> buffer, int hashSize)
+{
+	CowBuffer<uint8_t> hash(hashSize);
+
+	crypto_blake2b(
+		hash.Pointer(),
+		hashSize,
+		buffer.Pointer(),
+		buffer.Size());
+
+	return hash;
+}
+
 // Stream reader.
 CryptoStreamReader::~CryptoStreamReader()
 {
