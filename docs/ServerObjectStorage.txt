@@ -1,0 +1,2 @@
+Server object storage item structure:
+| item type (int32_t) | next item ID (ObjectStorage ID) | Payload |
