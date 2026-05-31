@@ -53,15 +53,16 @@ class MessageDescriptor : public QuantEventProcessor
 public:
 	MessageDescriptor(Root *root);
 
-	Message::HeaderPointToPoint ID;
+	ObjectStorage::ID Identifier;
 
-	int32_t Flags;
-
+	Message::HeaderPointToPoint Header;
+	Message::Attribute Attrs;
 	Message::Contents Contents;
 
 	MessageDecryptor *Dec;
 
 	void ProcessQuant() override;
+	void SaveAttributes();
 
 private:
 	Root *_root;
@@ -72,7 +73,8 @@ class Chat
 public:
 	Chat(
 		Root *root,
-		String peerName);
+		String peerName,
+		ObjectStorage *objectStorage);
 	~Chat();
 
 	bool HasUnread();
@@ -109,19 +111,22 @@ private:
 
 		bool operator==(const MessageContainer &c) const
 		{
-			return Descriptor->ID == c.Descriptor->ID;
+			return Descriptor->Header == c.Descriptor->Header;
 		}
 
 		bool operator<(const MessageContainer &c) const
 		{
-			return Descriptor->ID < c.Descriptor->ID;
+			return Descriptor->Header < c.Descriptor->Header;
 		}
 	};
 
 	Root *_root;
+	ObjectStorage *_objectStorage;
+	String _peerName;
 
 	Tree<MessageContainer> _messages;
 	Tree<MessageContainer>::Entry *_currentMessage;
+	int _currentMessageOffset;
 
 	void LoadMessages();
 	void UnloadMessages();

@@ -110,6 +110,12 @@ void ChatList::SetKnownID(const ObjectStorage::ID &id)
 		0);
 }
 
+void ChatList::SelectOrCreateChat(String peerName)
+{
+	LoadChat(peerName);
+	_currentChat = _chats.FindEntry(peerName);
+}
+
 /*void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
 {
 	Message::Header header;
@@ -138,10 +144,65 @@ void ChatList::SetKnownID(const ObjectStorage::ID &id)
 	_chatList[_chatCount - 1]->DeliverMessage(message);
 }*/
 
+ChatList::ChatContainer::ChatContainer()
+{
+	_chat = nullptr;
+}
+
+ChatList::ChatContainer::ChatContainer(String peerName)
+{
+	_peerName = peerName;
+	_chat = nullptr;
+}
+
+ChatList::ChatContainer::ChatContainer(String peerName, Chat *chat)
+{
+	_peerName = peerName;
+	_chat = chat;
+}
+
+bool ChatList::ChatContainer::operator<(const ChatContainer &container) const
+{
+	return _peerName < container._peerName;
+}
+
+bool ChatList::ChatContainer::operator==(const ChatContainer &container) const
+{
+	return _peerName == container._peerName;
+}
+
 void ChatList::LoadChats()
 {
+	CowBuffer<String> peerList = ListDirectory(
+		"storage/" + DataToHex(_root->PublicKey, KEY_SIZE) +
+		"/storage/refs");
+
+	for (uint64_t i = 0; i < peerList.Size(); i++) {
+		LoadChat(peerList[i]);
+	}
 }
 
 void ChatList::UnloadChats()
 {
+	_currentChatIsActive = false;
+	_currentChat = _chats.FindSmallest();
+
+	while (_currentChat) {
+		delete _currentChat->Key.GetChat();
+		Tree<ChatContainer>::Entry *nextChat =
+			_chats.Next(_currentChat);
+
+		_chats.RemoveEntry(_currentChat);
+		_currentChat = nextChat;
+	}
+}
+
+void ChatList::LoadChat(String peerName)
+{
+	if (_chats.FindEntry(peerName)) {
+		return;
+	}
+
+	Chat *chat = new Chat(_root, peerName, &_objectStorage);
+	_chats.AddEntry(ChatContainer(peerName, chat));
 }

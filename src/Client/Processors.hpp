@@ -18,6 +18,10 @@ public:
 	virtual ContactStorage *GetContactStorage() = 0;
 	virtual ObjectStorage::ID GetKnownID() = 0;
 	virtual void SetKnownID(const ObjectStorage::ID &id) = 0;
+
+	virtual void SelectOrCreateChat(String peerName) = 0;
+	virtual void Activate() = 0;
+	virtual void Deactivate() = 0;
 };
 
 // Voice chat.

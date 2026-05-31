@@ -7,7 +7,7 @@
 #include "../Common/UnixTime.hpp"
 #include "../Message/Message.hpp"
 
-CowBuffer<uint8_t> MessageContents::Build() const
+/*CowBuffer<uint8_t> MessageContents::Build() const
 {
 	CowBuffer<uint8_t> text;
 	CowBuffer<uint8_t> data;
@@ -85,55 +85,7 @@ void MessageContents::Parse(const CowBuffer<uint8_t> data)
 			}
 		}
 	}
-}
-
-MessageDecryptor::MessageDecryptor(
-	const CowBuffer<uint8_t> *message,
-	MessageContents *contents)
-{
-	_message = message;
-	_contents = contents;
-
-	EncryptedStream inES;
-	EncryptedStream outES;
-
-	Message::Header header;
-	bool parseResult = Message::GetHeader(*message, header);
-
-	if (!parseResult) {
-		THROW("Invalid message header.");
-	}
-
-	bool outgoing = !crypto_verify32(
-		header.Source,
-		_root->Network->GetPublicKey());
-
-	EncryptedStream outES;
-	EncryptedStream inES;
-
-	GenerateSessionKeys(
-		_session->PrivateKey,
-		_session->PublicKey,
-		_peerKey,
-		header.Timestamp,
-		inES.Key,
-		outES.Key,
-		!outgoing);
-
-	memset(inES.Nonce, 0, NONCE_SIZE);
-
-	_streamReader.Init(inES);
-
-	_decryptedPart = CowBuffer<uint8_t>(
-		message->Size() - Message::HeaderSize);
-
-	_offset = 0;
-}
-
-void MessageEncryptor::Run()
-{
-
-}
+}*/
 
 MessageDescriptor::MessageDescriptor(
 	MessageStorage *msgStorage,
@@ -195,42 +147,19 @@ void MessageDescriptor::ProcessQuant()
 	_root->Dispatcher->RequestQuant(this);
 }
 
-void MessageDescriptor::SaveAttributes()
-{
-	int32_t attrs = 0;
-
-	if (!Read) {
-		attrs |= ATTRIBUTE_READ;
-	}
-
-	if (!Sent) {
-		attrs |= ATTRIBUTE_SENT;
-	}
-
-	if (SendFailure) {
-		attrs |= ATTRIBUTE_FAILURE;
-	}
-
-	_attributeStorage->SetAttribute(ID, attrs);
-}
-
 Chat::Chat(
 	Root *root,
-	const uint8_t *peerKey,
-	int64_t *latestReceiveTime) :
-	_messageStorage(_root->Network->GetPublicKey()),
-	_attributeStorage(_root->Network->GetPublicKey())
+	String *peerName,
+	ObjectStorage *objectStorage)
 {
 	_root = root;
-	_latestReceiveTime = latestReceiveTime;
-
-	_utf8ExpectedSize = 0;
-
-	_peerKey = peerKey;
+	_objectStorage = objectStorage;
+	_peerName = peerName;
 
 	LoadMessages();
 
 	_currentMessage = _messages.FindBiggest();
+	_currentMessageOffset = 0;
 }
 
 Chat::~Chat()
@@ -240,7 +169,7 @@ Chat::~Chat()
 
 bool Chat::HasUnread()
 {
-	return _attributeStorage.ListUnread().Size();
+	THROW("Not implemented.");
 }
 
 void Chat::SwitchUp()

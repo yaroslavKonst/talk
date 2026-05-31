@@ -18,11 +18,13 @@ public:
 
 	void SwitchUp();
 	void SwitchDown();
-	void Activate();
-	void Deactivate();
+	void Activate() override;
+	void Deactivate() override;
 
 	ObjectStorage::ID GetKnownID() override;
 	void SetKnownID(const ObjectStorage::ID &id) override;
+
+	void SelectOrCreateChat(String peerName) override;
 
 private:
 	Root *_root;
@@ -30,6 +32,8 @@ private:
 	class ChatContainer
 	{
 	public:
+		ChatContainer();
+		ChatContainer(String peerName);
 		ChatContainer(String peerName, Chat *chat);
 
 		Chat *GetChat()
@@ -37,8 +41,8 @@ private:
 			return _chat;
 		}
 
-		bool operator==(const ChatContainer &container) const;
 		bool operator<(const ChatContainer &container) const;
+		bool operator==(const ChatContainer &container) const;
 
 	private:
 		String _peerName;
@@ -55,6 +59,8 @@ private:
 
 	void LoadChats();
 	void UnloadChats();
+
+	void LoadChat(String peerName);
 };
 
 #endif

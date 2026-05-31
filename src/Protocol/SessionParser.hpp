@@ -1,21 +1,20 @@
 #ifndef _ACTIVE_SESSION_HPP
 #define _ACTIVE_SESSION_HPP
 
-//#include "../Message/Message.hpp"
+#include "../Message/Message.hpp"
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
 #include "../Common/ObjectStorage.hpp"
 
 #define SESSION_COMMAND_KEEP_ALIVE 1
-#define SESSION_COMMAND_SEND_MESSAGE 2
-#define SESSION_COMMAND_DELIVER_MESSAGE 3
-#define SESSION_COMMAND_LIST_USERS 4
-#define SESSION_COMMAND_GET_UPDATE 5
-#define SESSION_COMMAND_GET_HOST_NAME 6
-#define SESSION_COMMAND_ADD_CONTACT 7
-#define SESSION_COMMAND_UPDATE_CONTACT_KEY 8
-#define SESSION_COMMAND_REQUEST_ID 9
-#define SESSION_COMMAND_UPDATE_ID 10
+#define SESSION_COMMAND_GET_HOST_NAME 2
+#define SESSION_COMMAND_REQUEST_ID 3
+#define SESSION_COMMAND_UPDATE_ID 4
+#define SESSION_COMMAND_ADD_CONTACT 5
+#define SESSION_COMMAND_UPDATE_CONTACT_KEY 6
+#define SESSION_COMMAND_SEND_MESSAGE 7
+#define SESSION_COMMAND_UPDATE_MESSAGE 8
+#define SESSION_COMMAND_LIST_CONTACTS 9
 
 #define SESSION_RESPONSE_OK 200
 #define SESSION_RESPONSE_ERROR 100
@@ -23,8 +22,8 @@
 #define SESSION_RESPONSE_ERROR_MESSAGE_TOO_SHORT 102
 #define SESSION_RESPONSE_ERROR_CONNECTION_LOST 103
 #define SESSION_RESPONSE_ERROR_USER_OFFLINE 104
-#define SESSION_RESPONSE_ERROR_USER_IN_VOICE 105
-#define SESSION_RESPONSE_ERROR_YOU_IN_VOICE 106
+#define SESSION_RESPONSE_ERROR_USER_BUSY 105
+#define SESSION_RESPONSE_ERROR_YOU_BUSY 106
 
 #define SESSION_COMMAND_STREAM_INIT 500
 #define SESSION_COMMAND_STREAM_REQUEST 501
@@ -106,50 +105,39 @@ namespace CommandUpdateContactKey
 		String ContactName;
 		const uint8_t *Key;
 		int8_t Validated;
+		int8_t SetAsDefault;
 	};
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
 	CowBuffer<uint8_t> BuildCommand(const Command &command);
 }
 
-/*namespace CommandSendMessage
+namespace CommandSendMessage
 {
 	struct Command
 	{
+		// This field is a concatenation "Attributes | Message".
 		CowBuffer<uint8_t> Message;
-	};
-
-	struct Response
-	{
-		Message::MessageID ID;
-		int32_t Status;
-	};
-
-	int32_t ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
-	CowBuffer<uint8_t> BuildCommand(const Command &data);
-	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
-	CowBuffer<uint8_t> BuildResponse(const Response &data);
-}
-
-namespace CommandDeliverMessage
-{
-	struct Command
-	{
-		CowBuffer<uint8_t> Message;
-	};
-
-	struct Response
-	{
-		Message::MessageID ID;
 	};
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
 	CowBuffer<uint8_t> BuildCommand(const Command &data);
-	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
-	CowBuffer<uint8_t> BuildResponse(const Response &data);
 }
 
-namespace CommandListUsers
+namespace CommandUpdateMessage
+{
+	struct Command
+	{
+		CowBuffer<uint8_t> HeaderHash;
+		Message::Attribute Attr;
+		uint8_t SetAttr;
+	};
+
+	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
+	CowBuffer<uint8_t> BuildCommand(const Command &data);
+}
+
+/*namespace CommandListContacts
 {
 	struct Response
 	{

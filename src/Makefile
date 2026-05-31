@@ -46,6 +46,7 @@ CLIENT_MODULES=\
 	Client/Config.o \
 	Client/Network.o \
 	Client/ChatList.o \
+	Client/Chat.o \
 	Client/ClientHandshake.o \
 	Client/ClientSession.o \
 	Client/UI.o \

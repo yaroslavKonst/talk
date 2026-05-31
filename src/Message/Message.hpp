@@ -74,6 +74,21 @@ namespace Message
 		const CowBuffer<uint8_t> message,
 		Contents &contents);
 	CowBuffer<uint8_t> BuildContents(const Contents &contents);
+
+	enum class Attribute : int32_t
+	{
+		// Direction.
+		Inbound = 0x1,
+
+		// Inbound attributes.
+		Unread = 0x2,
+
+		// Outbound attributes.
+		InProgress = 0x2,
+		ConnectionFailure = 0x4,
+		NonExistentAddress = 0x8,
+		MessageTooBig = 0x10
+	};
 };
 
 #endif

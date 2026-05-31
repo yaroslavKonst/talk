@@ -146,6 +146,16 @@ public:
 		return _keyNames[(int)Keys::ContactNew];
 	}
 
+	int ContactToChatKey()
+	{
+		return _keys[(int)Keys::ContactToChat];
+	}
+
+	String ContactToChatName()
+	{
+		return _keyNames[(int)Keys::ContactToChat];
+	}
+
 	int NotificationConfirmKey()
 	{
 		return _keys[(int)Keys::NotificationConfirm];
@@ -196,6 +206,7 @@ private:
 		ContactDown,
 		ContactEnter,
 		ContactNew,
+		ContactToChat,
 
 		VoiceStart,
 		VoiceEnd,

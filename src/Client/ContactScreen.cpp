@@ -127,6 +127,17 @@ Screen *ContactScreen::ProcessListEvent(int event)
 		return this;
 	}
 
+	if (event == _root->Conf->ContactToChatKey()) {
+		if (!_currentContact.Length()) {
+			_root->Ui->Notify("No contacts. Nothing to do.");
+			return this;
+		}
+
+		_root->Messages->SelectOrCreateChat(_currentContact);
+		_root->Messages->Activate();
+		return new WorkScreen(_root);
+	}
+
 	return this;
 }
 

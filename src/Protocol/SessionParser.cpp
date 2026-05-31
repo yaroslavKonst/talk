@@ -195,119 +195,141 @@ CowBuffer<uint8_t> CommandUpdateID::BuildCommand(const Command &command)
 	return buffer;
 }
 
-
-
-
-/*int32_t CommandTextMessage::ParseCommand(
+bool CommandUpdateContactKey::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)
 {
-	if (buffer.Size() <= sizeof(int32_t) + Message::HeaderSize) {
-		return SESSION_RESPONSE_ERROR_MESSAGE_TOO_SHORT;
+	uint32_t baseSize = sizeof(int32_t) + KEY_SIZE + 2 + sizeof(int32_t);
+
+	if (buffer.Size() <= baseSize) {
+		return false;
 	}
 
 	int32_t command = *buffer.SwitchType<int32_t>();
 
-	if (command != SESSION_COMMAND_TEXT_MESSAGE) {
-		return SESSION_RESPONSE_ERROR;
+	if (command != SESSION_COMMAND_UPDATE_CONTACT_KEY) {
+		return false;
+	}
+
+	int32_t nameLength = *buffer.SwitchType<int32_t>(
+		baseSize - sizeof(int32_t));
+
+	if (nameLength <= 0 || nameLength > 200) {
+		return false;
+	}
+
+	if (buffer.Size() != baseSize + nameLength) {
+		return false;
+	}
+
+	result.ContactName = String(
+		buffer.SwitchType<char>(baseSize),
+		nameLength);
+
+	result.Key = buffer.Pointer(sizeof(int32_t));
+	result.Validated = *buffer.Pointer(sizeof(int32_t) + KEY_SIZE);
+	result.SetAsDefault = *buffer.Pointer(sizeof(int32_t) + KEY_SIZE + 1);
+	return true;
+}
+
+CowBuffer<uint8_t> CommandUpdateContactKey::BuildCommand(const Command &command)
+{
+	CowBuffer<uint8_t> buffer(
+		sizeof(int32_t) * 2 + KEY_SIZE + 2 +
+		command.ContactName.Length());
+
+	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_UPDATE_CONTACT_KEY;
+
+	memcpy(buffer.Pointer(sizeof(int32_t)), command.Key, KEY_SIZE);
+	*buffer.Pointer(sizeof(int32_t) + KEY_SIZE) = command.Validated;
+	*buffer.Pointer(sizeof(int32_t) + KEY_SIZE + 1) = command.SetAsDefault;
+	*buffer.SwitchType<int32_t>(sizeof(int32_t) + KEY_SIZE + 2) =
+		command.ContactName.Length();
+	memcpy(
+		buffer.Pointer(sizeof(int32_t) * 2 + KEY_SIZE + 2),
+		command.ContactName.CStr(),
+		command.ContactName.Length());
+	return buffer;
+}
+
+bool CommandSendMessage::ParseCommand(
+	const CowBuffer<uint8_t> buffer,
+	Command &result)
+{
+	if (buffer.Size() <= sizeof(int32_t) * 2) {
+		return false;
+	}
+
+	int32_t command = *buffer.SwitchType<int32_t>();
+
+	if (command != SESSION_COMMAND_SEND_MESSAGE) {
+		return false;
 	}
 
 	result.Message = buffer.Slice(
 		sizeof(command),
 		buffer.Size() - sizeof(command));
 
-	return SESSION_RESPONSE_OK;
-}
-
-CowBuffer<uint8_t> CommandTextMessage::BuildCommand(const Command &data)
-{
-	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
-	*commandBuffer.SwitchType<int32_t>() = SESSION_COMMAND_TEXT_MESSAGE;
-	return commandBuffer.Concat(data.Message);
-}
-
-bool CommandTextMessage::ParseResponse(
-	const CowBuffer<uint8_t> buffer,
-	Response &result)
-{
-	if (buffer.Size() != sizeof(int32_t) + sizeof(result.Status)) {
-		return false;
-	}
-
-	int32_t command = *buffer.SwitchType<int32_t>();
-
-	if (command != SESSION_COMMAND_TEXT_MESSAGE) {
-		return false;
-	}
-
-	result.Status = *buffer.SwitchType<int32_t>(sizeof(command));
 	return true;
 }
 
-CowBuffer<uint8_t> CommandTextMessage::BuildResponse(const Response &data)
+CowBuffer<uint8_t> CommandSendMessage::BuildCommand(const Command &data)
 {
-	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(data.Status));
-	*result.SwitchType<int32_t>() = SESSION_COMMAND_TEXT_MESSAGE;
-	*result.SwitchType<int32_t>(sizeof(int32_t)) = data.Status;
-	return result;
+	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
+	*commandBuffer.SwitchType<int32_t>() = SESSION_COMMAND_SEND_MESSAGE;
+	return commandBuffer.Concat(data.Message);
 }
 
-bool CommandDeliverMessage::ParseCommand(
+bool CommandUpdateMessage::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)
 {
-	if (buffer.Size() <= sizeof(int32_t) + Message::HeaderSize) {
+	uint32_t validSize = sizeof(int32_t) +
+		(int)ObjectStorage::Constants::IDSize +
+		sizeof(result.Attr) + sizeof(result.SetAttr);
+
+	if (buffer.Size() != validSize) {
 		return false;
 	}
 
 	int32_t command = *buffer.SwitchType<int32_t>();
 
-	if (command != SESSION_COMMAND_DELIVER_MESSAGE) {
+	if (command != SESSION_COMMAND_UPDATE_MESSAGE) {
 		return false;
 	}
 
-	result.Message = buffer.Slice(
+	result.HeaderHash = buffer.Slice(
 		sizeof(command),
-		buffer.Size() - sizeof(command));
+		(int)ObjectStorage::Constants::IDSize);
+
+	result.Attr = *buffer.SwitchType<Message::Attribute>(
+		sizeof(command) + result.HeaderHash.Size());
+	result.SetAttr = *buffer.SwitchType<uint8_t>(validSize -
+		sizeof(result.SetAttr));
 
 	return true;
 }
 
-CowBuffer<uint8_t> CommandDeliverMessage::BuildCommand(const Command &data)
+CowBuffer<uint8_t> CommandUpdateMessage::BuildCommand(const Command &data)
 {
-	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
-	*commandBuffer.SwitchType<int32_t>() = SESSION_COMMAND_DELIVER_MESSAGE;
-	return commandBuffer.Concat(data.Message);
+	CowBuffer<uint8_t> buffer(
+		sizeof(int32_t) + (int)ObjectStorage::Constants::IDSize +
+		sizeof(data.Attr) + sizeof(data.SetAttr));
+
+	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_UPDATE_MESSAGE;
+	memcpy(
+		buffer.Pointer(sizeof(int32_t)),
+		data.HeaderHash.Pointer(),
+		(int)ObjectStorage::Constants::IDSize);
+	*buffer.SwitchType<Message::Attribute>(
+		sizeof(int32_t) + (int)ObjectStorage::Constants::IDSize) =
+		data.Attr;
+	*buffer.Pointer(buffer.Size() - sizeof(data.SetAttr)) = data.SetAttr;
+
+	return buffer;
 }
 
-bool CommandDeliverMessage::ParseResponse(
-	const CowBuffer<uint8_t> buffer,
-	Response &result)
-{
-	if (buffer.Size() != sizeof(int32_t) + Message::HeaderSize) {
-		return false;
-	}
-
-	int32_t command = *buffer.SwitchType<int32_t>();
-
-	if (command != SESSION_COMMAND_DELIVER_MESSAGE) {
-		return false;
-	}
-
-	return Message::GetID(
-		buffer.Slice(sizeof(int32_t), Message::HeaderSize),
-		result.ID);
-}
-
-CowBuffer<uint8_t> CommandDeliverMessage::BuildResponse(const Response &data)
-{
-	CowBuffer<uint8_t> buffer(sizeof(int32_t) + Message::HeaderSize);
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_DELIVER_MESSAGE;
-
-	return buffer.Concat(Message::BuildHeader(data.ID));
-}
-
-CowBuffer<uint8_t> CommandListUsers::BuildCommand()
+/*CowBuffer<uint8_t> CommandListUsers::BuildCommand()
 {
 	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
 	*commandBuffer.SwitchType<int32_t>() = SESSION_COMMAND_LIST_USERS;

@@ -80,6 +80,9 @@ namespace ContactScreenControls
 
 	static const char *New = "New Contact";
 	static const char *NewValue = "Ctrl-N";
+
+	static const char *ToChat = "Go To Chat";
+	static const char *ToChatValue = "Ctrl-C";
 }
 
 namespace NotificationControls
@@ -356,6 +359,7 @@ void Config::Init()
 			_configFile.Set(Section, Up, UpValue);
 			_configFile.Set(Section, Enter, EnterValue);
 			_configFile.Set(Section, New, NewValue);
+			_configFile.Set(Section, ToChat, ToChatValue);
 		}
 
 		{
@@ -409,6 +413,8 @@ void Config::LoadControls()
 			_configFile.Get(Section, Enter);
 		_keyNames[(int)Keys::ContactNew] =
 			_configFile.Get(Section, New);
+		_keyNames[(int)Keys::ContactToChat] =
+			_configFile.Get(Section, ToChat);
 	}
 
 	{
