@@ -3,6 +3,10 @@
 
 #include "../Common/UTF8.hpp"
 
+// Text is represented as a bidirectional linked list. Each node
+// contains one word. A word is a sequence of nonwhitespace characters
+// with an optional whitespace character in the end.
+
 class TextEditor
 {
 public:
@@ -39,7 +43,6 @@ private:
 		{
 			Next = nullptr;
 			Previous = nullptr;
-			NlFirst = false;
 		}
 	};
 

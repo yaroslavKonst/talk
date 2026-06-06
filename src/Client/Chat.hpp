@@ -2,8 +2,8 @@
 #define _CHAT_HPP
 
 #include "Root.hpp"
+#include "TextEditor.hpp"
 #include "../Message/Message.hpp"
-#include "../Common/Tree.hpp"
 #include "../Crypto/Crypto.hpp"
 
 class MessageDecryptor
@@ -84,7 +84,6 @@ public:
 
 	void MoveLeft();
 	void MoveRight();
-
 	void AddChar(int c);
 
 	void SendMessage();
@@ -100,23 +99,15 @@ public:
 	void ClearAttachment();
 
 private:
-	struct MessageContainer
+	struct MessageNode
 	{
+		MessageNode *Next;
 		MessageDescriptor *Descriptor;
 
-		MessageContainer(MessageDescriptor *descr)
+		MessageNode(MessageDescriptor *descr)
 		{
+			Next = nullptr;
 			Descriptor = descr;
-		}
-
-		bool operator==(const MessageContainer &c) const
-		{
-			return Descriptor->Header == c.Descriptor->Header;
-		}
-
-		bool operator<(const MessageContainer &c) const
-		{
-			return Descriptor->Header < c.Descriptor->Header;
 		}
 	};
 
@@ -124,22 +115,13 @@ private:
 	ObjectStorage *_objectStorage;
 	String _peerName;
 
-	Tree<MessageContainer> _messages;
-	Tree<MessageContainer>::Entry *_currentMessage;
-	int _currentMessageOffset;
+	MessageNode *_messages;
+	MessageNode *_currentMessage;
 
 	void LoadMessages();
 	void UnloadMessages();
 
-	CowBuffer<uint8_t> EncryptMessage(
-		const Message::Contents messageContents,
-		const uint8_t *senderKey,
-		const uint8_t *receiverKey,
-		int64_t timestamp,
-		int32_t index);
-	Message::Contents DecryptMessage(CowBuffer<uint8_t> message);
-
-	CowBuffer<String> _draftText;
+	TextEditor _draftText;
 	CowBuffer<uint8_t> _draftAttachment;
 
 	MessageEncryptor *_enc;

@@ -6,6 +6,79 @@
 
 TextEditor::TextEditor()
 {
+	_currentWord = new Word;
+}
+
+TextEditor::~TextEditor()
+{
+	delete _currentWord;
+}
+
+void TextEditor::SetPosition(int fromY, int toY, int fromX, int toX)
+{
+	_fromY = fromY;
+	_toY = toY;
+	_fromX = fromX;
+	_toX = toX;
+}
+
+void TextEditor::Redraw()
+{
+	UiHelpers::ClearScreen(_fromY, _toY, _fromX, _toX);
+
+	String s = UTF8::Encode(_currentWord->Data);
+	move(_fromY, _fromX);
+	addstr(s.CStr());
+}
+
+String TextEditor::GetText()
+{
+	return UTF8::Encode(_currentWord->Data);
+}
+
+void TextEditor::GoLeft()
+{
+}
+
+void TextEditor::GoRight()
+{
+}
+
+void TextEditor::GoUp()
+{
+}
+
+void TextEditor::GoDown()
+{
+}
+
+void TextEditor::AddChar(int event)
+{
+	_utf8Decoder.AddByte(event);
+
+	if (!_utf8Decoder.HasChar()) {
+		return;
+	}
+
+	int32_t c = _utf8Decoder.GetChar();
+
+	if (c == '\b') {
+		_currentWord->Data = _currentWord.Slice(
+			0,
+			_currentWord->Data.Size() - 1);
+
+		return;
+	}
+
+	CowBuffer<uint32_t> charBuf(1);
+	charBuf[0] = c;
+
+	_currentWord->Data = _currentWord->Data.Concat(charBuf);
+}
+
+
+/*TextEditor::TextEditor()
+{
 	_fromY = 0;
 	_toY = 0;
 	_fromX = 0;
@@ -117,8 +190,8 @@ TextEditor::Redraw()
 			if (w->Data.Size()) {
 				String s = UTF8::Encode(w->Data);
 
-				if (s.CStr()[0] == '\n') {
-					s = s.Substring(1, s.Length() - 1);
+				if (s.CStr()[s.Length() - 1] == '\n') {
+					s = s.Substring(0, s.Length() - 1);
 				}
 
 				addstr(s.CStr());
@@ -130,8 +203,8 @@ TextEditor::Redraw()
 
 			w = w->Next;
 
-			if (upLine->Next) {
-				if (w == upLine->Next->Data) {
+			if (downLine->Previous) {
+				if (w == downLine->Previous->Data) {
 					break;
 				}
 			}
@@ -153,6 +226,10 @@ TextEditor::Redraw()
 
 String TextEditor::GetText()
 {
+	if (!_firstLine) {
+		return "";
+	}
+
 	String result;
 
 	Word *w = _firstLine->Data;
@@ -205,6 +282,8 @@ void TextEditor::GoRight()
 
 void TextEditor::GoUp()
 {
+	THROW("Not implemented.");
+
 	if (!_currentLine->Previous) {
 		return;
 	}
@@ -249,6 +328,8 @@ void TextEditor::GoUp()
 
 void TextEditor::GoDown()
 {
+	THROW("Not implemented.");
+
 	if (!_currentLine->Next) {
 		return;
 	}
@@ -293,6 +374,11 @@ void TextEditor::GoDown()
 	}
 }
 
+static bool IsSpace(int c)
+{
+	return c == ' ' || c == '\n' || c == '\t';
+}
+
 void TextEditor::AddChar(int event)
 {
 	_utf8Decoder.AddByte(event);
@@ -303,7 +389,7 @@ void TextEditor::AddChar(int event)
 
 	int32_t c = _utf8Decoder.GetChar();
 
-	if (c == ' ' || c == '\n') {
+	if (IsSpace(c)) {
 		Word *w = new Word;
 		w->Next = _currentWord->Next;
 		w->Previous = _currentWord;
@@ -311,12 +397,38 @@ void TextEditor::AddChar(int event)
 		w->Data[0] = c;
 
 		_currentWord = w;
-		_currentChar = 0;
+		_currentChar = 1;
 	} else if (c == '\b') {
+		if (_currentChar > 0) {
+			CowBuffer<uint32_t> head = _currentWord->Data.Slice(
+				0,
+				_currentChar - 1);
 
+			CowBuffer<uint32_t> tail = _currentWord->Data.Slice(
+				_currentChar + 1,
+				_currentWord->Data.Size() - _currentChar - 1);
+
+			_currentWord->Data = head.Concat(tail);
+
+			if (!_currentWord->Data.Size()) {
+				Word *tmp = _currentWord;
+
+				if (_currentWord->Previous) {
+					_currentWord->Next->Previous =
+						_currentWord->Previous;
+					_currentWord = _currentWord->Previous();
+					_currentChar =
+						_currentWord->Data.Size();
+				}
+
+			GoLeft();
+		}
 	} else {
 
 	}
+
+	RebuildLines(_currentLine);
+}
 
 void TextEditor::Init()
 {
@@ -325,3 +437,7 @@ void TextEditor::Init()
 	_firstLine->Data = _currentWord;
 	_currentLine = _firstLine;
 }
+
+void TextEditor::RebuildLines(Line *firstLine)
+{
+}*/
