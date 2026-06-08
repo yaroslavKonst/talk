@@ -78,49 +78,6 @@ CowBuffer<uint8_t> CommandGetHostName::BuildResponse(const Response &data)
 	return buffer;
 }
 
-bool CommandAddContact::ParseCommand(
-	const CowBuffer<uint8_t> buffer,
-	Command &result)
-{
-	if (buffer.Size() < sizeof(int32_t) * 2) {
-		return false;
-	}
-
-	int32_t command = *buffer.SwitchType<int32_t>();
-	int32_t nameLength = *buffer.SwitchType<int32_t>(sizeof(command));
-
-	if (command != SESSION_COMMAND_ADD_CONTACT) {
-		return false;
-	}
-
-	if (nameLength <= 0 || nameLength > 200) {
-		return false;
-	}
-
-	if (buffer.Size() != sizeof(int32_t) * 2 + nameLength) {
-		return false;
-	}
-
-	result.ContactName = String(
-		buffer.SwitchType<char>(sizeof(int32_t) * 2),
-		nameLength);
-	return true;
-}
-
-CowBuffer<uint8_t> CommandAddContact::BuildCommand(const Command &command)
-{
-	CowBuffer<uint8_t> buffer(
-		sizeof(int32_t) * 2 + command.ContactName.Length());
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_ADD_CONTACT;
-	*buffer.SwitchType<int32_t>(sizeof(int32_t)) =
-		command.ContactName.Length();
-	memcpy(
-		buffer.Pointer(sizeof(int32_t) * 2),
-		command.ContactName.CStr(),
-		command.ContactName.Length());
-	return buffer;
-}
-
 CowBuffer<uint8_t> CommandRequestID::BuildCommand()
 {
 	CowBuffer<uint8_t> buffer(sizeof(int32_t));
@@ -192,6 +149,49 @@ CowBuffer<uint8_t> CommandUpdateID::BuildCommand(const Command &command)
 		command.Id.GetValue(),
 		(int)ObjectStorage::Constants::IDSize);
 
+	return buffer;
+}
+
+bool CommandAddContact::ParseCommand(
+	const CowBuffer<uint8_t> buffer,
+	Command &result)
+{
+	if (buffer.Size() < sizeof(int32_t) * 2) {
+		return false;
+	}
+
+	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t nameLength = *buffer.SwitchType<int32_t>(sizeof(command));
+
+	if (command != SESSION_COMMAND_ADD_CONTACT) {
+		return false;
+	}
+
+	if (nameLength <= 0 || nameLength > 200) {
+		return false;
+	}
+
+	if (buffer.Size() != sizeof(int32_t) * 2 + nameLength) {
+		return false;
+	}
+
+	result.ContactName = String(
+		buffer.SwitchType<char>(sizeof(int32_t) * 2),
+		nameLength);
+	return true;
+}
+
+CowBuffer<uint8_t> CommandAddContact::BuildCommand(const Command &command)
+{
+	CowBuffer<uint8_t> buffer(
+		sizeof(int32_t) * 2 + command.ContactName.Length());
+	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_ADD_CONTACT;
+	*buffer.SwitchType<int32_t>(sizeof(int32_t)) =
+		command.ContactName.Length();
+	memcpy(
+		buffer.Pointer(sizeof(int32_t) * 2),
+		command.ContactName.CStr(),
+		command.ContactName.Length());
 	return buffer;
 }
 

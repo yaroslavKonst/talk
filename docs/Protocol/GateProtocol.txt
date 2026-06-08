@@ -3,3 +3,162 @@ Overview
 ########
 
 Gate protocol is used for communication between servers.
+
+Handshake
+#########
+#########
+
+requesting server                               responding server
+                 ------------Syn--------------->
+   | req server name | req server public key | key salt | signature |
+
+                                                   verification
+
+                 <--------------Ack-------------
+         | res server name | res server public key | signature |
+
+    verification
+
+ session key generation                    session key generation
+
+Verification
+############
+
+In case of verification failure the server may immediately close the connection.
+
+Verification of IP host names
+-----------------------------
+
+If the host name is an IP address then verification has the following
+steps:
+* verify that the connection is established with host with the same
+  IP address as in the host name.
+
+In this case the signature can't be checked. So, the server can apply
+restrictions to the recieved data. For example, decline spam reports
+and mark received messages to warn the user.
+
+Verification of DNS host names
+-----------------------------
+
+If the host name is a DNS name then verification has the following
+steps:
+* the name is resolved;
+* resolved IP address is compared with the IP address of the connected host;
+* The server queries the TXT field on the same domain as the host,
+  it must include a string "talkdkey=SIGNATURE_PUBLIC_KEY_HEX". All other text
+  is ignored;
+* received data signature is checked using public key from DNS.
+
+DDoS protection
+###############
+
+The server may measure the rate of incoming requests. If the request rate
+for some IP address exceeds maximum allowed rate, then the server may
+send the "request rate limit reached" command instead of Ack and close
+the connection.
+
+Session
+#######
+#######
+
+The session protocol is based on commands with the following structure:
+| command id | optional payload |
+
+After the session start the server which initiated the session becomes the
+session leader.
+
+The session leader can initiate actions during the session, the other
+server must not initiate any actions. When the session leader has finished
+all planned actions it can send the "end" command. After it the other server
+becomes the session leader, it can send commands to initiate actions. In
+this case the session continues. Or the other server may immediately send
+the "end" command. In this case the session is closed.
+
+User public key request
+#######################
+
+sender                                   receiver
+          --------------------------->
+                | user name |
+
+          <---------------------------
+        | status code | key (optional) |
+
+Message delivery
+################
+
+Message delivery has the fillowing scheme.
+
+sender                                   receiver
+          --------------------------->
+               | message header |
+                                   verification
+          <---------------------------
+             | verification status |
+
+          --------------------------->
+                | message body |
+                                   verification
+          <---------------------------
+             | verification status |
+
+Stream
+######
+
+sender                                   receiver
+          --------------------------->
+| stream request | caller name | callee name | timestamp |
+
+          <---------------------------
+          | stream request | answer |
+
+          <---------------------------
+                | stream start |
+
+          <-------------------------->
+              | frame | payload |
+
+                 - - - - - - -
+
+          <-------------------------->
+              | frame | payload |
+
+          <-------------------------->
+                | stream end |
+
+User presence
+#############
+
+sender                                   receiver
+          --------------------------->
+   | presence | user name | encrypted user name |
+
+          <---------------------------
+    | presence | response | encrypted response |
+
+Spam protection
+###############
+
+The server may maintain a list of IP addresses that are suspicious due to
+sending spam.
+
+Spam rating is based on spam points. Each point means one server that
+marked this address as spam sender. Each server may set its own threshold
+for IP addresses. Overcoming the threshold leads to rejection of the
+messages from the spam sending server.
+
+Each record in the spam database contains an IP address and a list of
+servers who received a message from the address and considered it to be
+spam. The size of the list is the spam score of the address.
+Each entry in the list must be signed by the server's key in order to prevent
+spam reporting from nonexistent servers.
+
+The servers may exchange their spam databases during commections.
+During data acquirement the receiving server must verify each line.
+
+The lifetime of one spam entry is one year. After this period it must be
+deleted from the spam database.
+
+The administrator of the server may ask the server to exchange spam data
+with any other server.

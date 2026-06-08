@@ -1,0 +1,11 @@
+This document describes representations of types that are used for
+data transmission.
+
+String
+######
+
+| length | char array |
+
+"length" is a number of bytes in "char array" represented as 32 bit unsigned
+integer.
+"char array" is an array of bytes without zero byte in the end. 

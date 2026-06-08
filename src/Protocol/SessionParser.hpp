@@ -63,17 +63,6 @@ namespace CommandGetHostName
 	CowBuffer<uint8_t> BuildResponse(const Response &data);
 };
 
-namespace CommandAddContact
-{
-	struct Command
-	{
-		String ContactName;
-	};
-
-	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
-	CowBuffer<uint8_t> BuildCommand(const Command &command);
-}
-
 namespace CommandRequestID
 {
 	struct Response
@@ -92,6 +81,17 @@ namespace CommandUpdateID
 	struct Command
 	{
 		ObjectStorage::ID Id;
+	};
+
+	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
+	CowBuffer<uint8_t> BuildCommand(const Command &command);
+}
+
+namespace CommandAddContact
+{
+	struct Command
+	{
+		String ContactName;
 	};
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
