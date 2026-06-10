@@ -83,7 +83,14 @@ sender                                   receiver
                 | user name |
 
           <---------------------------
-        | status code | key (optional) |
+           | status | key (optional) |
+
+Status codes:
+SUCCESS
+FAILURE
+
+The key is present only if the status is success. Failure status means
+that the server does not want to disclose user key for some reason.
 
 Message delivery
 ################
@@ -92,8 +99,13 @@ Message delivery has the fillowing scheme.
 
 sender                                   receiver
           --------------------------->
-               | message header |
+  | message | message header | message body size |
                                    verification
+
+           optional, only reject case
+          <---------------------------
+ | text | rejection reason description in human readable form (string) |
+
           <---------------------------
              | verification status |
 
@@ -103,16 +115,43 @@ sender                                   receiver
           <---------------------------
              | verification status |
 
+Message header verification may involve the following checks:
+* destination fields must contain existing user and valid key;
+* source field must contain correst source server name (relaying messages from
+  other servers is not allowed);
+* message body size limit;
+* spam filter;
+* user defined restrictions (blocked users list etc.);
+* whether this message is a duplicate of the existing one.
+
+If any verification step is failed, then message delivery is interrupted,
+sender may be informed about rejection reason via verification status.
+
+Header verification status list:
+ACCEPT
+REJECT
+REJECT_INVALID_DESTINATION_USER
+REJECT_INVALID_DESTINATION_KEY
+REJECT_MESSAGE_TOO_BIG
+REJECT_SENDER_BANNED
+REJECT_SPAM
+REJECT_EXISTING
+
+Message body verification status list:
+ACCEPT
+REJECT
+REJECT_INVALID_SIZE
+
 Stream
 ######
 
 sender                                   receiver
           --------------------------->
 | stream request | caller name | callee name | timestamp |
-
+                                    verification
           <---------------------------
           | stream request | answer |
-
+                                     user answer
           <---------------------------
                 | stream start |
 
@@ -127,13 +166,15 @@ sender                                   receiver
           <-------------------------->
                 | stream end |
 
+Verification
+
 User presence
 #############
 
 sender                                   receiver
           --------------------------->
    | presence | user name | encrypted user name |
-
+                                       verification
           <---------------------------
     | presence | response | encrypted response |
 
@@ -162,3 +203,7 @@ deleted from the spam database.
 
 The administrator of the server may ask the server to exchange spam data
 with any other server.
+
+Users can ban sources of unwanted messages, so this subsystem is targeted
+on the large scale spam senders. Small scale spam can be eliminated using
+manual bans by users.
