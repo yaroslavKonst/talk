@@ -24,7 +24,8 @@ requesting server                               responding server
 Verification
 ############
 
-In case of verification failure the server may immediately close the connection.
+In case of verification failure the server may immediately close the connection
+or response with error code.
 
 Verification of IP host names
 -----------------------------
@@ -55,7 +56,7 @@ DDoS protection
 
 The server may measure the rate of incoming requests. If the request rate
 for some IP address exceeds maximum allowed rate, then the server may
-send the "request rate limit reached" command instead of Ack and close
+send the "REQUEST_RATE_LIMIT_REACHED" command instead of Ack and close
 the connection.
 
 Session
@@ -80,17 +81,18 @@ User public key request
 
 sender                                   receiver
           --------------------------->
-                | user name |
+          | GET_USER_KEY | user name |
 
           <---------------------------
-           | status | key (optional) |
+        | status | user key (optional) |
 
 Status codes:
 SUCCESS
 FAILURE
 
-The key is present only if the status is success. Failure status means
-that the server does not want to disclose user key for some reason.
+The key in the response is present only if the status is success.
+Failure status means that the requested user does not exist or the server
+does not want to disclose user key for some reason.
 
 Message delivery
 ################
@@ -99,15 +101,15 @@ Message delivery has the fillowing scheme.
 
 sender                                   receiver
           --------------------------->
-  | message | message header | message body size |
+  | MESSAGE | message header | message body size |
                                    verification
 
            optional, only reject case
           <---------------------------
- | text | rejection reason description in human readable form (string) |
+ | TEXT | rejection reason description in human readable form (string) |
 
           <---------------------------
-             | verification status |
+        | MESSAGE | verification status |
 
           --------------------------->
                 | message body |
@@ -142,15 +144,31 @@ ACCEPT
 REJECT
 REJECT_INVALID_SIZE
 
+Message status update
+#####################
+
+sender                                   receiver
+          --------------------------->
+  | MESSAGE_UPDATE | message header | update type | update value |
+                                   verification
+
+          <---------------------------
+             | verification status |
+
+Message header verification may involve checks that ensure that the
+update command is valid. It must refer to an existing message and be
+applicable for the message. For example, the user can't mark outbound
+messages as read.
+
 Stream
 ######
 
 sender                                   receiver
           --------------------------->
-| stream request | caller name | callee name | timestamp |
+| STREAM_REQUEST | caller name | callee name | timestamp |
                                     verification
           <---------------------------
-          | stream request | answer |
+                   | answer |
                                      user answer
           <---------------------------
                 | stream start |
@@ -166,17 +184,18 @@ sender                                   receiver
           <-------------------------->
                 | stream end |
 
-Verification
+Verification includes checks for user existance, user defined rules,
+block lists, spam filters etc.
 
 User presence
 #############
 
 sender                                   receiver
           --------------------------->
-   | presence | user name | encrypted user name |
+   | PRESENCE | user name | encrypted user name |
                                        verification
           <---------------------------
-    | presence | response | encrypted response |
+     | response status | encrypted response (optional) |
 
 Spam protection
 ###############
@@ -207,3 +226,21 @@ with any other server.
 Users can ban sources of unwanted messages, so this subsystem is targeted
 on the large scale spam senders. Small scale spam can be eliminated using
 manual bans by users.
+
+sender                                   receiver
+          --------------------------->
+         | SPAM_DB_UPDATE | timestamp |
+
+          <---------------------------
+                 | response |
+
+          <---------------------------
+| spamming host ip | entry author host name | signature |
+
+                  - - - - - - -
+
+          <---------------------------
+| spamming host ip | entry author host name | signature |
+
+          <---------------------------
+                    | END |

@@ -20,6 +20,16 @@ scheme and establishing an encrypted channel.
 
 It consists of three steps.
 
+client                                                     server
+                ------------------------------>
+                   | scrambler init | name |
+
+                <------------------------------
+    | scrambler init | timestamp | encrypted challenge (key1) |
+
+                ------------------------------>
+                | encrypted challenge (key2) |
+
 Step 1: Syn
 ###########
 
@@ -100,7 +110,7 @@ Command list
 Keep alive
 ----------
 
-| keep alive | timestamp |
+| KEEP_ALIVE | timestamp |
 "timestamp": a 64-bit signed intager.
 
 This command is used when the session is idle in order to check the connection.
@@ -116,12 +126,12 @@ Since the server may be configured to accept client and peer connections on
 different network interfaces is may be impossible to get appropriate host
 name from the client configuration.
 
-| get host name |
+| GET_HOST_NAME |
 
 This command is sent by the client to get actual server host name.
 
 Response:
-| get host name | name |
+| GET_HOST_NAME | name |
 "name": string.
 
 The server must send this command as a response to the client's request.
@@ -143,12 +153,12 @@ When it is needed to synchronize local client's database with the server
 database the server needs to know the ID recorded by the client. This ID
 points on the latest item in the event sequence that was sent to the client.
 
-| request id |
+| REQUEST_ID |
 
 Sent by the server to get database ID, recorded by the client.
 
 Response, sent by the client:
-| request id | id |
+| REQUEST_ID | id |
 "id" : 32 byte array with the ID.
 
 The client can't initiate database update on its own. It is always started
@@ -162,33 +172,35 @@ If the client sends ID that does not exist in the server database, the server
 must assume that the client does not have any existing updates. So, the
 server must send the full database to the client.
 
-| update id | id |
+| UPDATE_ID | id |
 
 This command is sent by the server to make the client to record a new
 ID. It does not need a response.
 
+It must be sent after database item transmission to ensure consistency.
+
 Managing contacts and their keys
 --------------------------------
 
-| add contact | name |
+| ADD_CONTACT | name |
 "name": string.
 
 This command is sent by the server or the client to add a new contact to the
 contact list.
 
-| update contact key | key | validated | default |
+| UPDATE_CONTACT_KEY | key | validated | default |
 
 Contact book request
 --------------------
 
-| list contacts |
+| LIST_CONTACTS |
 
 This command allows to request server contact list. It includes all users
 registered on the server. But any user name can be excluded from the list
 by user or administrator decision.
 
 Response:
-| list contacts | contact number | { | name | public key | }
+| LIST_CONTACTS | contact number | { | name | public key | }
 
 "contact number": 32 bit unsigned integer.
 "name": string.
@@ -197,11 +209,11 @@ Response:
 Managing messages
 -----------------
 
-| send message | message size | message data |
+| SEND_MESSAGE | message size | message data |
 This command is sent by the client or the server to send a new message.
 
-| update message | message header hash | attribute ID | attribute value |
+| UPDATE_MESSAGE | message header hash | attribute ID | attribute value |
 This message is sent by the client or the server to update message attribute.
 
-| delete message | message header hash |
+| DELETE_MESSAGE | message header hash |
 This message is sent by the client or the server to delete message.
