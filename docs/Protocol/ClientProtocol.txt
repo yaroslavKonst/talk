@@ -217,3 +217,61 @@ This message is sent by the client or the server to update message attribute.
 
 | DELETE_MESSAGE | message header hash |
 This message is sent by the client or the server to delete message.
+
+Managing streams
+----------------
+
+Requesting new connection by client:
+client                                     server
+              --------------------->
+            | STREAM_INIT | request |
+
+              <---------------------
+             | STREAM_INIT | status |
+
+              <---------------------
+         | STREAM_INIT | peer response |
+
+Request structure:
+| source name | source key | destination name | destination key | MAC | nonce |
+| encrypted timestamp |
+
+Status types:
+WAITING_FOR_ANSWER
+ERROR
+USER_OFFLINE
+USER_BUSY
+USER_NONEXISTENT
+CALL_PROHIBITED
+YOU_ARE_BANNED
+
+Peer response types:
+ACCEPT
+DECLINE
+
+Responding on connection request:
+client                                     server
+              <---------------------
+           | STREAM_REQUEST | request |
+
+              --------------------->
+           | STREAM_REQUEST | response |
+
+Response types:
+ACCEPT
+DECLINE
+
+Active stream session:
+client                                     server
+              <-------------------->
+               | STREAM | payload |
+         | STREAM_CONTROL | control data |
+
+                  - - - - - - -
+
+              <-------------------->
+               | STREAM | payload |
+         | STREAM_CONTROL | control data |
+
+              <-------------------->
+                  | STREAM_END |

@@ -166,7 +166,7 @@ Stream
 
 sender                                   receiver
           --------------------------->
-| STREAM_REQUEST | caller name | callee name | timestamp |
+          | STREAM_REQUEST | request |
                                     verification
           <---------------------------
                    | answer |
@@ -184,6 +184,10 @@ sender                                   receiver
 
           <-------------------------->
                 | stream end |
+
+Request structure:
+| source name | source key | destination name | destination key | MAC | nonce |
+| encrypted timestamp |
 
 Verification includes checks for user existance, user defined rules,
 block lists, spam filters etc.

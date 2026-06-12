@@ -1,0 +1,63 @@
+Overview
+########
+########
+
+Stream protocol is used to establish data streams between clients.
+They can be used for various purposes: voice and video calls, screen sharing,
+etc.
+
+Stream management is described in the ClientProtocol and GateProtocol
+documents.
+
+Point to point stream structure
+###############################
+###############################
+
+The stream is a sequence of datagrams.
+Each datagram has the following structure:
+| MAC | nonce | encrypted payload |
+
+Payload size must not exceed 1 KB in order to fit UDP packet size.
+
+When the connection between clients is established, the clients may have
+any number of logical streams between them. Each logical stream is used
+by one subsystem (e.g. first stream for voice data, second stream for video
+data).
+
+Each direction has its own namespace of stream identifiers. For example,
+stream number 1 from client A to client B has no relation to stream number 1
+from client B to client A.
+
+So, the datagram payload has the following structure in decrypted state:
+| DATA | logical stream id | data size | data |
+
+Control datagrams have another structure:
+| CONTROL | action |
+
+Action types:
+| REQUEST_STREAM | stream type | stream id | -- request new outbount stream.
+| ACCEPT_STREAM | stream id | -- accept new outbound stream.
+| DECLINE_STREAM | stream id | -- decline new outbound stream.
+| END_STREAM | stream id | -- end outbound stream.
+| SWITCH_TO_UDP | sender IP address | -- request switching to UDP.
+
+Direct client connection
+########################
+
+The clients may establish direct connection via UDP to reduce server load.
+In this situation congestion control and stream consistency check must
+be done by the clients since TCP is not used.
+
+Datagrams sent via UDP have the following structure:
+              /         encrypted part of the datagram       \
+| MAC | nonce | datagram id | expected datagram id | payload |
+
+The datagram id is the number of datagram in the sequence. Expected datagram id 
+is the number of next datagram expected by the datagram sender. It is used
+to acknowledge the other client that the datagram was received.
+
+Group stream structure
+######################
+######################
+
+TODO
