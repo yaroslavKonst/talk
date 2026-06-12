@@ -49,3 +49,26 @@ MAC from the group keys entry protects its entry.
 So, to decrypt the message the message receiver finds an entry with its
 public key, checks the entry and decrypts the symmetric key. Then the
 receiver decrypts the message body using decrypted symmetric key.
+
+Message body structure
+######################
+
+Message body is a sequence of entries.
+Entry structure:
+| entry type | data |
+
+Entry types
+-----------
+
+TEXT -- text in UTF8 encoding without BOM.
+| TEXT | text length in bytes | data |
+
+ATTACHMENT -- any data, byte array.
+| ATTACHMENT | data name | data length | data |
+
+KEY -- new public key. It can be sent if the user wants to notify others
+       about upcoming key change.
+| KEY | key (32 bytes) |
+
+This list is not exhaustive and finalized. Client extensions may define
+other types.
