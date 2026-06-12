@@ -1,0 +1,51 @@
+Message structure
+#################
+#################
+
+Point to point message
+######################
+
+| source address | source key |                \
+| destination address | destination key |      | message
+| timestamp | index |                          | header
+| header size | message body size | nonce |    /
+| encrypted message body |                       message body
+
+Since the message body can be quite big, it is proposed to divide it
+into blocks to enable incremental encryption and decryption. So the
+encrypted message body is stored as a block sequence.
+
+Block structure:
+| block size | MAC | encrypted payload |
+
+Each MAC protects the header and its message body block to ensure
+consistency. The full message size verification is done using the
+message body size field in the header.
+
+Group message
+#############
+
+| source address | source key |                \
+| group name | group keys |                    | message
+| timestamp | index |                          | header
+| header size | message body size | nonce |    /
+| encrypted message body |                       message body
+
+Encrypted message body has the same structure as in point to point messages.
+
+The group keys field is an array of key entries.
+| entry number | entry 1 | ... | entry N |
+
+Each entry has the following structure:
+| destination key | MAC | nonce | encrypted symmetric key |
+
+The idea of group message structure is the following: the message is
+encrypted with a one-time symmetric key. Then this key is encrypted
+by public keys of message receivers. It forms an array of group keys,
+each entry allows the appropriate receiver to decrypt the message.
+
+MAC from the group keys entry protects its entry.
+
+So, to decrypt the message the message receiver finds an entry with its
+public key, checks the entry and decrypts the symmetric key. Then the
+receiver decrypts the message body using decrypted symmetric key.
