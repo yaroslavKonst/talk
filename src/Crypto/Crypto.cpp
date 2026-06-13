@@ -75,17 +75,6 @@ static bool VerifyNonce(
 {
 	int64_t prevT;
 	int64_t t;
-	bool equal = true;
-
-	for (int i = 0; i < NONCE_SIZE; i++) {
-		if (prevNonce[i] != nonce[i]) {
-			equal = false;
-		}
-	}
-
-	if (equal) {
-		return false;
-	}
 
 	memcpy(&prevT, prevNonce, sizeof(t));
 	memcpy(&t, nonce, sizeof(t));
@@ -94,16 +83,30 @@ static bool VerifyNonce(
 		return false;
 	}
 
-	return true;
+	for (int i = sizeof(t); i < NONCE_SIZE; i++) {
+		if (prevNonce[i] < nonce[i]) {
+			return true;
+		} else if (prevNonce[i] > nonce[i]) {
+			return false;
+		}
+	}
+
+	return false;
 }
 
 void InitNonce(uint8_t nonce[NONCE_SIZE])
 {
 	int64_t t = GetUnixTime();
 	memcpy(nonce, &t, sizeof(t));
+
+	int offset = sizeof(t);
+
+	memset(nonce + offset, 0, 2);
+	offset += 2;
+
 	GenerateRandomData(
-		NONCE_SIZE - sizeof(t),
-		nonce + sizeof(t),
+		NONCE_SIZE - offset,
+		nonce + offset,
 		false);
 }
 
