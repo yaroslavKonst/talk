@@ -235,6 +235,89 @@ This message is sent by the client or the server to update message attribute.
 | DELETE_MESSAGE | message header hash |
 This message is sent by the client or the server to delete message.
 
+Managing groups
+---------------
+
+Group managing commands can be sent not only to the user's server,
+but on remote servers too (via the user's server). So, these commands use
+special headers for encryption and authentication:
+| group host | group host key | user name | user key | timestamp | MAC | nonce |
+The encrypted payload goes after the header.
+
+Response header has the same structure.
+
+Command list:
+
+* | CREATE_GROUP | group name |
+  This command can be sent only to the server where the user is registered.
+  So, it does not have encryption. The user which requested group creation
+  is automatically added to it and gets a full set of capabilities.
+
+  Response list:
+  SUCCESS
+  GROUP_EXISTS
+  FORBIDDEN
+
+* | DELETE_GROUP | header | group name |
+  Delete existing group. Capability: REMOVE_USERS.
+
+  Response list:
+  SUCCESS
+  NO_CAPABILITY
+  SERVER_UNREACHABLE
+  NONEXISTENT_GROUP
+
+* | ADD_USER | header | group name | user name | user public key |
+  Add new user to the group. Capability: ADD_USERS.
+
+  Response list:
+  SUCCESS
+  NO_CAPABILITY
+  SERVER_UNREACHABLE
+  USER_EXISTS
+
+* | REMOVE_USER | header | group name | user name |
+  Remove user from the group. Capability: REMOVE_USERS. Exception: any user
+  always can remove themselves. And any user can ban the group to avoid getting
+  any messages from it.
+
+  If the group becomes empty as a result of user removal, it is deleted.
+
+  Response list:
+  SUCCESS
+  NO_CAPABILITY
+  SERVER_UNREACHABLE
+  USER_NONEXISTENT
+
+* | UPDATE_USER | header | group name | user name | user public key |
+  Update existing user's key. Capability: UPDATE_USERS.
+
+  Response list:
+  SUCCESS
+  NO_CAPABILITY
+  SERVER_UNREACHABLE
+  USER_NONEXISTENT
+
+* | SET_USER_CAPABILITIES | header | group name | user name | capabilities |
+  Set capabilities for an existing user. Capability: SET_CAPABILITIES.
+
+  Response list:
+  SUCCESS
+  NO_CAPABILITY
+  SERVER_UNREACHABLE
+  USER_NONEXISTENT
+
+* | GET_CAPABILITIES | header | group name | user name |
+  Get requesting user's capabilities. Capability is not required, any user
+  can request own capabilities.
+
+  Response structure:
+  | status | capabilities (optional) |
+
+  Response status list:
+  SUCCESS
+  SERVER_UNREACHABLE
+
 Managing streams
 ----------------
 
@@ -244,7 +327,7 @@ client                                     server
 |            | STREAM_INIT | request |          |
 |                                               |
 | <-------------------------------------------- |
-|             | STREAM_INIT | status |          |
+|            | STREAM_INIT | status |           |
 |                                               |
 |  +-----------------------------------------+  |
 |  | If the status is not WAITING_FOR_ANSWER |  |
@@ -264,6 +347,7 @@ Request structure:
 Status types:
 WAITING_FOR_ANSWER
 ERROR
+SERVER_OFFLINE
 USER_OFFLINE
 USER_BUSY
 USER_NONEXISTENT

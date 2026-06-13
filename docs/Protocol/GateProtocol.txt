@@ -193,6 +193,19 @@ ACCEPT
 REJECT
 REJECT_NONEXISTENT_MESSAGE
 
+Group management
+################
+
+sender                                   receiver
+| --------------------------------------------> |
+|         | MANAGE_GROUP | request |            |
+|                                               |
+| <-------------------------------------------- |
+|                 | response |                  |
+
+Request and response structures are described in the client protocol
+specification.
+
 Stream
 ######
 

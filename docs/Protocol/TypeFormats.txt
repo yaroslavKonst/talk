@@ -9,3 +9,17 @@ String
 "length" is a number of bytes in "char array" represented as 32 bit unsigned
 integer.
 "char array" is an array of bytes without zero byte in the end. 
+
+User name
+#########
+
+Full user names are strings, consisting of user name on the host and
+host name separated by '@': user@host.
+
+Group name
+##########
+
+Full group names look similar to user names but have different syntax
+in order to put user names and group names to different namespaces.
+So, group names are strings that consist of two parts: group name and
+host name, separated by "@@": group@@host.

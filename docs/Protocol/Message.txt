@@ -12,7 +12,7 @@ Point to point message
 | encrypted message body |                       message body
 
 Since the message body can be quite big, it is proposed to divide it
-into blocks to enable incremental encryption and decryption. So the
+into blocks to enable incremental encryption and decryption. So, the
 encrypted message body is stored as a block sequence.
 
 Block structure:
@@ -24,6 +24,12 @@ message body size field in the header.
 
 Group message
 #############
+
+Groups are maintained as entities separated from users. Any user can
+create a group on the server where the user is registered and then invite
+users from any servers.
+
+Any group has its own name.
 
 | source address | source key |                \
 | group name | group keys |                    | message
@@ -49,6 +55,23 @@ MAC from the group keys entry protects its entry.
 So, to decrypt the message the message receiver finds an entry with its
 public key, checks the entry and decrypts the symmetric key. Then the
 receiver decrypts the message body using decrypted symmetric key.
+
+Service messages
+----------------
+
+The server may send a message where sender name is equal to the group name
+and group keys field contains keys of the message destinations. These messages
+contain commands and notifications from the server to group members.
+
+Server command list:
+| NOTIFY_ADD | name of new user | name of invitation sender |
+Notifies the user that the user was added to the group.
+
+| NOTIFY_REMOVE | name of removed user | name of removal initiator |
+Notifies the user that the user was removed from the group.
+
+| NOTIFY_CAPABILITY_CHANGE | capabilities |
+Notifies the user that the assigned capabilities have been changed.
 
 Message body structure
 ######################
