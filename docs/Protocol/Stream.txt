@@ -36,10 +36,18 @@ Control datagrams have another structure:
 
 Action types:
 | REQUEST_STREAM | stream type | stream id | -- request new outbount stream.
-| ACCEPT_STREAM | stream id | -- accept new outbound stream.
-| DECLINE_STREAM | stream id | -- decline new outbound stream.
+| ACCEPT_STREAM | stream id | -- accept new inbound stream.
+| DECLINE_STREAM | stream id | -- decline new inbound stream.
 | END_STREAM | stream id | -- end outbound stream.
-| SWITCH_TO_UDP | sender IP address | -- request switching to UDP.
+
+| SWITCH_TO_UDP | sender IP address | sender port | -- request switching to UDP.
+| ACK_UDP | -- confirm getting packages via UDP.
+| UDP_FAILURE | -- notify about critical data loss via UDP.
+
+Stream types:
+AUDIO
+VIDEO
+CUSTOM
 
 Direct client connection
 ########################
