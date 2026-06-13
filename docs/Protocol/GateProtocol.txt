@@ -169,10 +169,10 @@ sender                                   receiver
           | STREAM_REQUEST | request |
                                     verification
           <---------------------------
-                   | answer |
+                | request status |
                                      user answer
           <---------------------------
-                | stream start |
+                | peer response |
 
           <-------------------------->
               | frame | payload |
@@ -185,9 +185,7 @@ sender                                   receiver
           <-------------------------->
                 | stream end |
 
-Request structure:
-| source name | source key | destination name | destination key | MAC | nonce |
-| encrypted timestamp |
+Request and peer response structure are described in client protocol.
 
 Verification includes checks for user existance, user defined rules,
 block lists, spam filters etc.

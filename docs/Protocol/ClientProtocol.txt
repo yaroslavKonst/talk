@@ -8,6 +8,9 @@ All data is bitwise xor-ed with a stream of pseudo-random numbers (scrambled)
 in order to make it harder for an eavesdropper to identify the protocol
 and parse the data.
 
+The client and the server are assumed to know each other's public keys.
+It as achieved by key exchange during user registration on the server.
+
 Some types used in this document are described in TypeFormats.txt.
 
 Handshake
@@ -21,41 +24,42 @@ scheme and establishing an encrypted channel.
 It consists of three steps.
 
 client                                                     server
-                ------------------------------>
-                   | scrambler init | name |
-
-                <------------------------------
-    | scrambler init | timestamp | encrypted challenge (key1) |
-
-                ------------------------------>
-                | encrypted challenge (key2) |
+| ------------------------------------------------------------> |
+|                  | scrambler init | name |                    |
+|                                                               |
+| <------------------------------------------------------------ |
+|  | scrambler init | timestamp | encrypted challenge (key1) |  |
+|                                                               |
+| ------------------------------------------------------------> |
+|               | encrypted challenge (key2) |                  |
 
 Step 1: Syn
 ###########
 
 client                                                     server
-                ------------------------------>
-                   | scrambler init | name |
+| ------------------------------------------------------------> |
+|                  | scrambler init | name |                    |
 
 "scrambler init": byte;
 "name": string.
 
-The client sends to the server its user name. Name is prepended by a
+The client sends its user name to the server. Name is prepended by a
 scrambler init.
 
 The server checks whether the user with this name exists. If so,
-the server uses the current time as salt and generates
-two keys that will be used as session keys.
+the server uses the current time as salt and generates two keys that
+will be used as session keys. Each key is used for one direction.
 
 Step 2: SynAck
 ##############
 
 client                                                     server
-                <------------------------------
-    | scrambler init | timestamp | encrypted challenge (key1) |
+| <------------------------------------------------------------ |
+|  | scrambler init | timestamp | encrypted challenge (key1) |  |
 
 "scrambler init": byte;
 "timestamp": a 64-bit signed integer.
+"encrypted challenge": | MAC | nonce | encrypted challenge bytes |
 
 The server generates random 64 byte challenge and encrypts it with its
 session key. Then the server sends encrypted challenge and timestamp
@@ -65,8 +69,8 @@ Step 3: Ack
 ###########
 
 client                                                     server
-                ------------------------------>
-                | encrypted challenge (key2) |
+| ------------------------------------------------------------> |
+|               | encrypted challenge (key2) |                  |
 
 The client receives timestamp and challende from the server, generates session
 keys, decrypts the challenge and encrypts it with another session key. Then
@@ -102,7 +106,7 @@ Some commands may require answer from the other side. Responses have the same
 structure:
 | command id | optional payload |
 
-"Command id": 32-bit integer.
+"Command id": 32-bit unsigned integer.
 
 Command list
 ############
@@ -111,11 +115,12 @@ Keep alive
 ----------
 
 | KEEP_ALIVE | timestamp |
-"timestamp": a 64-bit signed intager.
+"timestamp": a 64-bit signed integer.
 
-This command is used when the session is idle in order to check the connection.
-It is initiated by the client. When the server receives this command
-it must send the same command with the same parameter as response.
+This command is used when the session is idle in order to check the
+connection and prevent timeout. It is initiated by the client. When
+the server receives this command it must send the same command with
+the same parameter as response.
 
 Managing server host name
 -------------------------
@@ -123,7 +128,7 @@ Managing server host name
 The client must embed server host name into the message header before header
 signing. So, the client must get actual host name from the server.
 Since the server may be configured to accept client and peer connections on
-different network interfaces is may be impossible to get appropriate host
+different network interfaces it may be impossible to get appropriate host
 name from the client configuration.
 
 | GET_HOST_NAME |
@@ -141,7 +146,9 @@ update.
 Managing database ID
 --------------------
 
-The server stores data as a sequence of modifications.
+The server stores data as a sequence of modifications and tells the client
+the ID of the latest item, sent to the client. It allows to synchronize
+data between the server and the client.
 
 Example:
 [sent message1] -> [message1 is marked as delivered] -> [received message2] ->
@@ -149,13 +156,16 @@ Example:
 
 Each item in the sequence has its unique 32 byte identifier.
 
-When it is needed to synchronize local client's database with the server
+When it is needed to synchronize local client's database with the server's
 database the server needs to know the ID recorded by the client. This ID
 points on the latest item in the event sequence that was sent to the client.
 
 | REQUEST_ID |
 
 Sent by the server to get database ID, recorded by the client.
+
+If the client does not want to update local database it can ignore this command.
+In this case the server will not send any updates.
 
 Response, sent by the client:
 | REQUEST_ID | id |
@@ -164,9 +174,6 @@ Response, sent by the client:
 The client can't initiate database update on its own. It is always started
 by the server in two cases: in the beginning of a new session and in
 case of new data being added to the database.
-
-If the client does not want to update local database it can ignore this command.
-In this case the server will not send any updates.
 
 If the client sends ID that does not exist in the server database, the server
 must assume that the client does not have any existing updates. So, the
@@ -188,7 +195,15 @@ Managing contacts and their keys
 This command is sent by the server or the client to add a new contact to the
 contact list.
 
-| UPDATE_CONTACT_KEY | key | validated | default |
+| UPDATE_CONTACT_KEY | name | key | validated | default |
+"name": user name, string.
+"key": user key, 32 byte array.
+"validated": byte, considered as logical value. Whether to consider this key
+             as checked for authenticity.
+"default": byte, considered as logical value. Whether to use the key for
+           new messages.
+
+This command is used for contact key management.
 
 Contact book request
 --------------------
@@ -196,12 +211,10 @@ Contact book request
 | LIST_CONTACTS |
 
 This command allows to request server contact list. It includes all users
-registered on the server. But any user name can be excluded from the list
-by user or administrator decision.
+registered on the server that allowed broadcasting of their contact data.
 
 Response:
 | LIST_CONTACTS | contact number | { | name | public key | }
-
 "contact number": 32 bit unsigned integer.
 "name": string.
 "public key": 32 byte key.
@@ -209,7 +222,7 @@ Response:
 Managing messages
 -----------------
 
-| SEND_MESSAGE | message size | message data |
+| SEND_MESSAGE | message data |
 This command is sent by the client or the server to send a new message.
 
 | UPDATE_MESSAGE | message header hash | attribute ID | attribute value |
@@ -223,18 +236,26 @@ Managing streams
 
 Requesting new connection by client:
 client                                     server
-              --------------------->
-            | STREAM_INIT | request |
-
-              <---------------------
-             | STREAM_INIT | status |
-
-              <---------------------
-         | STREAM_INIT | peer response |
+| --------------------------------------------> |
+|            | STREAM_INIT | request |          |
+|                                               |
+| <-------------------------------------------- |
+|             | STREAM_INIT | status |          |
+|                                               |
+|  +-----------------------------------------+  |
+|  | If the status is not WAITING_FOR_ANSWER |  |
+|  |  stream initialization ends here with   |  |
+|  |    failure. Stream is not started.      |  |
+|  +-----------------------------------------+  |
+|                                               |
+| <-------------------------------------------- |
+|         | STREAM_INIT | peer response |       |
 
 Request structure:
 | source name | source key | destination name | destination key | MAC | nonce |
 | encrypted timestamp |
+
+"status" is a 32 bit unsigned integer.
 
 Status types:
 WAITING_FOR_ANSWER
@@ -245,17 +266,26 @@ USER_NONEXISTENT
 CALL_PROHIBITED
 YOU_ARE_BANNED
 
+If the status is not WAITING_FOR_ANSWER then stream is not started.
+
+Peer response structure:
+| MAC | nonce | response |
+"response": 32 bit unsigned integer.
+
 Peer response types:
 ACCEPT
 DECLINE
 
+If the peer response is ACCEPT then the stream is started.
+Response is encrypted to ensure answer authentication.
+
 Responding on connection request:
 client                                     server
-              <---------------------
-           | STREAM_REQUEST | request |
-
-              --------------------->
-           | STREAM_REQUEST | response |
+| <-------------------------------------------- |
+|          | STREAM_REQUEST | request |         |
+|                                               |
+| --------------------------------------------> |
+|          | STREAM_REQUEST | response |        |
 
 Response types:
 ACCEPT
@@ -263,15 +293,26 @@ DECLINE
 
 Active stream session:
 client                                     server
-              <-------------------->
-               | STREAM | payload |
-         | STREAM_CONTROL | control data |
+| <-------------------------------------------> |
+|              | STREAM | payload |             |
+|                                               |
+|                 - - - - - - -                 |
+|                                               |
+| <-------------------------------------------> |
+|              | STREAM | payload |             |
+|                                               |
+| <-------------------------------------------> |
+|                 | STREAM_END |                |
 
-                  - - - - - - -
+Bidirectional arrows mean that commands with stream payload may be sent by
+any side at any time.
 
-              <-------------------->
-               | STREAM | payload |
-         | STREAM_CONTROL | control data |
+Stream end command may be sent by any side. When any side receives or sends
+this command, the stream session is considered to be closed. This command
+does not require an answer.
 
-              <-------------------->
-                  | STREAM_END |
+STREAM_END command may be sent not only during the active session, but
+during stream initialization. In this case initialization must be interrupted
+and considered unsuccessful.
+
+One user may have only one active stream session at a time.
