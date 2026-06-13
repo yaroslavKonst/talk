@@ -109,6 +109,21 @@ void ObjectStorage::SetRef(String refName, const ID &id)
 	file.Write<uint8_t>(id.GetValue(), (int)Constants::IDSize, 0);
 }
 
+void ObjectStorage::DelRef(String refName)
+{
+	String path = _rootPath + "/" + REFS_PREFIX + "/" + refName;
+
+	if (!FileExists(path)) {
+		return;
+	}
+
+	int res = unlink(path.CStr());
+
+	if (res == -1) {
+		THROW("Failed to remove reference " + refName + ".");
+	}
+}
+
 ObjectStorage::ID ObjectStorage::GetFreeID(const CowBuffer<uint8_t> object)
 {
 	ID id(GetHash(object, (int)Constants::IDSize).Pointer());
