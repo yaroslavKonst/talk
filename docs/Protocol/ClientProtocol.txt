@@ -225,7 +225,11 @@ Managing messages
 | SEND_MESSAGE | message data |
 This command is sent by the client or the server to send a new message.
 
-| UPDATE_MESSAGE | message header hash | attribute ID | attribute value |
+| UPDATE_MESSAGE | MAC | nonce | message header |...
+| attribute ID | attribute value |
+\--------------------------------/
+           encrypted
+
 This message is sent by the client or the server to update message attribute.
 
 | DELETE_MESSAGE | message header hash |
@@ -253,7 +257,7 @@ client                                     server
 
 Request structure:
 | source name | source key | destination name | destination key | MAC | nonce |
-| encrypted timestamp |
+| timestamp | encrypted one time challenge |
 
 "status" is a 32 bit unsigned integer.
 
@@ -265,11 +269,15 @@ USER_BUSY
 USER_NONEXISTENT
 CALL_PROHIBITED
 YOU_ARE_BANNED
+REJECT_SPAM
 
 If the status is not WAITING_FOR_ANSWER then stream is not started.
 
 Peer response structure:
-| MAC | nonce | response |
+| MAC | nonce | response | challenge response |
+              \-------------------------------/
+                         encrypted
+
 "response": 32 bit unsigned integer.
 
 Peer response types:
@@ -316,3 +324,41 @@ during stream initialization. In this case initialization must be interrupted
 and considered unsuccessful.
 
 One user may have only one active stream session at a time.
+
+Requesting presence and responding presence requests
+----------------------------------------------------
+
+Requesting presence:
+client                                                                 server
+| ------------------------------------------------------------------------> |
+| | PRESENCE | name | key | timestamp | MAC | nonce | encrypted user name | |
+|                                                                           |
+| <------------------------------------------------------------------------ |
+|    | PRESENCE | status | name | key | MAC | nonce | encrypted status |    |
+|                        \---------------------------------------------/    |
+|                                           optional                        |
+
+Responding presence:
+client                                                                    server
+| <--------------------------------------------------------------------------- |
+| | PRESENCE_REQUEST | name | key | timestamp |...                             |
+|                                        | MAC | nonce | encrypted user name | |
+|                                                                              |
+| ---------------------------------------------------------------------------> |
+| | PRESENCE_REQUEST | status | name | key | MAC | nonce | encrypted status |  |
+|                             \---------------------------------------------/  |
+|                                                optional                      |
+
+Status list:
+OFFLINE
+RESPONDED
+
+Encrypted status:
+| status ID | status text |
+
+Status ID list:
+ONLINE
+BUSY
+AWAY
+
+Status text is a short string.

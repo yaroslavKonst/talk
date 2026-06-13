@@ -8,18 +8,27 @@ Handshake
 #########
 #########
 
-requesting server                               responding server
-                 ------------Syn--------------->
-   | req server name | req server public key | key salt | signature |
-
-                                                   verification
-
-                 <--------------Ack-------------
-         | res server name | res server public key | signature |
-
-    verification
-
- session key generation                    session key generation
+requesting server                                    responding server
+| -----------------------------------------------------------------> |
+| | req server name | req server public key | key salt | signature | |
+|                                                                    |
+|                                                     +--------------|
+|                                                     | verification |
+|                                                     +--------------|
+|                                                                    |
+| <----------------------------------------------------------------- |
+|       | res server name | res server public key | signature |      |
+|                                OR                                  |
+|                  | REQUEST_RATE_LIMIT_REACHED |                    |
+|                                                                    |
+|--------------+                                                     |
+| verification |                                                     |
+|--------------+                                                     |
+|                                                                    |
+|--------------------------------+  +--------------------------------|
+|     Session key generation     |  |     Session key generation     |
+| if verification was successful |  | if verification was successful |
+|--------------------------------+  +--------------------------------|
 
 Verification
 ############
@@ -51,7 +60,7 @@ steps:
   is ignored;
 * received data signature is checked using public key from DNS.
 
-DDoS protection
+DoS protection
 ###############
 
 The server may measure the rate of incoming requests. If the request rate
@@ -71,26 +80,26 @@ session leader.
 
 The session leader can initiate actions during the session, the other
 server must not initiate any actions. When the session leader has finished
-all planned actions it can send the "end" command. After it the other server
+all planned actions it can send the END command. After it the other server
 becomes the session leader, it can send commands to initiate actions. In
 this case the session continues. Or the other server may immediately send
-the "end" command. In this case the session is closed.
+the END command. In this case the session is closed.
 
 User public key request
 #######################
 
 sender                                   receiver
-          --------------------------->
-          | GET_USER_KEY | user name |
-
-          <---------------------------
-        | status | user key (optional) |
+| --------------------------------------------> |
+|         | GET_USER_KEY | user name |          |
+|                                               |
+| <-------------------------------------------- |
+|       | status | user key (optional) |        |
 
 Status codes:
 SUCCESS
 FAILURE
 
-The key in the response is present only if the status is success.
+The key in the response is present only if the status is SUCCESS.
 Failure status means that the requested user does not exist or the server
 does not want to disclose user key for some reason.
 
@@ -99,23 +108,35 @@ Message delivery
 
 Message delivery has the fillowing scheme.
 
-sender                                   receiver
-          --------------------------->
-  | MESSAGE | message header | message body size |
-                                   verification
-
-           optional, only reject case
-          <---------------------------
- | TEXT | rejection reason description in human readable form (string) |
-
-          <---------------------------
-        | MESSAGE | verification status |
-
-          --------------------------->
-                | message body |
-                                   verification
-          <---------------------------
-             | verification status |
+sender                                                      receiver
+| ---------------------------------------------------------------> |
+|        | MESSAGE | message header | message body size |          |
+|                                                                  |
+|                                                   +--------------|
+|                                                   | verification |
+|                                                   +--------------|
+|                                                                  |
+|                   optional, only reject case                     |
+| <--------------------------------------------------------------- |
+|  | TEXT | rejection reason description in human readable form |  |
+|                                                                  |
+| <--------------------------------------------------------------- |
+|                | MESSAGE | verification status |                 |
+|                                                                  |
+|----------------------------------+                               |
+| End of message transmission with |                               |
+| failure if status is not ACCEPT. |                               |
+|----------------------------------+                               |
+|                                                                  |
+| ---------------------------------------------------------------> |
+|                        | message body |                          |
+|                                                                  |
+|                                                   +--------------|
+|                                                   | verification |
+|                                                   +--------------|
+|                                                                  |
+| <--------------------------------------------------------------- |
+|                    | verification status |                       |
 
 Message header verification may involve the following checks:
 * destination fields must contain existing user and valid key;
@@ -128,77 +149,120 @@ Message header verification may involve the following checks:
 
 If any verification step is failed, then message delivery is interrupted,
 sender may be informed about rejection reason via verification status.
+Message receiver can provide more detailed error descriprion via text message.
 
 Header verification status list:
-ACCEPT
-REJECT
-REJECT_INVALID_DESTINATION_USER
-REJECT_INVALID_DESTINATION_KEY
-REJECT_INVALID_HEADER
-REJECT_MESSAGE_TOO_BIG
-REJECT_SENDER_BANNED
-REJECT_SPAM
-REJECT_EXISTING
+ACCEPT -- header is OK, proceed.
+REJECT -- header is rejected, no details are given.
+REJECT_INVALID_DESTINATION_USER -- destination user does not exist or invalid
+                                   destination host name.
+REJECT_INVALID_DESTINATION_KEY -- destination key is not valid.
+REJECT_INVALID_HEADER -- header is ill formed and caused parsing failure.
+REJECT_MESSAGE_TOO_BIG -- reported message body is too big to be processed.
+REJECT_SENDER_BANNED -- sender was banned by the user.
+REJECT_SPAM -- spam filter did not allow the message to pass.
+REJECT_EXISTS -- message with the same header already was delivered.
 
 Message body verification status list:
-ACCEPT
-REJECT
-REJECT_INVALID_SIZE
+ACCEPT -- message body is OK, message is accepted for delivery.
+REJECT -- message body was rejected, no details.
+REJECT_INVALID_SIZE -- message body size differs from the data in message
+                       header.
 
 Message status update
 #####################
 
 sender                                   receiver
-          --------------------------->
-  | MESSAGE_UPDATE | message header | update type | update value |
-                                   verification
+| --------------------------------------------> |
+|       | MESSAGE_UPDATE | update data |        |
+|                                               |
+|                                +--------------|
+|                                | verification |
+|                                +--------------|
+|                                               |
+| <-------------------------------------------- |
+|            | verification status |            |
 
-          <---------------------------
-             | verification status |
+Update data specification is given in client protocol.
 
 Message header verification may involve checks that ensure that the
-update command is valid. It must refer to an existing message and be
-applicable for the message. For example, the user can't mark outbound
-messages as read.
+update command is valid. It must refer to an existing message.
+
+Status list:
+ACCEPT
+REJECT
+REJECT_NONEXISTENT_MESSAGE
 
 Stream
 ######
 
 sender                                   receiver
-          --------------------------->
-          | STREAM_REQUEST | request |
-                                    verification
-          <---------------------------
-                | request status |
-                                     user answer
-          <---------------------------
-                | peer response |
-
-          <-------------------------->
-              | frame | payload |
-
-                 - - - - - - -
-
-          <-------------------------->
-              | frame | payload |
-
-          <-------------------------->
-                | stream end |
+| --------------------------------------------> |
+|         | STREAM_REQUEST | request |          |
+|                                               |
+|                                +--------------|
+|                                | verification |
+|                                +--------------|
+|                                               |
+| <-------------------------------------------- |
+|              | request status |               |
+|                                               |
+|      +---------------------------------+      |
+|      | Stream initialization ends here |      |
+|      |  with failure if status is not  |      |
+|      |       WAITING_FOR_ANSWER.       |      |
+|      +---------------------------------+      |
+|                                               |
+|                                 +-------------|
+|                                 | user answer |
+|                                 +-------------|
+|                                               |
+| <-------------------------------------------- |
+|              | peer response |                |
+|                                               |
+|      +---------------------------------+      |
+|      | Stream initialization ends here |      |
+|      |   with failure if response is   |      |
+|      |           not ACCEPT.           |      |
+|      +---------------------------------+      |
+|                                               |
+| <-------------------------------------------> |
+|              | FRAME | payload |              |
+|                                               |
+|                 - - - - - - -                 |
+|                                               |
+| <-------------------------------------------> |
+|              | FRAME | payload |              |
+|                                               |
+| <-------------------------------------------> |
+|                | STREAM_END |                 |
 
 Request and peer response structure are described in client protocol.
 
-Verification includes checks for user existance, user defined rules,
+Verification includes checks for user existence, user defined rules,
 block lists, spam filters etc.
+
+Stream control logic is described in the client protocol specification.
 
 User presence
 #############
 
-sender                                   receiver
-          --------------------------->
-   | PRESENCE | user name | encrypted user name |
-                                       verification
-          <---------------------------
-     | response status | encrypted response (optional) |
+sender                                                               receiver
+| ------------------------------------------------------------------------> |
+| | PRESENCE | name | key | timestamp | MAC | nonce | encrypted user name | |
+|                                                                           |
+|                                                            +--------------|
+|                                                            | verification |
+|                                                            +--------------|
+|                                                                           |
+| <------------------------------------------------------------------------ |
+|    | response status | name | key | MAC | nonce | encrypted response |    |
+|                      \-----------------------------------------------/    |
+|                                           optional                        |
+
+Response status list:
+OFFLINE -- all clients are offline or don't want to respond.
+RESPONDED -- client is online and responded. Further data is in encrypted part.
 
 Spam protection
 ###############
@@ -230,20 +294,28 @@ Users can ban sources of unwanted messages, so this subsystem is targeted
 on the large scale spam senders. Small scale spam can be eliminated using
 manual bans by users.
 
-sender                                   receiver
-          --------------------------->
-         | SPAM_DB_UPDATE | timestamp |
+sender                                                 receiver
+| ----------------------------------------------------------> |
+|              | SPAM_DB_UPDATE | timestamp |                 |
+|                                                             |
+| <---------------------------------------------------------- |
+|                       | response |                          |
+|                                                             |
+|       +---------------------------------------------+       |
+|       | Update ends here if the response is REJECT. |       |
+|       +---------------------------------------------+       |
+|                                                             |
+| <---------------------------------------------------------- |
+|  | spamming host ip | entry author host name | signature |  |
+|                                                             |
+|                       - - - - - - -                         |
+|                                                             |
+| <---------------------------------------------------------- |
+|  | spamming host ip | entry author host name | signature |  |
+|                                                             |
+| <---------------------------------------------------------- |
+|                    | SPAM_UPDATE_END |                      |
 
-          <---------------------------
-                 | response |
-
-          <---------------------------
-| spamming host ip | entry author host name | signature |
-
-                  - - - - - - -
-
-          <---------------------------
-| spamming host ip | entry author host name | signature |
-
-          <---------------------------
-                    | END |
+Response types:
+OK
+REJECT
