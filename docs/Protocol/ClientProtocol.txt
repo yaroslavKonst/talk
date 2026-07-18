@@ -23,24 +23,26 @@ scheme and establishing an encrypted channel.
 
 It consists of three steps.
 
-client                                                     server
-| ------------------------------------------------------------> |
-|                  | scrambler init | name |                    |
-|                                                               |
-| <------------------------------------------------------------ |
-|  | scrambler init | timestamp | encrypted challenge (key1) |  |
-|                                                               |
-| ------------------------------------------------------------> |
-|               | encrypted challenge (key2) |                  |
+client                                                         server
+| ----------------------------------------------------------------> |
+| | scrambler init | protocol version | encryption scheme | name |  |
+|                                                                   |
+| <---------------------------------------------------------------- |
+|    | scrambler init | timestamp | encrypted challenge (key1) |    |
+|                                                                   |
+| ----------------------------------------------------------------> |
+|                 | encrypted challenge (key2) |                    |
 
 Step 1: Syn
 ###########
 
-client                                                     server
-| ------------------------------------------------------------> |
-|                  | scrambler init | name |                    |
+client                                                         server
+| ----------------------------------------------------------------> |
+| | scrambler init | protocol version | encryption scheme | name |  |
 
 "scrambler init": byte;
+"protocol version": 32 bit integer;
+"encryption scheme": 32 bit integer;
 "name": string.
 
 The client sends its user name to the server. Name is prepended by a
@@ -412,6 +414,18 @@ One user may have only one active stream session at a time.
 Requesting presence and responding presence requests
 ----------------------------------------------------
 
+To prevent active polling, presence data exchange is implemented via
+subscriptions.
+
+When a user logs in and opens a chat, the client sends a presence subscription
+request to the peer. If presence data sharing is allowed, the server sends
+user status and adds a subscription, so it will automatically send status
+updates when necessary without requests. A subscription has a limitied
+duration to prevent its infinite lifetime. In the end of subscription
+the server notifies the requesting server about it. The requesting server can
+stop the subscription in any time if it is not needed. For example, if the
+user logged out.
+
 Requesting presence:
 client                                                                 server
 | ------------------------------------------------------------------------> |
@@ -445,4 +459,4 @@ ONLINE
 BUSY
 AWAY
 
-Status text is a short string.
+Status text is a string.

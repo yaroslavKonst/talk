@@ -10,7 +10,8 @@ Handshake
 
 requesting server                                    responding server
 | -----------------------------------------------------------------> |
-| | req server name | req server public key | key salt | signature | |
+| | protocol version | encryption scheme | req server name |...      |
+|                              | req server public key | signature | |
 |                                                                    |
 |                                                     +--------------|
 |                                                     | verification |
@@ -260,22 +261,43 @@ Stream control logic is described in the client protocol specification.
 User presence
 #############
 
+Detailed description of presence status sharing is available in Client protocol
+specification.
+
+Subscription:
 sender                                                               receiver
 | ------------------------------------------------------------------------> |
-| | PRESENCE | name | key | timestamp | MAC | nonce | encrypted user name | |
+| | PRESENCE_SUBSCRIBE | name | key | timestamp | MAC | nonce |...          |
+|                                                   | encrypted user name | |
 |                                                                           |
 |                                                            +--------------|
 |                                                            | verification |
 |                                                            +--------------|
 |                                                                           |
 | <------------------------------------------------------------------------ |
-|    | response status | name | key | MAC | nonce | encrypted response |    |
-|                      \-----------------------------------------------/    |
-|                                           optional                        |
+|                           | response status |                             |
 
 Response status list:
+SUBSCRIBED -- status updates will be sent, subscription is active.
+DECLINE -- server refuses to disclose status data.
+
+Unsubscribe message can be sent by any side to notify that subscription
+is expired or is not longer needed.
+sender                                                               receiver
+| ------------------------------------------------------------------------> |
+| | PRESENCE_UNSUBSCRIBE | subscribed user name | status sender user name | |
+
+Presence status update:
+sender                                                               receiver
+| ------------------------------------------------------------------------> |
+| | PRESENCE_STATUS | presence status | name | key | MAC | nonce |...       |
+|                                                 | encrypted response |    |
+|                                     \--------------------------------/    |
+|                                                  optional                 |
+
+Presence status list:
 OFFLINE -- all clients are offline or don't want to respond.
-RESPONDED -- client is online and responded. Further data is in encrypted part.
+ONLINE -- client is online and responded. Further data is in encrypted part.
 
 Spam protection
 ###############

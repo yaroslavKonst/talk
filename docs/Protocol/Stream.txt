@@ -56,16 +56,46 @@ The clients may establish direct connection via UDP to reduce server load.
 In this situation congestion control and stream consistency check must
 be done by the clients since TCP is not used.
 
-Datagrams sent via UDP have the following structure:
-              /         encrypted part of the datagram       \
-| MAC | nonce | datagram id | expected datagram id | payload |
+Direct connection is used only for datagrams with data. Control datagrams must
+be sent via the server.
 
-The datagram id is the number of datagram in the sequence. Expected datagram id 
-is the number of next datagram expected by the datagram sender. It is used
-to acknowledge the other client that the datagram was received.
+Datagrams sent via UDP have the following structure:
+| MAC | nonce | datagram id | confirmed datagram id | payload |
+              \         encrypted part of the datagram        /
+
+The datagram id is the number of datagram in the sequence.
+
+Confirmed datagram id is the number of datagram previously received by the
+datagram sender. It is used to acknowledge the other client that the
+datagram was received. It there is no datagram to acknowledge, this field
+must have a value -1.
+
+A datagram without payload can be sent if there is no data to be sent and a
+received datagram needs to be acknowledged.
+
+Example:
+Client A            Client B
+| -----------------------> |
+|   | 1 | -1 | payload |   |
+|                          |
+| <----------------------- |
+|   | 1 | 1 | payload |    |
+|                          |
+| -----------------------> |
+|   | 2 | 1 | payload |    |
+|                          |
+| <----------------------- |
+|        | 2 | 2 |         |
+
 
 Group stream structure
 ######################
 ######################
 
-TODO
+For group streams the server hosting the group chat maintains a list of
+all active streams in the group and all active users.
+
+Any change in the list is sent to all clients that participate in group
+stream.
+
+TODO.

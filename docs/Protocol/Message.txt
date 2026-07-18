@@ -5,10 +5,11 @@ Message structure
 Point to point message
 ######################
 
-| source address | source key |                \
-| destination address | destination key |      | message
-| timestamp | index |                          | header
-| header size | message body size | nonce |    /
+| encryption scheme |                          \
+| source address | source key |                | message
+| destination address | destination key |      | header
+| timestamp | index |                          |
+| message body size | nonce |                  /
 | encrypted message body |                       message body
 
 Since the message body can be quite big, it is proposed to divide it
@@ -31,9 +32,10 @@ users from any servers.
 
 Any group has its own name.
 
-| source address | source key |                \
-| group name | group keys |                    | message
-| timestamp | index |                          | header
+| encryption scheme |                          \
+| source address | source key |                | message
+| group name | group keys |                    | header
+| timestamp | index |                          |
 | header size | message body size | nonce |    /
 | encrypted message body |                       message body
 
