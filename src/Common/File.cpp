@@ -111,3 +111,12 @@ void MakeNonblocking(int fd)
 		THROW("Failed to set fd flags.");
 	}
 }
+
+void DeleteFile(String path)
+{
+	int res = unlink(path.CStr());
+
+	if (res == -1) {
+		THROW("Failed to unlink " + path + ".");
+	}
+}

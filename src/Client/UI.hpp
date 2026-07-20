@@ -46,7 +46,6 @@ public:
 
 private:
 	Root *_root;
-	Screen *_screen;
 
 	NotificationSystem _notifier;
 
@@ -56,6 +55,21 @@ private:
 	void DrawUserData();
 	void DrawConnectionState();
 	void DrawVoiceState();
+	void DrawControlHelp();
+
+	struct ScreenStackEntry
+	{
+		Screen *screen;
+		ScreenStackEntry *previous;
+
+		ScreenStackEntry(ScreenStackEntry *prev)
+		{
+			previous = prev;
+			screen = nullptr;
+		}
+	};
+
+	ScreenStackEntry *_screenStack;
 };
 
 #endif

@@ -6,15 +6,16 @@
 ClientHandshake::ClientHandshake(
 	int fd,
 	String name,
-	const uint8_t *privateKey,
-	const uint8_t *publicKey,
-	const uint8_t *serverPublicKey)
+	const Crypto::X25519::PrivateKeyContainer &privateKey,
+	const Crypto::X25519::PublicKeyContainer &publicKey,
+	const Crypto::X25519::PublicKeyContainer &serverPublicKey) :
+	_privateKey(privateKey),
+	_publicKey(publicKey)
 {
 	_fd = fd;
 	_name = name;
-	_privateKey = privateKey;
-	_publicKey = publicKey;
-	memcpy(_serverPublicKey, serverPublicKey, KEY_SIZE);
+
+	_serverPublicKey = serverPublicKey;
 
 	_reader = nullptr;
 	_writer = nullptr;
@@ -106,11 +107,13 @@ bool ClientHandshake::ConnectionSuccessful()
 void ClientHandshake::InitSyn()
 {
 	HandshakeSyn::Data data;
+	data.ProtocolVersion = 0;
+	data.EncryptionScheme = Crypto::X25519::SCHEME_ID;
 	data.Name = _name;
 
 	CowBuffer<uint8_t> buffer = HandshakeSyn::Build(data);
 
-	GenerateRandomData(
+	Crypto::GenerateRandomData(
 		sizeof(_outScramblerInit),
 		&_outScramblerInit,
 		false);
@@ -118,7 +121,7 @@ void ClientHandshake::InitSyn()
 	CowBuffer<uint8_t> outScrambler(1);
 	outScrambler[0] = _outScramblerInit;
 
-	_outScramblerInit = ApplyScrambler(
+	_outScramblerInit = Crypto::ApplyScrambler(
 		buffer.Pointer(),
 		buffer.Size(),
 		_outScramblerInit);
@@ -138,7 +141,7 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 	_inScramblerInit = buffer[0];
 
 	buffer = buffer.Slice(1, buffer.Size() - 1);
-	_inScramblerInit = ApplyScrambler(
+	_inScramblerInit = Crypto::ApplyScrambler(
 		buffer.Pointer(),
 		buffer.Size(),
 		_inScramblerInit);
@@ -150,7 +153,7 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
-	GenerateSessionKeys(
+	Crypto::X25519::GenerateSessionKeys(
 		_privateKey,
 		_publicKey,
 		_serverPublicKey,
@@ -159,8 +162,8 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 		_outES.Key,
 		true);
 
-	InitNonce(_outES.Nonce);
-	memset(_inES.Nonce, 0, NONCE_SIZE);
+	Crypto::X25519::InitNonce(_outES.Nonce);
+	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
 
 	CowBuffer<uint8_t> encryptedChallenge(
 		Handshake::EncryptedChallengeSize);
@@ -182,7 +185,7 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 
 	CowBuffer<uint8_t> responseData = HandshakeAck::Build(response);
 
-	_outScramblerInit = ApplyScrambler(
+	_outScramblerInit = Crypto::ApplyScrambler(
 		responseData.Pointer(),
 		responseData.Size(),
 		_outScramblerInit);

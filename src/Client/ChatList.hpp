@@ -2,8 +2,8 @@
 #define _CHAT_LIST_HPP
 
 #include "Root.hpp"
-#include "Chat.hpp"
-#include "ContactStorage.hpp"
+//#include "Chat.hpp"
+#include "../Message/ContactStorage.hpp"
 #include "../Common/ObjectStorage.hpp"
 
 class ChatList : public MessageEventProcessor
@@ -14,7 +14,7 @@ public:
 
 	ContactStorage *GetContactStorage();
 
-	Chat *GetCurrentChat();
+//	Chat *GetCurrentChat();
 
 	void SwitchUp();
 	void SwitchDown();
@@ -29,7 +29,7 @@ public:
 private:
 	Root *_root;
 
-	class ChatContainer
+	/*class ChatContainer
 	{
 	public:
 		ChatContainer();
@@ -50,17 +50,16 @@ private:
 	};
 
 	Tree<ChatContainer> _chats;
-	Tree<ChatContainer>::Entry *_currentChat;
+	Tree<ChatContainer>::Entry *_currentChat;*/
 
 	ContactStorage _contactStorage;
-	ObjectStorage _objectStorage;
 
 	bool _currentChatIsActive;
 
-	void LoadChats();
-	void UnloadChats();
+	/*void LoadChats();
+	void UnloadChats();*/
 
-	void LoadChat(String peerName);
+	//void LoadChat(String peerName);
 };
 
 #endif

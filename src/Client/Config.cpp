@@ -83,6 +83,9 @@ namespace ContactScreenControls
 
 	static const char *ToChat = "Go To Chat";
 	static const char *ToChatValue = "Ctrl-C";
+
+	static const char *Block = "Block User";
+	static const char *BlockValue = "Ctrl-B";
 }
 
 namespace NotificationControls
@@ -250,14 +253,13 @@ static int ParseKey(String key)
 	THROW("Unknown key name " + key + ".");
 }
 
-Config::Config(const uint8_t *publicKey) :
+Config::Config(const Crypto::X25519::PublicKeyContainer &publicKey) :
 	_configFile(
 		"storage/" +
-		DataToHex(publicKey, KEY_SIZE) +
-		"/talk.conf")
+		DataToHex(publicKey.Key, Crypto::X25519::KEY_SIZE) +
+		"/talk.conf"),
+	_publicKey(publicKey)
 {
-	_publicKey = publicKey;
-
 	Init();
 	LoadControls();
 }
@@ -322,7 +324,7 @@ void Config::Init()
 		CreateDirectory("storage");
 		CreateDirectory(
 			"storage/" +
-			DataToHex(_publicKey, KEY_SIZE));
+			DataToHex(_publicKey.Key, Crypto::X25519::KEY_SIZE));
 
 		{
 			using namespace General;
@@ -360,6 +362,7 @@ void Config::Init()
 			_configFile.Set(Section, Enter, EnterValue);
 			_configFile.Set(Section, New, NewValue);
 			_configFile.Set(Section, ToChat, ToChatValue);
+			_configFile.Set(Section, Block, BlockValue);
 		}
 
 		{
@@ -415,6 +418,8 @@ void Config::LoadControls()
 			_configFile.Get(Section, New);
 		_keyNames[(int)Keys::ContactToChat] =
 			_configFile.Get(Section, ToChat);
+		_keyNames[(int)Keys::ContactBlock] =
+			_configFile.Get(Section, Block);
 	}
 
 	{

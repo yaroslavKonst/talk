@@ -4,7 +4,7 @@
 #include <cstdint>
 
 #include "../Common/MyString.hpp"
-#include "../Crypto/CryptoDefinitions.hpp"
+#include "../Crypto/Crypto.hpp"
 
 class Client
 {
@@ -15,8 +15,8 @@ public:
 	int Run();
 
 private:
-	uint8_t _privateKey[KEY_SIZE];
-	uint8_t _publicKey[KEY_SIZE];
+	Crypto::X25519::PrivateKeyContainer _privateKey;
+	Crypto::X25519::PublicKeyContainer _publicKey;
 
 	void GetPassword();
 	void GenerateKeys(const String &password);

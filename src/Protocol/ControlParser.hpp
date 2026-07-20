@@ -3,6 +3,7 @@
 
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
+#include "../Crypto/Crypto.hpp"
 
 #define TALKD_SOCKET_NAME "talkd.socket"
 
@@ -27,16 +28,16 @@
 #define COMMAND_REMOVE_USER 5
 #define COMMAND_LIST_USERS 6
 
-#define COMMAND_IP_LIST_BANNED 7
-#define COMMAND_IP_BAN 8
-#define COMMAND_IP_UNBAN 9
+#define COMMAND_FAILBAN_LIST_BANNED 7
+#define COMMAND_FAILBAN_BAN 8
+#define COMMAND_FAILBAN_UNBAN 9
 
 namespace CommandAddUser
 {
 	struct Request
 	{
 		String Name;
-		const uint8_t *Key;
+		Crypto::X25519::PublicKeyContainer Key;
 	};
 
 	struct Response
@@ -87,12 +88,62 @@ namespace CommandListUsers
 		struct UserData
 		{
 			String Name;
-			const uint8_t *Key;
+			Crypto::X25519::PublicKeyContainer Key;
 		};
 
 		int32_t Code;
 		int32_t Flags;
 		CowBuffer<UserData> Data;
+	};
+
+	bool ParseRequest(const CowBuffer<uint8_t> buffer, Request &request);
+	CowBuffer<uint8_t> BuildRequest(const Request &request);
+
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &response);
+	CowBuffer<uint8_t> BuildResponse(const Response &response);
+}
+
+namespace CommandFailBanListBanned
+{
+	struct Response
+	{
+		int32_t Code;
+		CowBuffer<uint32_t> BannedIPList;
+	};
+
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &response);
+	CowBuffer<uint8_t> BuildResponse(const Response &response);
+}
+
+namespace CommandFailBanBan
+{
+	struct Request
+	{
+		uint32_t IP;
+	};
+
+	struct Response
+	{
+		int32_t Code;
+	};
+
+	bool ParseRequest(const CowBuffer<uint8_t> buffer, Request &request);
+	CowBuffer<uint8_t> BuildRequest(const Request &request);
+
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &response);
+	CowBuffer<uint8_t> BuildResponse(const Response &response);
+}
+
+namespace CommandFailBanUnban
+{
+	struct Request
+	{
+		uint32_t IP;
+	};
+
+	struct Response
+	{
+		int32_t Code;
 	};
 
 	bool ParseRequest(const CowBuffer<uint8_t> buffer, Request &request);

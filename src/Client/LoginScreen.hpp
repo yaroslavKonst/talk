@@ -13,6 +13,8 @@ public:
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;
 
+	CowBuffer<String> GetControlHelp();
+
 private:
 	bool _writingIp;
 	bool _writingPort;

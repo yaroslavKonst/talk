@@ -11,8 +11,8 @@ public:
 	ClientSession(
 		Root *root,
 		int _fd,
-		EncryptedStream &outES,
-		EncryptedStream &inES,
+		Crypto::X25519::EncryptedStream &outES,
+		Crypto::X25519::EncryptedStream &inES,
 		uint8_t outScramblerInit,
 		uint8_t inScramblerInit);
 	~ClientSession();
@@ -24,13 +24,20 @@ public:
 
 	bool InitKeepAlive();
 	void AddContact(String name);
+	void UpdateContactKey(
+		String contactName,
+		const Crypto::X25519::PublicKeyContainer &key,
+		bool validated,
+		bool blocked,
+		bool setAsDefault);
+	void BlockContact(String contactName, Contact::BlockStatus block);
 
 private:
 	Root *_root;
 
 	int _fd;
-	EncryptedStream _outES;
-	EncryptedStream _inES;
+	Crypto::X25519::EncryptedStream _outES;
+	Crypto::X25519::EncryptedStream _inES;
 
 	SessionProtocol *_protocol;
 
@@ -43,9 +50,11 @@ private:
 
 	void RequestHostName();
 	bool ProcessGetHostName(const CowBuffer<uint8_t> buffer);
-	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessRequestID();
 	bool ProcessUpdateID(const CowBuffer<uint8_t> buffer);
+	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);
+	bool ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer);
+	bool ProcessBlockContact(const CowBuffer<uint8_t> buffer);
 };
 
 #endif

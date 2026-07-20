@@ -27,7 +27,8 @@ UI::UI(Root *root) :
 	init_pair(YELLOW_TEXT, COLOR_YELLOW, COLOR_BLACK);
 	init_pair(RED_TEXT, COLOR_RED, COLOR_BLACK);
 
-	_screen = new WorkScreen(_root);
+	_screenStack = new ScreenStackEntry(nullptr);
+	_screenStack->screen = new WorkScreen(_root);
 
 	ProcessResize();
 
@@ -71,26 +72,33 @@ bool UI::ProcessEvent()
 		event = '\b';
 	}
 
-	Screen *newScreen = _screen->ProcessEvent(event);
+	Screen *newScreen = _screenStack->screen->ProcessEvent(event);
 
-	if (newScreen != _screen) {
-		delete _screen;
-		_screen = newScreen;
+	if (newScreen != _screenStack->screen) {
+		if (newScreen) {
+			_screenStack = new ScreenStackEntry(_screenStack);
+			_screenStack->screen = newScreen;
+		} else {
+			delete _screenStack->screen;
+			ScreenStackEntry *tmp = _screenStack;
+			_screenStack = _screenStack->previous;
+			delete tmp;
+		}
 	}
 
-	if (_screen) {
+	if (_screenStack) {
 		Redraw();
 	}
 
-	return _screen;
+	return _screenStack;
 }
 
 void UI::ProcessResize()
 {
 	getmaxyx(stdscr, _rows, _columns);
 
-	if (_screen) {
-		_screen->ProcessResize();
+	if (_screenStack) {
+		_screenStack->screen->ProcessResize();
 	}
 
 	Redraw();
@@ -103,9 +111,10 @@ void UI::Redraw()
 	DrawUserData();
 	DrawConnectionState();
 	DrawVoiceState();
+	DrawControlHelp();
 
-	if (_screen) {
-		_screen->Redraw();
+	if (_screenStack) {
+		_screenStack->screen->Redraw();
 	}
 
 	_notifier.Redraw();
@@ -153,7 +162,9 @@ void UI::DrawUserData()
 
 	move(1, 0);
 	addstr("Key: ");
-	addstr(DataToHex(_root->PublicKey, KEY_SIZE).CStr());
+	addstr(DataToHex(
+		_root->PublicKey->Key,
+		Crypto::X25519::KEY_SIZE).CStr());
 }
 
 void UI::DrawConnectionState()
@@ -224,4 +235,39 @@ void UI::DrawVoiceState()
 
 	attrset(COLOR_PAIR(DEFAULT_TEXT));*/
 	addch('.');
+}
+
+void UI::DrawControlHelp()
+{
+	if (!_screenStack) {
+		return;
+	}
+
+	int posY = _rows - 1;
+	int posX = 0;
+
+	CowBuffer<String> help = _screenStack->screen->GetControlHelp();
+
+	for (unsigned int i = 0; i < help.Size(); i++) {
+		int totalLength = help[i].Length();
+
+		if (posX) {
+			totalLength += 3;
+		}
+
+		if (posX + totalLength > _columns) {
+			posX = 0;
+			--posY;
+		}
+
+		move(posY, posX);
+
+		if (posX) {
+			addstr(" | ");
+		}
+
+		addstr(help[i].CStr());
+
+		posX += totalLength;
+	}
 }

@@ -75,8 +75,8 @@ class SessionProtocol
 public:
 	SessionProtocol(
 		int fd,
-		EncryptedStream *outES,
-		EncryptedStream *inES,
+		Crypto::X25519::EncryptedStream *outES,
+		Crypto::X25519::EncryptedStream *inES,
 		uint8_t outScramblerInit,
 		uint8_t inScramblerInit);
 	~SessionProtocol();
@@ -99,8 +99,8 @@ private:
 	};
 
 	int _fd;
-	EncryptedStream *_outES;
-	EncryptedStream *_inES;
+	Crypto::X25519::EncryptedStream *_outES;
+	Crypto::X25519::EncryptedStream *_inES;
 
 	uint8_t _inScramblerInit;
 	uint8_t _outScramblerInit;

@@ -24,7 +24,6 @@ void WorkScreen::Redraw()
 	RedrawContactList();
 	RedrawCurrentChat();
 	RedrawTextBox();
-	RedrawHelp();
 }
 
 Screen *WorkScreen::ProcessEvent(int event)
@@ -42,6 +41,16 @@ Screen *WorkScreen::ProcessEvent(int event)
 	}
 
 	return this;
+}
+
+CowBuffer<String> WorkScreen::GetControlHelp()
+{
+	CowBuffer<String> result(3);
+	result[0] = "Exit: " + _root->Conf->WorkExitName();
+	result[1] = "Manage contacts: " + _root->Conf->WorkContactName();
+	result[2] = "Connect: " + _root->Conf->WorkConnectName();
+
+	return result;
 }
 
 void WorkScreen::RedrawFrames()
@@ -115,9 +124,5 @@ void WorkScreen::RedrawCurrentChat()
 }
 
 void WorkScreen::RedrawTextBox()
-{
-}
-
-void WorkScreen::RedrawHelp()
 {
 }

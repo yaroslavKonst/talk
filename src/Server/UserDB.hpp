@@ -14,14 +14,17 @@ public:
 	UserDB(
 		EventDispatcher *dispatcher,
 		Config *config,
-		const uint8_t *privateKey,
-		const uint8_t *publicKey);
+		FailBan *failBan,
+		const Crypto::X25519::PrivateKeyContainer &privateKey,
+		const Crypto::X25519::PublicKeyContainer &publicKey);
 	~UserDB();
 
 	bool HasUser(String name);
 	User *GetUser(String name);
 
-	void AddUser(String name, const uint8_t *key);
+	void AddUser(
+		String name,
+		const Crypto::X25519::PublicKeyContainer &key);
 	void RemoveUser(String name);
 
 	int GetUserCount();
@@ -35,6 +38,7 @@ public:
 private:
 	EventDispatcher *_dispatcher;
 	Config *_config;
+	FailBan *_failBan;
 
 	struct UserByName
 	{
@@ -64,8 +68,8 @@ private:
 	StartupSession *_startupSessions;
 	bool _timeQuantRequested;
 
-	const uint8_t *_privateKey;
-	const uint8_t *_publicKey;
+	const Crypto::X25519::PrivateKeyContainer &_privateKey;
+	const Crypto::X25519::PublicKeyContainer &_publicKey;
 };
 
 #endif

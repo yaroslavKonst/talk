@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <curses.h>
+#include <cerrno>
 
 #include "WorkScreen.hpp"
 #include "../Common/Hex.hpp"
@@ -107,7 +108,7 @@ static bool LegalKeyChar(int event)
 Screen *LoginScreen::ProcessEvent(int event)
 {
 	if (event == _root->Conf->LoginBackKey()) {
-		return new WorkScreen(_root);
+		return nullptr;
 	}
 
 	if (event == _root->Conf->LoginUpKey()) {
@@ -177,6 +178,17 @@ Screen *LoginScreen::ProcessEvent(int event)
 	return this;
 }
 
+CowBuffer<String> LoginScreen::GetControlHelp()
+{
+	CowBuffer<String> result(3);
+	result[0] = "Back: " + _root->Conf->LoginBackName();
+	result[1] = "Up/Down: " + _root->Conf->LoginUpName() + "/" +
+		_root->Conf->LoginDownName();
+	result[2] = "Connect: " + _root->Conf->LoginConnectName();
+
+	return result;
+}
+
 Screen *LoginScreen::ProcessConnection()
 {
 	if (_root->Network->ConnectionActive() ||
@@ -186,13 +198,13 @@ Screen *LoginScreen::ProcessConnection()
 		return this;
 	}
 
-	if (_serverKeyHex.Text.Length() != KEY_SIZE * 2) {
+	if (_serverKeyHex.Text.Length() != Crypto::X25519::KEY_SIZE * 2) {
 		_root->Ui->Notify("Invalid server key length.");
 		return this;
 	}
 
-	uint8_t serverKey[KEY_SIZE];
-	HexToData(_serverKeyHex.Text, serverKey);
+	Crypto::X25519::PublicKeyContainer serverKey;
+	HexToData(_serverKeyHex.Text, serverKey.Key);
 
 	uint16_t port = atoi(_port.Text.CStr());
 
@@ -237,7 +249,8 @@ Screen *LoginScreen::ProcessConnection()
 	if (res == -1) {
 		_root->Ui->BlockCancel(blockHandle);
 		close(socketFd);
-		_root->Ui->Notify("Failed to connect.");
+		_root->Ui->Notify(
+			String("Failed to connect: ") + strerror(errno) + ".");
 		return this;
 	}
 
@@ -247,5 +260,5 @@ Screen *LoginScreen::ProcessConnection()
 
 	_root->Network->StartConnection(socketFd, serverKey);
 
-	return new WorkScreen(_root);
+	return nullptr;
 }

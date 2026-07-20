@@ -11,21 +11,21 @@
 #define STORED_OBJECT_ID "/server_ref"
 
 ChatList::ChatList(Root *root) :
-	_contactStorage("storage/" + DataToHex(root->PublicKey, KEY_SIZE)),
-	_objectStorage(
-		"storage/" + DataToHex(root->PublicKey, KEY_SIZE) + "/storage",
-		root->Dispatcher)
+	_contactStorage(
+		"storage/" + DataToHex(
+			root->PublicKey->Key,
+			Crypto::X25519::KEY_SIZE))
 {
 	_root = root;
-	_currentChat = nullptr;
+	//_currentChat = nullptr;
 	_currentChatIsActive = false;
 
-	LoadChats();
+	//LoadChats();
 }
 
 ChatList::~ChatList()
 {
-	UnloadChats();
+	//UnloadChats();
 }
 
 ContactStorage *ChatList::GetContactStorage()
@@ -33,18 +33,18 @@ ContactStorage *ChatList::GetContactStorage()
 	return &_contactStorage;
 }
 
-Chat *ChatList::GetCurrentChat()
+/*Chat *ChatList::GetCurrentChat()
 {
 	if (!_currentChat) {
 		return nullptr;
 	}
 
 	return _currentChat->Key.GetChat();
-}
+}*/
 
 void ChatList::SwitchUp()
 {
-	if (!_currentChat) {
+	/*if (!_currentChat) {
 		_currentChat = _chats.FindBiggest();
 		return;
 	}
@@ -53,12 +53,12 @@ void ChatList::SwitchUp()
 
 	if (newChat) {
 		_currentChat = newChat;
-	}
+	}*/
 }
 
 void ChatList::SwitchDown()
 {
-	if (!_currentChat) {
+	/*if (!_currentChat) {
 		_currentChat = _chats.FindSmallest();
 		return;
 	}
@@ -67,14 +67,14 @@ void ChatList::SwitchDown()
 
 	if (newChat) {
 		_currentChat = newChat;
-	}
+	}*/
 }
 
 void ChatList::Activate()
 {
-	if (_currentChat) {
+	/*if (_currentChat) {
 		_currentChatIsActive = true;
-	}
+	}*/
 }
 
 void ChatList::Deactivate()
@@ -85,7 +85,10 @@ void ChatList::Deactivate()
 ObjectStorage::ID ChatList::GetKnownID()
 {
 	String path = "storage/" +
-		DataToHex(_root->PublicKey, KEY_SIZE) + STORED_OBJECT_ID;
+		DataToHex(
+			_root->PublicKey->Key,
+			Crypto::X25519::KEY_SIZE) +
+		STORED_OBJECT_ID;
 
 	if (!FileExists(path)) {
 		return ObjectStorage::ID();
@@ -101,7 +104,10 @@ ObjectStorage::ID ChatList::GetKnownID()
 void ChatList::SetKnownID(const ObjectStorage::ID &id)
 {
 	String path = "storage/" +
-		DataToHex(_root->PublicKey, KEY_SIZE) + STORED_OBJECT_ID;
+		DataToHex(
+			_root->PublicKey->Key,
+			Crypto::X25519::KEY_SIZE) +
+		STORED_OBJECT_ID;
 
 	BinaryFile file(path, true);
 	file.Write<uint8_t>(
@@ -112,8 +118,8 @@ void ChatList::SetKnownID(const ObjectStorage::ID &id)
 
 void ChatList::SelectOrCreateChat(String peerName)
 {
-	LoadChat(peerName);
-	_currentChat = _chats.FindEntry(peerName);
+	/*LoadChat(peerName);
+	_currentChat = _chats.FindEntry(peerName);*/
 }
 
 /*void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
@@ -144,7 +150,7 @@ void ChatList::SelectOrCreateChat(String peerName)
 	_chatList[_chatCount - 1]->DeliverMessage(message);
 }*/
 
-ChatList::ChatContainer::ChatContainer()
+/*ChatList::ChatContainer::ChatContainer()
 {
 	_chat = nullptr;
 }
@@ -174,8 +180,10 @@ bool ChatList::ChatContainer::operator==(const ChatContainer &container) const
 void ChatList::LoadChats()
 {
 	CowBuffer<String> peerList = ListDirectory(
-		"storage/" + DataToHex(_root->PublicKey, KEY_SIZE) +
-		"/storage/refs");
+		"storage/" + DataToHex(
+			_root->PublicKey->Key,
+			Crypto::X25519::KEY_SIZE) +
+		"/storage");
 
 	for (uint64_t i = 0; i < peerList.Size(); i++) {
 		LoadChat(peerList[i]);
@@ -203,6 +211,6 @@ void ChatList::LoadChat(String peerName)
 		return;
 	}
 
-	Chat *chat = new Chat(_root, peerName, &_objectStorage);
+	Chat *chat = new Chat(_root, peerName);
 	_chats.AddEntry(ChatContainer(peerName, chat));
-}
+}*/

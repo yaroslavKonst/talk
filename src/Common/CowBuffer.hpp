@@ -194,7 +194,7 @@ private:
 		_data->RefCount -= 1;
 
 		if (_data->RefCount <= 0) {
-			if (_size || _offset) {
+			if (_data->Data) {
 				delete[] _data->Data;
 				_data->Data = nullptr;
 			}

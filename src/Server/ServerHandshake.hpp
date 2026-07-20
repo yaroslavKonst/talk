@@ -2,6 +2,7 @@
 #define _SERVER_HANDSHAKE_HPP
 
 #include "User.hpp"
+#include "FailBan.hpp"
 #include "../Common/EventDispatcher.hpp"
 #include "../Common/StreamReader.hpp"
 #include "../Common/StreamWriter.hpp"
@@ -19,8 +20,9 @@ public:
 		int32_t ip,
 		ServerHandshakeStorage *storage,
 		EventDispatcher *dispatcher,
-		const uint8_t *privateKey,
-		const uint8_t *publicKey);
+		FailBan *failBan,
+		const Crypto::X25519::PrivateKeyContainer &privateKey,
+		const Crypto::X25519::PublicKeyContainer &publicKey);
 	~ServerHandshake();
 
 	int GetDescriptor() override
@@ -38,6 +40,7 @@ public:
 
 private:
 	EventDispatcher *_dispatcher;
+	FailBan *_failBan;
 
 	enum class State
 	{
@@ -50,15 +53,15 @@ private:
 	int _fd;
 	int32_t _ip;
 	ServerHandshakeStorage *_storage;
-	const uint8_t *_privateKey;
-	const uint8_t *_publicKey;
+	const Crypto::X25519::PrivateKeyContainer &_privateKey;
+	const Crypto::X25519::PublicKeyContainer &_publicKey;
 
 	void ProcessSize(CowBuffer<uint8_t> buffer);
 	void ProcessSyn(CowBuffer<uint8_t> buffer);
 	void ProcessAck(CowBuffer<uint8_t> buffer);
 
-	EncryptedStream _inES;
-	EncryptedStream _outES;
+	Crypto::X25519::EncryptedStream _inES;
+	Crypto::X25519::EncryptedStream _outES;
 	User *_user;
 	CowBuffer<uint8_t> _nameSize;
 

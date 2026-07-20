@@ -15,7 +15,8 @@ public:
 		UserDB *users,
 		EventDispatcher *dispatcher,
 		Config *config,
-		const uint8_t *publicKey);
+		FailBan *failBan,
+		const Crypto::X25519::PublicKeyContainer &publicKey);
 	~ControlSocket();
 
 	void ReloadConfig() override;
@@ -46,7 +47,7 @@ public:
 	void AddSession(int fd);
 	void MarkSessionForRemoval(ControlSession *session) override;
 
-	const uint8_t *GetPublicKey() override
+	const Crypto::X25519::PublicKeyContainer &GetPublicKey() override
 	{
 		return _publicKey;
 	}
@@ -56,6 +57,7 @@ private:
 	UserDB *_users;
 	EventDispatcher *_dispatcher;
 	Config *_config;
+	FailBan *_failBan;
 
 	struct ControlNode
 	{
@@ -67,7 +69,7 @@ private:
 	ControlNode *_controlSessions;
 	bool _timeQuantRequested;
 
-	const uint8_t *_publicKey;
+	const Crypto::X25519::PublicKeyContainer &_publicKey;
 };
 
 #endif

@@ -4,6 +4,7 @@
 
 #include "WorkScreen.hpp"
 #include "TextColor.hpp"
+#include "ContactManageScreen.hpp"
 
 ContactScreen::ContactScreen(Root *root)
 {
@@ -27,15 +28,18 @@ void ContactScreen::Redraw()
 		addch(ACS_HLINE);
 	}
 
-	move(5, 0);
-	addstr("Contacts");
+	UiHelpers::DrawFrame(
+		5,
+		_rows - 3,
+		1,
+		_columns - 2,
+		"Contacts",
+		COLOR_PAIR(YELLOW_TEXT));
 
 	RedrawContactList();
 
 	if (_mode == Mode::Add) {
 		DrawAddWindow();
-	} else if (_mode == Mode::Manage) {
-		DrawManageWindow();
 	}
 }
 
@@ -45,16 +49,39 @@ Screen *ContactScreen::ProcessEvent(int event)
 		return ProcessListEvent(event);
 	} else if (_mode == Mode::Add) {
 		return ProcessAddEvent(event);
-	} else if (_mode == Mode::Manage) {
-		return ProcessManageEvent(event);
 	}
 
 	return this;
 }
 
+CowBuffer<String> ContactScreen::GetControlHelp()
+{
+	if (_mode == Mode::List) {
+		CowBuffer<String> result(6);
+		result[0] = "Back: " + _root->Conf->ContactBackName();
+		result[1] = "Up/Down: " + _root->Conf->ContactUpName() + "/" +
+			_root->Conf->ContactDownName();
+		result[2] = "Select: " + _root->Conf->ContactEnterName();
+		result[3] = "New: " + _root->Conf->ContactNewName();
+		result[4] = "Go to chat: " + _root->Conf->ContactToChatName();
+		result[5] = "Block/Unblock: " + _root->Conf->ContactBlockName();
+
+		return result;
+	} else if (_mode == Mode::Add) {
+		CowBuffer<String> result(2);
+		result[0] = "Back: " + _root->Conf->ContactBackName();
+		result[1] = "Create contact: " +
+			_root->Conf->ContactEnterName();
+
+		return result;
+	}
+
+	THROW("Must never be reached.");
+}
+
 void ContactScreen::RedrawContactList()
 {
-	int size = _rows - 8;
+	int size = _rows - 9;
 
 	CowBuffer<String> names = _contacts->GetContactRange(
 		_currentContact,
@@ -64,19 +91,32 @@ void ContactScreen::RedrawContactList()
 		_currentContact = names[0];
 	}
 
-	int currentContactPosition = 7;
+	int currentContactPosition = 6;
 
 	for (unsigned int i = 0; i < names.Size(); i++) {
-		move(i + 7, 4);
+		move(i + 6, 3);
 
 		if (names[i] == _currentContact) {
 			attrset(COLOR_PAIR(YELLOW_TEXT));
-			currentContactPosition = i + 7;
+			currentContactPosition = i + 6;
 		}
 
 		addstr(names[i].CStr());
 
 		if (names[i] == _currentContact) {
+			attrset(COLOR_PAIR(DEFAULT_TEXT));
+		}
+
+		Contact::BlockStatus blocked =
+			_contacts->GetContact(names[i])->GetBlockStatus();
+
+		if (blocked == Contact::BlockStatus::Blocked) {
+			attrset(COLOR_PAIR(RED_TEXT));
+			addstr(" Blocked");
+			attrset(COLOR_PAIR(DEFAULT_TEXT));
+		} else if (blocked == Contact::BlockStatus::SilentlyBlocked) {
+			attrset(COLOR_PAIR(RED_TEXT));
+			addstr(" Silently Blocked");
 			attrset(COLOR_PAIR(DEFAULT_TEXT));
 		}
 	}
@@ -87,7 +127,7 @@ void ContactScreen::RedrawContactList()
 Screen *ContactScreen::ProcessListEvent(int event)
 {
 	if (event == _root->Conf->ContactBackKey()) {
-		return new WorkScreen(_root);
+		return nullptr;
 	}
 
 	if (event == _root->Conf->ContactUpKey()) {
@@ -118,8 +158,7 @@ Screen *ContactScreen::ProcessListEvent(int event)
 			return this;
 		}
 
-		_mode = Mode::Manage;
-		return this;
+		return new ContactManageScreen(_root, _currentContact);
 	}
 
 	if (event == _root->Conf->ContactNewKey()) {
@@ -135,7 +174,37 @@ Screen *ContactScreen::ProcessListEvent(int event)
 
 		_root->Messages->SelectOrCreateChat(_currentContact);
 		_root->Messages->Activate();
-		return new WorkScreen(_root);
+		return nullptr;
+	}
+
+	if (event == _root->Conf->ContactBlockKey()) {
+		if (!_currentContact.Length()) {
+			_root->Ui->Notify("No contacts. Nothing to do.");
+			return this;
+		}
+
+		Contact *contact = _contacts->GetContact(_currentContact);
+		Contact::BlockStatus blocked = contact->GetBlockStatus();
+
+		if (blocked == Contact::BlockStatus::Allowed) {
+			blocked = Contact::BlockStatus::Blocked;
+		} else if (blocked == Contact::BlockStatus::Blocked) {
+			blocked = Contact::BlockStatus::SilentlyBlocked;
+		} else if (blocked == Contact::BlockStatus::SilentlyBlocked) {
+			blocked = Contact::BlockStatus::Allowed;
+		}
+
+		bool requestSuccess = _root->Network->BlockContact(
+			_currentContact,
+			blocked);
+
+		if (!requestSuccess) {
+			_root->Ui->Notify(
+				"Failed to set contact properties. "
+				"No connection.");
+		}
+
+		return this;
 	}
 
 	return this;
@@ -211,33 +280,6 @@ Screen *ContactScreen::ProcessAddEvent(int event)
 		_newContactName.ProcessChar(event);
 	} else {
 		_root->Ui->Notify("Invalid character.");
-	}
-
-	return this;
-}
-
-void ContactScreen::DrawManageWindow()
-{
-	UiHelpers::ClearScreen(
-		6,
-		_rows - 2,
-		1,
-		_columns - 2);
-
-	UiHelpers::DrawFrame(
-		7,
-		_rows - 3,
-		2,
-		_columns - 3,
-		"Manage " + _currentContact,
-		COLOR_PAIR(YELLOW_TEXT));
-}
-
-Screen *ContactScreen::ProcessManageEvent(int event)
-{
-	if (event == _root->Conf->ContactBackKey()) {
-		_mode = Mode::List;
-		return this;
 	}
 
 	return this;

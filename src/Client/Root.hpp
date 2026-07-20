@@ -5,6 +5,7 @@
 #include "Config.hpp"
 #include "../Common/IniFile.hpp"
 #include "../Common/EventDispatcher.hpp"
+#include "../Crypto/Crypto.hpp"
 
 struct Root
 {
@@ -14,8 +15,8 @@ struct Root
 	Config *Conf;
 	MessageEventProcessor *Messages;
 
-	const uint8_t *PrivateKey;
-	const uint8_t *PublicKey;
+	const Crypto::X25519::PrivateKeyContainer *PrivateKey;
+	const Crypto::X25519::PublicKeyContainer *PublicKey;
 
 	Root();
 };

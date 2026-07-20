@@ -12,10 +12,11 @@
 #define SESSION_COMMAND_UPDATE_ID 4
 #define SESSION_COMMAND_ADD_CONTACT 5
 #define SESSION_COMMAND_UPDATE_CONTACT_KEY 6
-#define SESSION_COMMAND_LIST_CONTACTS 7
-#define SESSION_COMMAND_SEND_MESSAGE 8
-#define SESSION_COMMAND_UPDATE_MESSAGE 9
-#define SESSION_COMMAND_DELETE_MESSAGE 10
+#define SESSION_COMMAND_BLOCK_CONTACT 7
+#define SESSION_COMMAND_LIST_CONTACTS 8
+#define SESSION_COMMAND_SEND_MESSAGE 9
+#define SESSION_COMMAND_UPDATE_MESSAGE 10
+#define SESSION_COMMAND_DELETE_MESSAGE 11
 
 #define SESSION_RESPONSE_OK 200
 #define SESSION_RESPONSE_ERROR 100
@@ -104,38 +105,26 @@ namespace CommandUpdateContactKey
 	struct Command
 	{
 		String ContactName;
-		const uint8_t *Key;
-		int8_t Validated;
-		int8_t SetAsDefault;
+		Crypto::X25519::PublicKeyContainer Key;
+		uint8_t Validated;
+		uint8_t Blocked;
+		uint8_t SetAsDefault;
 	};
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
 	CowBuffer<uint8_t> BuildCommand(const Command &command);
 }
 
-namespace CommandSendMessage
+namespace CommandBlockContact
 {
 	struct Command
 	{
-		// This field is a concatenation "Attributes | Message".
-		CowBuffer<uint8_t> Message;
+		String ContactName;
+		uint8_t BlockStatus;
 	};
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
-	CowBuffer<uint8_t> BuildCommand(const Command &data);
-}
-
-namespace CommandUpdateMessage
-{
-	struct Command
-	{
-		CowBuffer<uint8_t> HeaderHash;
-		Message::Attribute Attr;
-		uint8_t SetAttr;
-	};
-
-	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
-	CowBuffer<uint8_t> BuildCommand(const Command &data);
+	CowBuffer<uint8_t> BuildCommand(const Command &command);
 }
 
 /*namespace CommandListContacts
@@ -154,9 +143,34 @@ namespace CommandUpdateMessage
 	CowBuffer<uint8_t> BuildCommand();
 	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
 	CowBuffer<uint8_t> BuildResponse(const Response &data);
+}*/
+
+namespace CommandSendMessage
+{
+	struct Command
+	{
+		CowBuffer<uint8_t> Message;
+	};
+
+	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
+	CowBuffer<uint8_t> BuildCommand(const Command &data);
 }
 
-namespace CommandGetMessages
+namespace CommandUpdateMessage
+{
+	struct Command
+	{
+		String PeerName;
+		CowBuffer<uint8_t> HeaderHash;
+		Message::Attribute Attr;
+		uint8_t AttrValue;
+	};
+
+	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
+	CowBuffer<uint8_t> BuildCommand(const Command &data);
+}
+
+/*namespace CommandGetMessages
 {
 	struct Command
 	{

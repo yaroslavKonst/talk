@@ -31,6 +31,8 @@ public:
 	String Substring(int start, int length) const;
 	String Replace(char from, char to) const;
 
+	String ToLowerCase() const;
+
 	void Wipe();
 
 private:

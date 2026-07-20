@@ -1,10 +1,11 @@
 #ifndef _PROCESSORS_HPP
 #define _PROCESSORS_HPP
 
-#include "ContactStorage.hpp"
+#include "../Message/ContactStorage.hpp"
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
 #include "../Common/ObjectStorage.hpp"
+#include "../Crypto/Crypto.hpp"
 
 // Processors are objects that can process events of certain types.
 
@@ -58,8 +59,20 @@ public:
 	virtual bool ConnectionActive() = 0;
 	virtual bool HandshakeActive() = 0;
 
-	virtual void StartConnection(int fd, const uint8_t *serverKey) = 0;
+	virtual void StartConnection(
+		int fd,
+		const Crypto::X25519::PublicKeyContainer &serverKey) = 0;
+
 	virtual bool AddContact(String name) = 0;
+	virtual bool UpdateContactKey(
+		String contactName,
+		const Crypto::X25519::PublicKeyContainer &key,
+		bool validated,
+		bool blocked,
+		bool setAsDefault) = 0;
+	virtual bool BlockContact(
+		String contactName,
+		Contact::BlockStatus block) = 0;
 };
 
 // UI.

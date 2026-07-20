@@ -27,8 +27,8 @@ static const char *MessageSizeLimitSettingValue = "1073741824";
 static const char *FailBanSection = "FailBan";
 static const char *FailBanEnabledSetting = "Enabled";
 static const char *FailBanEnabledSettingValue = "Yes";
-static const char *FailBanTriesSetting = "AllowedTries";
-static const char *FailBanTriesSettingValue = "5";
+static const char *FailBanMaxTriesSetting = "AllowedTries";
+static const char *FailBanMaxTriesSettingValue = "5";
 static const char *FailBanCooldownSetting = "CooldownInterval";
 static const char *FailBanCooldownSettingValue = "14400";
 static const char *FailBanBanTimeSetting = "BanInterval";
@@ -121,6 +121,26 @@ String Config::GetHostName()
 	return _hostName;
 }
 
+bool Config::GetFailBanEnabled()
+{
+	return _failBanEnabled;
+}
+
+int64_t Config::GetFailBanBanTime()
+{
+	return _failBanBanTime;
+}
+
+int32_t Config::GetFailBanMaxTries()
+{
+	return _failBanMaxTries;
+}
+
+int64_t Config::GetFailBanCooldownInterval()
+{
+	return _failBanCooldownInterval;
+}
+
 void Config::Init()
 {
 	if (!FileExists(_configFile.GetPath())) {
@@ -150,8 +170,8 @@ void Config::Init()
 			FailBanEnabledSettingValue);
 		_configFile.Set(
 			FailBanSection,
-			FailBanTriesSetting,
-			FailBanTriesSettingValue);
+			FailBanMaxTriesSetting,
+			FailBanMaxTriesSettingValue);
 		_configFile.Set(
 			FailBanSection,
 			FailBanCooldownSetting,
@@ -165,6 +185,21 @@ void Config::Init()
 	}
 
 	Validate();
+}
+
+static bool ParseYesNo(String text, bool &result)
+{
+	text = text.ToLowerCase();
+
+	if (text == "yes") {
+		result = true;
+	} else if (text == "no") {
+		result = false;
+	} else {
+		return false;
+	}
+
+	return true;
 }
 
 void Config::Validate()
@@ -219,11 +254,55 @@ void Config::Validate()
 	// Host name.
 	String hostName = _configFile.Get(NetworkSection, HostNameSetting);
 
+	// FailBan.
+	bool failBanEnabled;
+
+	bool parseResult = ParseYesNo(
+		_configFile.Get(FailBanSection, FailBanEnabledSetting),
+		failBanEnabled);
+
+	if (!parseResult) {
+		THROW(String(FailBanSection) + "." + FailBanEnabledSetting +
+			" must be 'Yes' or 'No'.");
+	}
+
+	int64_t failBanBanTime = atoll(_configFile.Get(
+		FailBanSection,
+		FailBanBanTimeSetting).CStr());
+
+	if (failBanBanTime <= 0) {
+		THROW("FailBan ban time must be positive integer.");
+	}
+
+	int32_t failBanMaxTries = atoi(_configFile.Get(
+		FailBanSection,
+		FailBanMaxTriesSetting).CStr());
+
+	if (failBanMaxTries <= 0) {
+		THROW("FailBan max tries setting must be positive integer.");
+	}
+
+	int64_t failBanCooldownInterval = atoll(_configFile.Get(
+		FailBanSection,
+		FailBanCooldownSetting).CStr());
+
+	if (failBanCooldownInterval <= 0) {
+		THROW("FailBan cooldown setting must be positive integer.");
+	}
+
 	// Writing new parameters.
 	_listeningAddress = addr.s_addr;
 	_listeningPort = port;
+
 	_gateAddress = gateAddr.s_addr;
 	_gatePort = gatePort;
+
 	_messageSizeLimit = messageSize;
+
 	_hostName = hostName;
+
+	_failBanEnabled = failBanEnabled;
+	_failBanBanTime = failBanBanTime;
+	_failBanMaxTries = failBanMaxTries;
+	_failBanCooldownInterval = failBanCooldownInterval;
 }

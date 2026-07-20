@@ -15,8 +15,11 @@ ServerHandshake::ServerHandshake(
 	int32_t ip,
 	ServerHandshakeStorage *storage,
 	EventDispatcher *dispatcher,
-	const uint8_t *privateKey,
-	const uint8_t *publicKey)
+	FailBan *failBan,
+	const Crypto::X25519::PrivateKeyContainer &privateKey,
+	const Crypto::X25519::PublicKeyContainer &publicKey) :
+	_privateKey(privateKey),
+	_publicKey(publicKey)
 {
 	SetInterval(10);
 	SetTimestamp(GetUnixTime());
@@ -26,11 +29,10 @@ ServerHandshake::ServerHandshake(
 	_state = State::WaitingSize;
 	_storage = storage;
 	_dispatcher = dispatcher;
-	_privateKey = privateKey;
-	_publicKey = publicKey;
+	_failBan = failBan;
 
 	_user = nullptr;
-	_reader = new StreamReader(fd, sizeof(int32_t) + 1);
+	_reader = new StreamReader(fd, sizeof(int32_t) * 3 + 1);
 	_writer = nullptr;
 
 	_dispatcher->RegisterDescriptorProcessor(this);
@@ -48,6 +50,8 @@ ServerHandshake::~ServerHandshake()
 		shutdown(_fd, SHUT_RDWR);
 		close(_fd);
 		_fd = -1;
+
+		_failBan->RecordFailure(_ip);
 	} else {
 		HandshakeLog(_user->GetName(), "Handshake success.");
 	}
@@ -158,7 +162,7 @@ void ServerHandshake::ProcessTimeEvent()
 
 void ServerHandshake::ProcessSize(CowBuffer<uint8_t> buffer)
 {
-	if (buffer.Size() != sizeof(int32_t) + 1) {
+	if (buffer.Size() != sizeof(int32_t) * 3 + 1) {
 		HandshakeLog("", "Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
@@ -167,14 +171,14 @@ void ServerHandshake::ProcessSize(CowBuffer<uint8_t> buffer)
 	_inScramblerInit = buffer[0];
 	buffer = buffer.Slice(1, buffer.Size() - 1);
 
-	_inScramblerInit = ApplyScrambler(
+	_inScramblerInit = Crypto::ApplyScrambler(
 		buffer.Pointer(),
 		buffer.Size(),
 		_inScramblerInit);
 
-	int32_t nameLength = *buffer.SwitchType<int32_t>();
+	int32_t nameLength = *buffer.SwitchType<int32_t>(sizeof(int32_t) * 2);
 
-	if (nameLength > 200 || nameLength <= 0) {
+	if (nameLength > 500 || nameLength <= 0) {
 		HandshakeLog("", "Invalid size.");
 		_storage->MarkSessionForRemoval(this);
 		return;
@@ -187,7 +191,7 @@ void ServerHandshake::ProcessSize(CowBuffer<uint8_t> buffer)
 
 void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 {
-	_inScramblerInit = ApplyScrambler(
+	_inScramblerInit = Crypto::ApplyScrambler(
 		buffer.Pointer(),
 		buffer.Size(),
 		_inScramblerInit);
@@ -197,6 +201,18 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 
 	if (!parseResult) {
 		HandshakeLog("", "Protocol violation.");
+		_storage->MarkSessionForRemoval(this);
+		return;
+	}
+
+	if (data.ProtocolVersion != 0) {
+		HandshakeLog("", "Unsupported protocol version.");
+		_storage->MarkSessionForRemoval(this);
+		return;
+	}
+
+	if (data.EncryptionScheme != Crypto::X25519::SCHEME_ID) {
+		HandshakeLog("", "Unsupported encryption scheme.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
@@ -220,11 +236,14 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 		_outES.Key,
 		_inES.Key);
 
-	InitNonce(_outES.Nonce);
-	memset(_inES.Nonce, 0, NONCE_SIZE);
+	Crypto::X25519::InitNonce(_outES.Nonce);
+	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
 
 	_challenge = CowBuffer<uint8_t>(Handshake::ChallengeSize);
-	GenerateRandomData(_challenge.Size(), _challenge.Pointer(), false);
+	Crypto::GenerateRandomData(
+		_challenge.Size(),
+		_challenge.Pointer(),
+		false);
 
 	CowBuffer<uint8_t> encryptedChallenge = Encrypt(_challenge, _outES);
 
@@ -234,7 +253,7 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 
 	CowBuffer<uint8_t> responseData = HandshakeSynAck::Build(response);
 
-	GenerateRandomData(
+	Crypto::GenerateRandomData(
 		sizeof(_outScramblerInit),
 		&_outScramblerInit,
 		false);
@@ -242,7 +261,7 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 	CowBuffer<uint8_t> outScrambler(1);
 	outScrambler[0] = _outScramblerInit;
 
-	_outScramblerInit = ApplyScrambler(
+	_outScramblerInit = Crypto::ApplyScrambler(
 		responseData.Pointer(),
 		responseData.Size(),
 		_outScramblerInit);
@@ -259,7 +278,7 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 		return;
 	}
 
-	_inScramblerInit = ApplyScrambler(
+	_inScramblerInit = Crypto::ApplyScrambler(
 		buffer.Pointer(),
 		buffer.Size(),
 		_inScramblerInit);

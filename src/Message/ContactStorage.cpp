@@ -14,20 +14,186 @@ Contact::Contact(String name, String path)
 		CreateDirectory(path);
 	}
 
+	_defaultKeyIndex = -1;
+
+	Crypto::X25519::PublicKeyContainer defaultKey;
+	bool hasDefaultKey = false;
+
+	if (FileExists(path + "/DefaultKey")) {
+		BinaryFile file(path + "/DefaultKey", false);
+		file.Read<uint8_t>(defaultKey.Key, Crypto::X25519::KEY_SIZE, 0);
+		hasDefaultKey = true;
+	}
+
 	CowBuffer<String> keyList = ListDirectory(path);
-	_keys = CowBuffer<CowBuffer<uint8_t>>(keyList.Size());
+
+	int keyCount = keyList.Size();
+
+	if (FileExists(path + "/DefaultKey")) {
+		--keyCount;
+	}
+
+	if (FileExists(path + "/Blocked")) {
+		--keyCount;
+	}
+
+	_keys = CowBuffer<Crypto::X25519::PublicKeyContainer>(keyCount);
+	_verifiedKeys = CowBuffer<bool>(keyCount);
+	_blockedKeys = CowBuffer<bool>(keyCount);
+
+	long currentKeyIndex = 0;
 
 	for (unsigned long keyIdx = 0; keyIdx < keyList.Size(); keyIdx++) {
-		CowBuffer<uint8_t> key(KEY_SIZE);
-		HexToData(keyList[keyIdx], key.Pointer());
+		Crypto::X25519::PublicKeyContainer key;
+
+		if (keyList[keyIdx] == "DefaultKey") {
+			continue;
+		}
+
+		if (keyList[keyIdx] == "Blocked") {
+			continue;
+		}
+
+		if (keyList[keyIdx].Length() != Crypto::X25519::KEY_SIZE * 2) {
+			THROW("Invalid key file name.");
+		}
+
+		HexToData(keyList[keyIdx], key.Key);
 
 		BinaryFile file(path + "/" + keyList[keyIdx], false);
-		uint8_t verified;
-		file.Read<uint8_t>(&verified, 1, 0);
+		uint8_t attrs;
+		file.Read<uint8_t>(&attrs, 1, 0);
 
-		_keys[keyIdx] = key;
-		_verifiedKeys[keyIdx] = verified;
+		_keys[currentKeyIndex] = key;
+		_verifiedKeys[currentKeyIndex] = attrs & Verified;
+		_blockedKeys[currentKeyIndex] = attrs & Blocked;
+
+		if (hasDefaultKey && key == defaultKey) {
+			_defaultKeyIndex = currentKeyIndex;
+			hasDefaultKey = false;
+		}
+
+		++currentKeyIndex;
 	}
+
+	if (FileExists(path + "/Blocked")) {
+		BinaryFile file(path + "/Blocked", false);
+		file.Read<BlockStatus>(&_blockStatus, 1, 0);
+	} else {
+		_blockStatus = BlockStatus::Allowed;
+	}
+}
+
+CowBuffer<Crypto::X25519::PublicKeyContainer> Contact::GetKeys()
+{
+	return _keys;
+}
+
+bool Contact::HasDefaultKey()
+{
+	return _defaultKeyIndex != -1;
+}
+
+Crypto::X25519::PublicKeyContainer Contact::GetDefaultKey()
+{
+	if (_defaultKeyIndex == -1) {
+		THROW("Requested nonexistent default key.");
+	}
+
+	return _keys[_defaultKeyIndex];
+}
+
+Contact::BlockStatus Contact::GetBlockStatus()
+{
+	return _blockStatus;
+}
+
+bool Contact::IsKeyVerified(const Crypto::X25519::PublicKeyContainer &key)
+{
+	for (unsigned int i = 0; i < _keys.Size(); i++) {
+		if (_keys[i] == key) {
+			return _verifiedKeys[i];
+		}
+	}
+
+	return false;
+}
+
+bool Contact::IsKeyBlocked(const Crypto::X25519::PublicKeyContainer &key)
+{
+	for (unsigned int i = 0; i < _keys.Size(); i++) {
+		if (_keys[i] == key) {
+			return _blockedKeys[i];
+		}
+	}
+
+	return false;
+}
+
+void Contact::UpdateKey(
+	const Crypto::X25519::PublicKeyContainer &key,
+	bool verified,
+	bool blocked)
+{
+	String keyHex = DataToHex(key.Key, Crypto::X25519::KEY_SIZE);
+
+	BinaryFile file(_path + "/" + keyHex, true);
+	uint8_t attrs = 0;
+
+	if (verified) {
+		attrs |= Verified;
+	}
+
+	if (blocked) {
+		attrs |= Blocked;
+	}
+
+	file.Write<uint8_t>(&attrs, 1, 0);
+
+	uint32_t keyIndex = 0;
+
+	while (keyIndex < _keys.Size()) {
+		if (key == _keys[keyIndex]) {
+			break;
+		}
+
+		++keyIndex;
+	}
+
+	if (keyIndex >= _keys.Size()) {
+		_keys.Resize(_keys.Size() + 1);
+		_verifiedKeys.Resize(_keys.Size());
+		_blockedKeys.Resize(_keys.Size());
+
+		_keys[_keys.Size() - 1] = key;
+	}
+
+	_verifiedKeys[keyIndex] = verified;
+	_blockedKeys[keyIndex] = blocked;
+}
+
+void Contact::SetDefaultKey(const Crypto::X25519::PublicKeyContainer &key)
+{
+	BinaryFile file(_path + "/DefaultKey", true);
+	file.Write<uint8_t>(key.Key, Crypto::X25519::KEY_SIZE, 0);
+
+	for (unsigned int i = 0; i < _keys.Size(); i++) {
+		if (_keys[i] == key) {
+			_defaultKeyIndex = i;
+			return;
+		}
+	}
+
+	UpdateKey(key, false, false);
+	_defaultKeyIndex = _keys.Size() - 1;
+}
+
+void Contact::SetBlockStatus(BlockStatus value)
+{
+	_blockStatus = value;
+
+	BinaryFile file(_path + "/Blocked", true);
+	file.Write<BlockStatus>(&_blockStatus, 1, 0);
 }
 
 ContactStorage::ContactStorage(String root)

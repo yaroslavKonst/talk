@@ -2,6 +2,7 @@
 #define _USER_HPP
 
 #include "ServerSession.hpp"
+#include "../Message/ContactStorage.hpp"
 #include "../Common/MyString.hpp"
 #include "../Common/ObjectStorage.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
@@ -12,13 +13,15 @@ class User :
 	public ObjectStorageUser
 {
 public:
-	static void CreateUser(String name, const uint8_t publicKey[KEY_SIZE]);
+	static void CreateUser(
+		String name,
+		const Crypto::X25519::PublicKeyContainer &publicKey);
 	static void RemoveUser(String name);
 
 	User(String name, EventDispatcher *dispatcher, Config *config);
 	~User();
 
-	const uint8_t *GetPublicKey()
+	const Crypto::X25519::PublicKeyContainer &GetPublicKey()
 	{
 		return _publicKey;
 	}
@@ -30,8 +33,8 @@ public:
 
 	void AddSession(
 		int fd,
-		EncryptedStream *outES,
-		EncryptedStream *inES,
+		Crypto::X25519::EncryptedStream *outES,
+		Crypto::X25519::EncryptedStream *inES,
 		uint8_t outScramblerInit,
 		uint8_t inScramblerInit);
 	void MarkSessionForRemoval(ServerSession *session) override;
@@ -44,6 +47,15 @@ public:
 	void NotifyWriteCompleted(const ObjectStorage::ID &id) override;
 
 	void AddContact(String name) override;
+	void UpdateContactKey(
+		String name,
+		const Crypto::X25519::PublicKeyContainer &key,
+		bool validated,
+		bool blocked,
+		bool setAsDefault) override;
+	void BlockContact(
+		String name,
+		Contact::BlockStatus block) override;
 
 	ObjectStorage *GetObjectStorage() override
 	{
@@ -55,6 +67,7 @@ private:
 	Config *_config;
 
 	ObjectStorage _objectStorage;
+	ContactStorage _contactStorage;
 
 	struct UserSession
 	{
@@ -69,12 +82,12 @@ private:
 	String _root;
 
 	String _name;
-	uint8_t _publicKey[KEY_SIZE];
+	Crypto::X25519::PublicKeyContainer _publicKey;
 
 	void LoadPublicKey();
 	static void StorePublicKey(
 		String root,
-		const uint8_t publicKey[KEY_SIZE]);
+		const Crypto::X25519::PublicKeyContainer &publicKey);
 
 	void AddNewObject(const CowBuffer<uint8_t> object);
 };

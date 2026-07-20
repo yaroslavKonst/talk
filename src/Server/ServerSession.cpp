@@ -7,6 +7,7 @@
 #include "User.hpp"
 #include "ObjectType.hpp"
 #include "../Protocol/SessionParser.hpp"
+#include "../Protocol/ParserHelpers.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Log.hpp"
 #include "../Common/Exception.hpp"
@@ -16,8 +17,8 @@ ServerSession::ServerSession(
 	ServerSessionStorage *storage,
 	Config *config,
 	EventDispatcher *dispatcher,
-	EncryptedStream *outES,
-	EncryptedStream *inES,
+	Crypto::X25519::EncryptedStream *outES,
+	Crypto::X25519::EncryptedStream *inES,
 	uint8_t outScramblerInit,
 	uint8_t inScramblerInit)
 {
@@ -144,10 +145,14 @@ bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessKeepAlive(buffer);
 	case SESSION_COMMAND_GET_HOST_NAME:
 		return ProcessGetHostName();
-	case SESSION_COMMAND_ADD_CONTACT:
-		return ProcessAddContact(buffer);
 	case SESSION_COMMAND_REQUEST_ID:
 		return ProcessRequestID(buffer);
+	case SESSION_COMMAND_ADD_CONTACT:
+		return ProcessAddContact(buffer);
+	case SESSION_COMMAND_UPDATE_CONTACT_KEY:
+		return ProcessUpdateContactKey(buffer);
+	case SESSION_COMMAND_BLOCK_CONTACT:
+		return ProcessBlockContact(buffer);
 	default:
 		SessionLog("Unknown command.");
 		return false;
@@ -191,6 +196,45 @@ bool ServerSession::ProcessAddContact(const CowBuffer<uint8_t> buffer)
 	SessionLog("Requested add contact " + command.ContactName + ".");
 
 	_storage->AddContact(command.ContactName);
+	return true;
+}
+
+bool ServerSession::ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer)
+{
+	CommandUpdateContactKey::Command command;
+	bool parseResult = CommandUpdateContactKey::ParseCommand(
+		buffer,
+		command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	SessionLog("Requested key update for " + command.ContactName + ".");
+
+	_storage->UpdateContactKey(
+		command.ContactName,
+		command.Key,
+		command.Validated,
+		command.Blocked,
+		command.SetAsDefault);
+	return true;
+}
+
+bool ServerSession::ProcessBlockContact(const CowBuffer<uint8_t> buffer)
+{
+	CommandBlockContact::Command command;
+	bool parseResult = CommandBlockContact::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	SessionLog("Requested block for " + command.ContactName + ".");
+
+	_storage->BlockContact(
+		command.ContactName,
+		(Contact::BlockStatus)command.BlockStatus);
 	return true;
 }
 
@@ -275,24 +319,69 @@ void ServerSession::SendObject(const CowBuffer<uint8_t> object)
 	case (int)ObjectType::NewContact:
 		SendAddContact(object);
 		break;
+	case (int)ObjectType::UpdateContactKey:
+		SendUpdateContactKey(object);
+		break;
+	case (int)ObjectType::BlockContact:
+		SendBlockContact(object);
+		break;
 	}
 }
 
 void ServerSession::SendAddContact(const CowBuffer<uint8_t> object)
 {
-	String contactName(
-		object.SwitchType<char>(
-			sizeof(int32_t) +
-			(int)ObjectStorage::Constants::IDSize),
-		object.Size() - sizeof(int32_t) -
-			(int)ObjectStorage::Constants::IDSize);
+	NewContactObject::Data data;
+	bool parseResult = NewContactObject::ParseData(object, data);
+
+	if (!parseResult) {
+		THROW("Corrupt database entry.");
+	}
 
 	CommandAddContact::Command command;
-	command.ContactName = contactName;
+	command.ContactName = data.ContactName;
 
-	SessionLog("Sent add contact " + contactName + ".");
+	SessionLog("Sent add contact " + command.ContactName + ".");
 
 	_protocol->Send(CommandAddContact::BuildCommand(command), 1);
+}
+
+void ServerSession::SendUpdateContactKey(const CowBuffer<uint8_t> object)
+{
+	UpdateContactKeyObject::Data data;
+	bool parseResult = UpdateContactKeyObject::ParseData(object, data);
+
+	if (!parseResult) {
+		THROW("Corrupt database entry.");
+	}
+
+	CommandUpdateContactKey::Command command;
+	command.ContactName = data.ContactName;
+	command.Key = data.Key;
+	command.Validated = data.Validated;
+	command.Blocked = data.Blocked;
+	command.SetAsDefault = data.SetAsDefault;
+
+	SessionLog("Sent update contact key for " + command.ContactName + ".");
+
+	_protocol->Send(CommandUpdateContactKey::BuildCommand(command), 1);
+}
+
+void ServerSession::SendBlockContact(const CowBuffer<uint8_t> object)
+{
+	BlockContactObject::Data data;
+	bool parseResult = BlockContactObject::ParseData(object, data);
+
+	if (!parseResult) {
+		THROW("Corrupt database entry.");
+	}
+
+	CommandBlockContact::Command command;
+	command.ContactName = data.ContactName;
+	command.BlockStatus = data.BlockStatus;
+
+	SessionLog("Sent block contact for " + command.ContactName + ".");
+
+	_protocol->Send(CommandBlockContact::BuildCommand(command), 1);
 }
 
 void ServerSession::SessionLog(String message)

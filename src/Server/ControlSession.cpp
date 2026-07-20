@@ -15,7 +15,8 @@ ControlSession::ControlSession(
 	int fd,
 	UserDB *users,
 	ControlSessionStorage *storage,
-	EventDispatcher *dispatcher)
+	EventDispatcher *dispatcher,
+	FailBan *failBan)
 {
 	SetInterval(10);
 	SetTimestamp(GetUnixTime());
@@ -23,6 +24,7 @@ ControlSession::ControlSession(
 	_fd = fd;
 	_users = users;
 	_dispatcher = dispatcher;
+	_failBan = failBan;
 	_storage = storage;
 
 	_writer = nullptr;
@@ -198,6 +200,15 @@ void ControlSession::Process(const CowBuffer<uint8_t> buffer)
 	case COMMAND_LIST_USERS:
 		ProcessListUsersCommand(buffer);
 		break;
+	case COMMAND_FAILBAN_LIST_BANNED:
+		ProcessFailBanListBannedCommand();
+		break;
+	case COMMAND_FAILBAN_BAN:
+		ProcessFailBanBanCommand(buffer);
+		break;
+	case COMMAND_FAILBAN_UNBAN:
+		ProcessFailBanUnbanCommand(buffer);
+		break;
 	default:
 		ProcessUnknownCommand(command);
 		break;
@@ -239,8 +250,11 @@ void ControlSession::ProcessGetKeyCommand()
 	CowBuffer<uint8_t> code(sizeof(int32_t));
 	*code.SwitchType<int32_t>() = OK;
 
-	CowBuffer<uint8_t> key(KEY_SIZE);
-	memcpy(key.Pointer(), _storage->GetPublicKey(), KEY_SIZE);
+	CowBuffer<uint8_t> key(Crypto::X25519::KEY_SIZE);
+	memcpy(
+		key.Pointer(),
+		_storage->GetPublicKey().Key,
+		Crypto::X25519::KEY_SIZE);
 
 	SendResponse(code.Concat(key));
 }
@@ -282,7 +296,9 @@ void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> buffer)
 	} else {
 		response.Code = OK;
 		Log("Control: Adding new user " + request.Name +
-			" with key " + DataToHex(request.Key, KEY_SIZE) + ".");
+			" with key " +
+			DataToHex(request.Key.Key, Crypto::X25519::KEY_SIZE) +
+			".");
 		_users->AddUser(request.Name, request.Key);
 	}
 
@@ -350,10 +366,64 @@ void ControlSession::ProcessListUsersCommand(CowBuffer<uint8_t> buffer)
 		if (request.Flags & CommandListUsers::ShowKeys) {
 			response.Data[i].Key =
 				_users->GetUser(userNames[i])->GetPublicKey();
-		} else {
-			response.Data[i].Key = nullptr;
 		}
 	}
 
 	SendResponse(CommandListUsers::BuildResponse(response));
+}
+
+void ControlSession::ProcessFailBanListBannedCommand()
+{
+	CommandFailBanListBanned::Response response;
+
+	response.Code = OK;
+	response.BannedIPList = _failBan->ListBanned();
+
+	SendResponse(CommandFailBanListBanned::BuildResponse(response));
+}
+
+void ControlSession::ProcessFailBanBanCommand(CowBuffer<uint8_t> buffer)
+{
+	CommandFailBanBan::Request request;
+	bool parseResult = CommandFailBanBan::ParseRequest(buffer, request);
+
+	if (!parseResult) {
+		_storage->MarkSessionForRemoval(this);
+		return;
+	}
+
+	bool result = _failBan->Ban(request.IP);
+
+	CommandFailBanBan::Response response;
+
+	if (result) {
+		response.Code = OK;
+	} else {
+		response.Code = ERROR_INVALID_IP;
+	}
+
+	SendResponse(CommandFailBanBan::BuildResponse(response));
+}
+
+void ControlSession::ProcessFailBanUnbanCommand(CowBuffer<uint8_t> buffer)
+{
+	CommandFailBanUnban::Request request;
+	bool parseResult = CommandFailBanUnban::ParseRequest(buffer, request);
+
+	if (!parseResult) {
+		_storage->MarkSessionForRemoval(this);
+		return;
+	}
+
+	bool result = _failBan->Unban(request.IP);
+
+	CommandFailBanUnban::Response response;
+
+	if (result) {
+		response.Code = OK;
+	} else {
+		response.Code = ERROR_INVALID_IP;
+	}
+
+	SendResponse(CommandFailBanUnban::BuildResponse(response));
 }

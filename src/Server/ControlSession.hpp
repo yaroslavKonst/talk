@@ -18,7 +18,8 @@ public:
 		int fd,
 		UserDB *users,
 		ControlSessionStorage *storage,
-		EventDispatcher *dispatcher);
+		EventDispatcher *dispatcher,
+		FailBan *failBan);
 	~ControlSession();
 
 	int GetDescriptor() override;
@@ -33,6 +34,7 @@ private:
 	int _fd;
 	UserDB *_users;
 	EventDispatcher *_dispatcher;
+	FailBan *_failBan;
 	ControlSessionStorage *_storage;
 
 	StreamReader *_reader;
@@ -50,6 +52,9 @@ private:
 	void ProcessAddUserCommand(CowBuffer<uint8_t> buffer);
 	void ProcessRemoveUserCommand(CowBuffer<uint8_t> buffer);
 	void ProcessListUsersCommand(CowBuffer<uint8_t> buffer);
+	void ProcessFailBanListBannedCommand();
+	void ProcessFailBanBanCommand(CowBuffer<uint8_t> buffer);
+	void ProcessFailBanUnbanCommand(CowBuffer<uint8_t> buffer);
 };
 
 class ControlSessionStorage
@@ -59,7 +64,7 @@ public:
 	{ }
 
 	virtual void MarkSessionForRemoval(ControlSession *session) = 0;
-	virtual const uint8_t *GetPublicKey() = 0;
+	virtual const Crypto::X25519::PublicKeyContainer &GetPublicKey() = 0;
 	virtual void ReloadConfig() = 0;
 };
 

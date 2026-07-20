@@ -29,8 +29,20 @@ public:
 	bool ConnectionActive() override;
 	bool HandshakeActive() override;
 
-	void StartConnection(int fd, const uint8_t *serverKey) override;
+	void StartConnection(
+		int fd,
+		const Crypto::X25519::PublicKeyContainer &serverKey) override;
+
 	bool AddContact(String name) override;
+	bool UpdateContactKey(
+		String contactName,
+		const Crypto::X25519::PublicKeyContainer &key,
+		bool validated,
+		bool blocked,
+		bool setAsDefault) override;
+	bool BlockContact(
+		String contactName,
+		Contact::BlockStatus block) override;
 
 private:
 	int _fd;

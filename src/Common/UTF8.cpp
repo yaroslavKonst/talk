@@ -32,7 +32,7 @@ String UTF8::Encode(CowBuffer<uint32_t> str)
 {
 	String result;
 
-	for (int i = 0; i < str.Size(); i++) {
+	for (unsigned int i = 0; i < str.Size(); i++) {
 		result += Encode(str[i]);
 	}
 
@@ -125,13 +125,16 @@ bool UTF8::Decoder::AddByte(int c)
 		}
 
 		unsigned char tmp = c;
+		uint32_t leadingOnes = 0;
 
 		while (tmp & 0x80) {
 			tmp <<= 1;
-			++_expectedBytes;
+			++leadingOnes;
 		}
 
-		_value = tmp >> _expectedBytes;
+		_value = tmp >> leadingOnes;
+
+		_expectedBytes = leadingOnes ? leadingOnes - 1 : 0;
 	} else {
 		if (!IsTrailing(c)) {
 			return false;
@@ -142,4 +145,6 @@ bool UTF8::Decoder::AddByte(int c)
 
 		--_expectedBytes;
 	}
+
+	return true;
 }

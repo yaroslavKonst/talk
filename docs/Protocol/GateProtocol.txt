@@ -62,7 +62,7 @@ steps:
 * received data signature is checked using public key from DNS.
 
 DoS protection
-###############
+##############
 
 The server may measure the rate of incoming requests. If the request rate
 for some IP address exceeds maximum allowed rate, then the server may
@@ -161,6 +161,7 @@ REJECT_INVALID_DESTINATION_KEY -- destination key is not valid.
 REJECT_INVALID_HEADER -- header is ill formed and caused parsing failure.
 REJECT_MESSAGE_TOO_BIG -- reported message body is too big to be processed.
 REJECT_SENDER_BANNED -- sender was banned by the user.
+REJECT_SENDER_KEY_BANNED -- sender key was banned by the user.
 REJECT_SPAM -- spam filter did not allow the message to pass.
 REJECT_EXISTS -- message with the same header already was delivered.
 

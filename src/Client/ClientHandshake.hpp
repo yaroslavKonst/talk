@@ -11,9 +11,9 @@ public:
 	ClientHandshake(
 		int fd,
 		String name,
-		const uint8_t *privateKey,
-		const uint8_t *publicKey,
-		const uint8_t *serverPublicKey);
+		const Crypto::X25519::PrivateKeyContainer &privateKey,
+		const Crypto::X25519::PublicKeyContainer &publicKey,
+		const Crypto::X25519::PublicKeyContainer &serverPublicKey);
 	~ClientHandshake();
 
 	bool RequestRead();
@@ -23,12 +23,12 @@ public:
 
 	bool ConnectionSuccessful();
 
-	EncryptedStream &GetOutES()
+	Crypto::X25519::EncryptedStream &GetOutES()
 	{
 		return _outES;
 	}
 
-	EncryptedStream &GetInES()
+	Crypto::X25519::EncryptedStream &GetInES()
 	{
 		return _inES;
 	}
@@ -53,15 +53,15 @@ private:
 	State _state;
 	int _fd;
 	String _name;
-	const uint8_t *_privateKey;
-	const uint8_t *_publicKey;
-	uint8_t _serverPublicKey[KEY_SIZE];
+	const Crypto::X25519::PrivateKeyContainer &_privateKey;
+	const Crypto::X25519::PublicKeyContainer &_publicKey;
+	Crypto::X25519::PublicKeyContainer _serverPublicKey;
 
 	StreamReader *_reader;
 	StreamWriter *_writer;
 
-	EncryptedStream _outES;
-	EncryptedStream _inES;
+	Crypto::X25519::EncryptedStream _outES;
+	Crypto::X25519::EncryptedStream _inES;
 
 	uint8_t _inScramblerInit;
 	uint8_t _outScramblerInit;

@@ -33,6 +33,11 @@ public:
 
 	String GetHostName();
 
+	bool GetFailBanEnabled();
+	int64_t GetFailBanBanTime();
+	int32_t GetFailBanMaxTries();
+	int64_t GetFailBanCooldownInterval();
+
 private:
 	IniFile _configFile;
 
@@ -48,6 +53,11 @@ private:
 	uint64_t _messageSizeLimit;
 
 	String _hostName;
+
+	bool _failBanEnabled;
+	int64_t _failBanBanTime;
+	int32_t _failBanMaxTries;
+	int64_t _failBanCooldownInterval;
 
 	struct ConfUser
 	{

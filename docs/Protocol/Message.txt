@@ -5,10 +5,11 @@ Message structure
 Point to point message
 ######################
 
-| encryption scheme |                          \
-| source address | source key |                | message
-| destination address | destination key |      | header
-| timestamp | index |                          |
+| P2P_MESSAGE | encryption scheme |            \
+| source address | source key |                |
+| destination address | destination key |      | message
+| timestamp | index |                          | header
+| message thread id |                          |
 | message body size | nonce |                  /
 | encrypted message body |                       message body
 
@@ -32,11 +33,12 @@ users from any servers.
 
 Any group has its own name.
 
-| encryption scheme |                          \
-| source address | source key |                | message
-| group name | group keys |                    | header
-| timestamp | index |                          |
-| header size | message body size | nonce |    /
+| GROUP_MESSAGE | encryption scheme |          \
+| source address | source key |                |
+| group name | group keys |                    | message
+| timestamp | index |                          | header
+| message thread id |                          |
+| message body size | nonce |                  /
 | encrypted message body |                       message body
 
 Encrypted message body has the same structure as in point to point messages.
@@ -80,20 +82,32 @@ Message body structure
 
 Message body is a sequence of entries.
 Entry structure:
-| entry type | data |
+| entry type (8 bit integer) | entry length (64 bit integer) | data |
+
+There can be multiple entries of the same type in the sequence.
 
 Entry types
 -----------
+This section describes contents of the "data" field from the previous
+subsection.
 
 TEXT -- text in UTF8 encoding without BOM.
-| TEXT | text length in bytes | data |
+"data" is a text, text length is obtained from the entry size.
 
 ATTACHMENT -- any data, byte array.
-| ATTACHMENT | data name | data length | data |
+"data" structure:
+| attachment name (string) | attachment payload |
+Payload size can be derived from entry size and attachment name length.
 
 KEY -- new public key. It can be sent if the user wants to notify others
        about upcoming key change.
-| KEY | key (32 bytes) |
+| user name (string) | key type (32 bit integer) | key (32 bytes) |
+
+EMPTY -- special entry type with random payload. Encryption hides message
+contents but not message size. This entry can be used to increase message
+size by random value and hide the actual payload size. Must be skipped during
+parsing.
 
 This list is not exhaustive and finalized. Client extensions may define
-other types.
+other types. Clients must mark such entries as unsupported and continue
+parsing.

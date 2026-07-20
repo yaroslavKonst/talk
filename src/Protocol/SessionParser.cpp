@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "ParserHelpers.hpp"
 //#include "../Message/Message.hpp"
 
 bool CommandKeepAlive::ParseCommand(
@@ -167,7 +168,7 @@ bool CommandAddContact::ParseCommand(
 		return false;
 	}
 
-	if (nameLength <= 0 || nameLength > 200) {
+	if (nameLength <= 0 || nameLength > 500) {
 		return false;
 	}
 
@@ -199,9 +200,7 @@ bool CommandUpdateContactKey::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)
 {
-	uint32_t baseSize = sizeof(int32_t) + KEY_SIZE + 2 + sizeof(int32_t);
-
-	if (buffer.Size() <= baseSize) {
+	if (buffer.Size() < sizeof(int32_t)) {
 		return false;
 	}
 
@@ -211,44 +210,116 @@ bool CommandUpdateContactKey::ParseCommand(
 		return false;
 	}
 
-	int32_t nameLength = *buffer.SwitchType<int32_t>(
-		baseSize - sizeof(int32_t));
+	uint64_t offset = sizeof(int32_t);
 
-	if (nameLength <= 0 || nameLength > 200) {
+	if (!ParseString(buffer, offset, result.ContactName, 500)) {
 		return false;
 	}
 
-	if (buffer.Size() != baseSize + nameLength) {
+	if (result.ContactName.Length() == 0) {
 		return false;
 	}
 
-	result.ContactName = String(
-		buffer.SwitchType<char>(baseSize),
-		nameLength);
+	uint64_t tailSize = Crypto::X25519::KEY_SIZE + 3;
 
-	result.Key = buffer.Pointer(sizeof(int32_t));
-	result.Validated = *buffer.Pointer(sizeof(int32_t) + KEY_SIZE);
-	result.SetAsDefault = *buffer.Pointer(sizeof(int32_t) + KEY_SIZE + 1);
+	if (buffer.Size() != offset + tailSize) {
+		return false;
+	}
+
+	result.Key = buffer.Pointer(offset);
+	offset += Crypto::X25519::KEY_SIZE;
+
+	result.Validated = *buffer.Pointer(offset);
+	offset += 1;
+
+	result.Blocked = *buffer.Pointer(offset);
+	offset += 1;
+
+	result.SetAsDefault = *buffer.Pointer(offset);
+
 	return true;
 }
 
 CowBuffer<uint8_t> CommandUpdateContactKey::BuildCommand(const Command &command)
 {
+	uint64_t tailSize = Crypto::X25519::KEY_SIZE + 3;
+
 	CowBuffer<uint8_t> buffer(
-		sizeof(int32_t) * 2 + KEY_SIZE + 2 +
-		command.ContactName.Length());
+		sizeof(int32_t) +
+		BuiltStringSize(command.ContactName) +
+		tailSize);
 
 	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_UPDATE_CONTACT_KEY;
 
-	memcpy(buffer.Pointer(sizeof(int32_t)), command.Key, KEY_SIZE);
-	*buffer.Pointer(sizeof(int32_t) + KEY_SIZE) = command.Validated;
-	*buffer.Pointer(sizeof(int32_t) + KEY_SIZE + 1) = command.SetAsDefault;
-	*buffer.SwitchType<int32_t>(sizeof(int32_t) + KEY_SIZE + 2) =
-		command.ContactName.Length();
+	uint64_t offset = sizeof(int32_t);
+
+	BuildString(buffer, offset, command.ContactName);
+
 	memcpy(
-		buffer.Pointer(sizeof(int32_t) * 2 + KEY_SIZE + 2),
-		command.ContactName.CStr(),
-		command.ContactName.Length());
+		buffer.Pointer(offset),
+		command.Key.Key,
+		Crypto::X25519::KEY_SIZE);
+	offset += Crypto::X25519::KEY_SIZE;
+
+	*buffer.Pointer(offset) = command.Validated;
+	offset += 1;
+
+	*buffer.Pointer(offset) = command.Blocked;
+	offset += 1;
+
+	*buffer.Pointer(offset) = command.SetAsDefault;
+
+	return buffer;
+}
+
+bool CommandBlockContact::ParseCommand(
+	const CowBuffer<uint8_t> buffer,
+	Command &result)
+{
+	if (buffer.Size() < sizeof(int32_t)) {
+		return false;
+	}
+
+	int32_t command = *buffer.SwitchType<int32_t>();
+
+	if (command != SESSION_COMMAND_BLOCK_CONTACT) {
+		return false;
+	}
+
+	uint64_t offset = sizeof(int32_t);
+
+	if (!ParseString(buffer, offset, result.ContactName, 500)) {
+		return false;
+	}
+
+	if (result.ContactName.Length() == 0) {
+		return false;
+	}
+
+	if (buffer.Size() != offset + sizeof(uint8_t)) {
+		return false;
+	}
+
+	result.BlockStatus = *buffer.Pointer(offset);
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandBlockContact::BuildCommand(const Command &command)
+{
+	CowBuffer<uint8_t> buffer(
+		sizeof(int32_t) +
+		BuiltStringSize(command.ContactName) +
+		sizeof(uint8_t));
+
+	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_BLOCK_CONTACT;
+
+	uint64_t offset = sizeof(int32_t);
+
+	BuildString(buffer, offset, command.ContactName);
+
+	*buffer.Pointer(offset) = command.BlockStatus;
+
 	return buffer;
 }
 
@@ -284,11 +355,7 @@ bool CommandUpdateMessage::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)
 {
-	uint32_t validSize = sizeof(int32_t) +
-		(int)ObjectStorage::Constants::IDSize +
-		sizeof(result.Attr) + sizeof(result.SetAttr);
-
-	if (buffer.Size() != validSize) {
+	if (buffer.Size() < sizeof(int32_t)) {
 		return false;
 	}
 
@@ -298,14 +365,38 @@ bool CommandUpdateMessage::ParseCommand(
 		return false;
 	}
 
-	result.HeaderHash = buffer.Slice(
-		sizeof(command),
-		(int)ObjectStorage::Constants::IDSize);
+	uint64_t offset = sizeof(int32_t);
 
-	result.Attr = *buffer.SwitchType<Message::Attribute>(
-		sizeof(command) + result.HeaderHash.Size());
-	result.SetAttr = *buffer.SwitchType<uint8_t>(validSize -
-		sizeof(result.SetAttr));
+	bool status = ParseString(
+		buffer,
+		offset,
+		result.PeerName);
+
+	if (!status) {
+		return false;
+	}
+
+	if (buffer.Size() < offset + (int)ObjectStorage::Constants::IDSize) {
+		return false;
+	}
+
+	result.HeaderHash = buffer.Slice(
+		offset,
+		(int)ObjectStorage::Constants::IDSize);
+	offset += (int)ObjectStorage::Constants::IDSize;
+
+	if (buffer.Size() < offset + sizeof(Message::Attribute)) {
+		return false;
+	}
+
+	result.Attr = *buffer.SwitchType<Message::Attribute>(offset);
+	offset += sizeof(Message::Attribute);
+
+	if (buffer.Size() != offset + sizeof(uint8_t)) {
+		return false;
+	}
+
+	result.AttrValue = *buffer.SwitchType<uint8_t>(offset);
 
 	return true;
 }
@@ -313,18 +404,27 @@ bool CommandUpdateMessage::ParseCommand(
 CowBuffer<uint8_t> CommandUpdateMessage::BuildCommand(const Command &data)
 {
 	CowBuffer<uint8_t> buffer(
-		sizeof(int32_t) + (int)ObjectStorage::Constants::IDSize +
-		sizeof(data.Attr) + sizeof(data.SetAttr));
+		sizeof(int32_t) +
+		sizeof(uint32_t) + data.PeerName.Length() +
+		(int)ObjectStorage::Constants::IDSize +
+		sizeof(data.Attr) + sizeof(data.AttrValue));
 
 	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_UPDATE_MESSAGE;
+
+	uint64_t offset = sizeof(int32_t);
+
+	BuildString(buffer, offset, data.PeerName);
+
 	memcpy(
-		buffer.Pointer(sizeof(int32_t)),
+		buffer.Pointer(offset),
 		data.HeaderHash.Pointer(),
 		(int)ObjectStorage::Constants::IDSize);
-	*buffer.SwitchType<Message::Attribute>(
-		sizeof(int32_t) + (int)ObjectStorage::Constants::IDSize) =
-		data.Attr;
-	*buffer.Pointer(buffer.Size() - sizeof(data.SetAttr)) = data.SetAttr;
+	offset += (int)ObjectStorage::Constants::IDSize;
+
+	*buffer.SwitchType<Message::Attribute>(offset) = data.Attr;
+	offset += sizeof(data.Attr);
+
+	*buffer.Pointer(offset) = data.AttrValue;
 
 	return buffer;
 }

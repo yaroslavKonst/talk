@@ -2,11 +2,12 @@
 #define _CONFIG_HPP
 
 #include "../Common/IniFile.hpp"
+#include "../Crypto/Crypto.hpp"
 
 class Config
 {
 public:
-	Config(const uint8_t *publicKey);
+	Config(const Crypto::X25519::PublicKeyContainer &publicKey);
 
 	void Save();
 
@@ -156,6 +157,16 @@ public:
 		return _keyNames[(int)Keys::ContactToChat];
 	}
 
+	int ContactBlockKey()
+	{
+		return _keys[(int)Keys::ContactBlock];
+	}
+
+	String ContactBlockName()
+	{
+		return _keyNames[(int)Keys::ContactBlock];
+	}
+
 	int NotificationConfirmKey()
 	{
 		return _keys[(int)Keys::NotificationConfirm];
@@ -168,7 +179,7 @@ public:
 
 private:
 	IniFile _configFile;
-	const uint8_t *_publicKey;
+	const Crypto::X25519::PublicKeyContainer &_publicKey;
 
 	void Init();
 	void LoadControls();
@@ -207,6 +218,7 @@ private:
 		ContactEnter,
 		ContactNew,
 		ContactToChat,
+		ContactBlock,
 
 		VoiceStart,
 		VoiceEnd,

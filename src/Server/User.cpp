@@ -6,9 +6,12 @@
 #include "../Common/File.hpp"
 #include "../Common/BinaryFile.hpp"
 #include "../Common/Exception.hpp"
+#include "../Protocol/ParserHelpers.hpp"
 #include "../ThirdParty/monocypher.h"
 
-void User::CreateUser(String name, const uint8_t publicKey[KEY_SIZE])
+void User::CreateUser(
+	String name,
+	const Crypto::X25519::PublicKeyContainer &publicKey)
 {
 	String root = "storage/users/" + name;
 
@@ -28,7 +31,8 @@ void User::RemoveUser(String name)
 }
 
 User::User(String name, EventDispatcher *dispatcher, Config *config) :
-	_objectStorage("storage/users/" + name + "/storage", dispatcher)
+	_objectStorage("storage/users/" + name + "/storage", dispatcher),
+	_contactStorage("storage/users/" + name)
 {
 	_dispatcher = dispatcher;
 	_config = config;
@@ -62,14 +66,12 @@ User::~User()
 		delete session->Session;
 		delete session;
 	}
-
-	crypto_wipe(_publicKey, KEY_SIZE);
 }
 
 void User::AddSession(
 	int fd,
-	EncryptedStream *outES,
-	EncryptedStream *inES,
+	Crypto::X25519::EncryptedStream *outES,
+	Crypto::X25519::EncryptedStream *inES,
 	uint8_t outScramblerInit,
 	uint8_t inScramblerInit)
 {
@@ -138,51 +140,65 @@ void User::NotifyWriteCompleted(const ObjectStorage::ID &id)
 
 void User::AddContact(String name)
 {
-	int32_t objectType = (int)ObjectType::NewContact;
+	_contactStorage.AddNewContact(name);
 
-	CowBuffer<uint8_t> object(
-		sizeof(objectType) +
-		(int)ObjectStorage::Constants::IDSize +
-		name.Length());
+	NewContactObject::Data data;
+	data.ContactName = name;
 
-	*object.SwitchType<int32_t>() = objectType;
-	memset(
-		object.Pointer(sizeof(int32_t)),
-		0,
-		(int)ObjectStorage::Constants::IDSize);
-	memcpy(
-		object.Pointer(sizeof(int32_t) +
-			(int)ObjectStorage::Constants::IDSize),
-		name.CStr(),
-		name.Length());
+	AddNewObject(NewContactObject::BuildData(data));
+}
 
-	AddNewObject(object);
+void User::UpdateContactKey(
+	String name,
+	const Crypto::X25519::PublicKeyContainer &key,
+	bool validated,
+	bool blocked,
+	bool setAsDefault)
+{
+	_contactStorage.GetContact(name)->UpdateKey(key, validated, blocked);
 
-	UserSession *s = _sessions;
-
-	while (s) {
-		s->Session->SendObjects();
-		s = s->Next;
+	if (setAsDefault) {
+		_contactStorage.GetContact(name)->SetDefaultKey(key);
 	}
+
+	UpdateContactKeyObject::Data data;
+	data.ContactName = name;
+	data.Key = key;
+	data.Validated = validated;
+	data.Blocked = blocked;
+	data.SetAsDefault =setAsDefault;
+
+	AddNewObject(UpdateContactKeyObject::BuildData(data));
+}
+
+void User::BlockContact(String name, Contact::BlockStatus block)
+{
+	_contactStorage.GetContact(name)->SetBlockStatus(block);
+
+	BlockContactObject::Data data;
+	data.ContactName = name;
+	data.BlockStatus = (uint8_t)block;
+
+	AddNewObject(BlockContactObject::BuildData(data));
 }
 
 void User::LoadPublicKey()
 {
 	BinaryFile file(_root + "/key", false);
 
-	if (file.Size() != KEY_SIZE) {
+	if (file.Size() != Crypto::X25519::KEY_SIZE) {
 		THROW("Invalid public key size for user " + _name + ".");
 	}
 
-	file.Read<uint8_t>(_publicKey, KEY_SIZE, 0);
+	file.Read<uint8_t>(_publicKey.Key, Crypto::X25519::KEY_SIZE, 0);
 }
 
 void User::StorePublicKey(
 	String root,
-	const uint8_t publicKey[KEY_SIZE])
+	const Crypto::X25519::PublicKeyContainer &publicKey)
 {
 	BinaryFile file(root + "/key", true);
-	file.Write<uint8_t>(publicKey, KEY_SIZE, 0);
+	file.Write<uint8_t>(publicKey.Key, Crypto::X25519::KEY_SIZE, 0);
 }
 
 void User::AddNewObject(const CowBuffer<uint8_t> object)
@@ -211,4 +227,11 @@ void User::AddNewObject(const CowBuffer<uint8_t> object)
 	}
 
 	_objectStorage.SetRef(HEAD_REF, itemId);
+
+	UserSession *s = _sessions;
+
+	while (s) {
+		s->Session->SendObjects();
+		s = s->Next;
+	}
 }

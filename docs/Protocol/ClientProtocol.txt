@@ -197,7 +197,7 @@ Managing contacts and their keys
 This command is sent by the server or the client to add a new contact to the
 contact list.
 
-| UPDATE_CONTACT_KEY | name | key | validated | default |
+| UPDATE_CONTACT_KEY | name | key | validated | blocked | default |
 "name": user name, string.
 "key": user key, 32 byte array.
 "validated": byte, considered as logical value. Whether to consider this key
@@ -206,6 +206,12 @@ contact list.
            new messages.
 
 This command is used for contact key management.
+
+| BLOCK_CONTACT | name | value |
+"name": string.
+"value": 8 bit unsigned int.
+
+This command sets whether contact is blocked.
 
 Contact book request
 --------------------

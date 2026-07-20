@@ -78,12 +78,12 @@ static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
 		THROW("Name is empty.\n");
 	}
 
-	if (keyHex.Length() != KEY_SIZE * 2) {
+	if (keyHex.Length() != Crypto::X25519::KEY_SIZE * 2) {
 		THROW("Key length is not equal to " +
-			ToString(KEY_SIZE * 2) + ".");
+			ToString(Crypto::X25519::KEY_SIZE * 2) + ".");
 	}
 
-	CowBuffer<uint8_t> key(KEY_SIZE);
+	CowBuffer<uint8_t> key(Crypto::X25519::KEY_SIZE);
 	HexToData(keyHex, key.Pointer());
 
 	CommandAddUser::Request request;
@@ -136,7 +136,7 @@ static CowBuffer<uint8_t> RequestListUsers(int argc, char **argv)
 static CowBuffer<uint8_t> RequestListBannedIP()
 {
 	CowBuffer<uint8_t> result(sizeof(int32_t));
-	*result.SwitchType<int32_t>() = COMMAND_IP_LIST_BANNED;
+	*result.SwitchType<int32_t>() = COMMAND_FAILBAN_LIST_BANNED;
 
 	return result;
 }
@@ -148,19 +148,17 @@ static CowBuffer<uint8_t> RequestBanIP(int argc, char **argv)
 		THROW("Invalid number of arguments.");
 	}
 
-	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(uint32_t));
-	*result.SwitchType<int32_t>() = COMMAND_IP_BAN;
-
 	struct in_addr addr;
-
 	int res = inet_aton(argv[3], &addr);
 
 	if (!res) {
 		THROW("Invalid IP address format.");
 	}
 
-	*result.SwitchType<uint32_t>(sizeof(int32_t)) = addr.s_addr;
-	return result;
+	CommandFailBanBan::Request request;
+	request.IP = addr.s_addr;
+
+	return CommandFailBanBan::BuildRequest(request);
 }
 
 static CowBuffer<uint8_t> RequestUnbanIP(int argc, char **argv)
@@ -170,19 +168,17 @@ static CowBuffer<uint8_t> RequestUnbanIP(int argc, char **argv)
 		THROW("Invalid number of arguments.");
 	}
 
-	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(uint32_t));
-	*result.SwitchType<int32_t>() = COMMAND_IP_UNBAN;
-
 	struct in_addr addr;
-
 	int res = inet_aton(argv[3], &addr);
 
 	if (!res) {
 		THROW("Invalid IP address format.");
 	}
 
-	*result.SwitchType<uint32_t>(sizeof(int32_t)) = addr.s_addr;
-	return result;
+	CommandFailBanUnban::Request request;
+	request.IP = addr.s_addr;
+
+	return CommandFailBanUnban::BuildRequest(request);
 }
 
 static CowBuffer<uint8_t> RequestReload()

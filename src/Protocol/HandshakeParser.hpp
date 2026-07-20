@@ -10,7 +10,9 @@ namespace Handshake
 	enum
 	{
 		ChallengeSize = 64,
-		EncryptedChallengeSize = ChallengeSize + CRYPTO_HEADER_SIZE
+		EncryptedChallengeSize =
+			ChallengeSize +
+			Crypto::X25519::CRYPTO_HEADER_SIZE
 	};
 }
 
@@ -18,6 +20,8 @@ namespace HandshakeSyn
 {
 	struct Data
 	{
+		int32_t ProtocolVersion;
+		int32_t EncryptionScheme;
 		String Name;
 	};
 

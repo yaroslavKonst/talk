@@ -10,13 +10,15 @@ ControlSocket::ControlSocket(
 	UserDB *users,
 	EventDispatcher *dispatcher,
 	Config *config,
-	const uint8_t *publicKey)
+	FailBan *failBan,
+	const Crypto::X25519::PublicKeyContainer &publicKey):
+	_publicKey(publicKey)
 {
 	_socketFd = -1;
 	_dispatcher = dispatcher;
 	_users = users;
 	_config = config;
-	_publicKey = publicKey;
+	_failBan = failBan;
 
 	_controlSessions = nullptr;
 	_timeQuantRequested = false;
@@ -126,7 +128,12 @@ void ControlSocket::AddSession(int fd)
 	ControlNode *s = new ControlNode;
 	s->Remove = false;
 	s->Next = _controlSessions;
-	s->Session = new ControlSession(fd, _users, this, _dispatcher);
+	s->Session = new ControlSession(
+		fd,
+		_users,
+		this,
+		_dispatcher,
+		_failBan);
 
 	_controlSessions = s;
 }

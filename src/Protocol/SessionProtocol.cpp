@@ -252,8 +252,8 @@ CowBuffer<uint8_t> Demultiplexer::GetBuffer()
 // Session.
 SessionProtocol::SessionProtocol(
 	int fd,
-	EncryptedStream *outES,
-	EncryptedStream *inES,
+	Crypto::X25519::EncryptedStream *outES,
+	Crypto::X25519::EncryptedStream *inES,
 	uint8_t outScramblerInit,
 	uint8_t inScramblerInit)
 {
@@ -317,7 +317,7 @@ bool SessionProtocol::Read()
 	delete _reader;
 	_reader = nullptr;
 
-	_inScramblerInit = ApplyScrambler(
+	_inScramblerInit = Crypto::ApplyScrambler(
 		buffer.Pointer(),
 		buffer.Size(),
 		_inScramblerInit);
@@ -382,7 +382,7 @@ bool SessionProtocol::Write()
 	*sizeBuffer.SwitchType<uint64_t>() = data.Size();
 	data = sizeBuffer.Concat(data);
 
-	_outScramblerInit = ApplyScrambler(
+	_outScramblerInit = Crypto::ApplyScrambler(
 		data.Pointer(),
 		data.Size(),
 		_outScramblerInit);

@@ -3,6 +3,7 @@
 
 #include "UserDB.hpp"
 #include "Config.hpp"
+#include "FailBan.hpp"
 #include "../Common/EventDispatcher.hpp"
 
 class ListeningSocket :
@@ -13,7 +14,8 @@ public:
 	ListeningSocket(
 		UserDB *users,
 		EventDispatcher *dispatcher,
-		Config *config);
+		Config *config,
+		FailBan *failBan);
 	~ListeningSocket();
 
 	void ReloadConfig() override;
@@ -44,6 +46,7 @@ private:
 	UserDB *_users;
 	EventDispatcher *_dispatcher;
 	Config *_config;
+	FailBan *_failBan;
 };
 
 #endif

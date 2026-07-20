@@ -296,6 +296,23 @@ String String::Replace(char from, char to) const
 	return res;
 }
 
+String String::ToLowerCase() const
+{
+	String res = *this;
+	res.MakeExclusive();
+
+	for (int i = 0; i < res.Length(); i++) {
+		char c = res._data->Data[i];
+
+		if (c >= 'A' && c <= 'Z') {
+			c += 'a' - 'A';
+			res._data->Data[i] = c;
+		}
+	}
+
+	return res;
+}
+
 void String::Wipe()
 {
 	MakeExclusive();

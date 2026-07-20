@@ -8,5 +8,6 @@ void CreateDirectory(String path);
 bool FileExists(String path);
 CowBuffer<String> ListDirectory(String path);
 void MakeNonblocking(int fd);
+void DeleteFile(String path);
 
 #endif

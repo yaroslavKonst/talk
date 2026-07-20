@@ -3,16 +3,57 @@
 
 #include "../Common/CowBuffer.hpp"
 #include "../Common/Tree.hpp"
+#include "../Crypto/Crypto.hpp"
+
+class ContactStorage;
 
 class Contact
 {
+	//friend class ContactStorage;
 public:
+	enum class BlockStatus : uint8_t
+	{
+		Allowed = 0,
+		Blocked = 1,
+		SilentlyBlocked = 2
+	};
+
 	Contact(String name, String path);
 
+	CowBuffer<Crypto::X25519::PublicKeyContainer> GetKeys();
+
+	bool HasDefaultKey();
+	Crypto::X25519::PublicKeyContainer GetDefaultKey();
+
+	BlockStatus GetBlockStatus();
+
+	bool IsKeyVerified(const Crypto::X25519::PublicKeyContainer &key);
+	bool IsKeyBlocked(const Crypto::X25519::PublicKeyContainer &key);
+
+	void UpdateKey(
+		const Crypto::X25519::PublicKeyContainer &key,
+		bool verified,
+		bool blocked);
+
+	void SetDefaultKey(const Crypto::X25519::PublicKeyContainer &key);
+
+	void SetBlockStatus(BlockStatus value);
+
 private:
+	enum KeyStatus : uint8_t
+	{
+		Verified = 0x1,
+		Blocked = 0x2
+	};
+
 	String _name; // name@host
-	CowBuffer<CowBuffer<uint8_t>> _keys;
+	CowBuffer<Crypto::X25519::PublicKeyContainer> _keys;
 	CowBuffer<bool> _verifiedKeys;
+	CowBuffer<bool> _blockedKeys;
+
+	int32_t _defaultKeyIndex;
+
+	BlockStatus _blockStatus;
 
 	String _path;
 };

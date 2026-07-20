@@ -126,7 +126,7 @@ void ObjectStorage::DelRef(String refName)
 
 ObjectStorage::ID ObjectStorage::GetFreeID(const CowBuffer<uint8_t> object)
 {
-	ID id(GetHash(object, (int)Constants::IDSize).Pointer());
+	ID id(Crypto::GetHash(object, (int)Constants::IDSize).Pointer());
 
 	if (!HasObject(id)) {
 		return id;
@@ -137,8 +137,14 @@ ObjectStorage::ID ObjectStorage::GetFreeID(const CowBuffer<uint8_t> object)
 	pair[1] = CowBuffer<uint8_t>(8);
 
 	for (;;) {
-		GenerateRandomData(pair[1].Size(), pair[1].Pointer(), false);
-		id.SetValue(GetHash(pair, (int)Constants::IDSize).Pointer());
+		Crypto::GenerateRandomData(
+			pair[1].Size(),
+			pair[1].Pointer(),
+			false);
+
+		id.SetValue(Crypto::GetHash(
+			pair,
+			(int)Constants::IDSize).Pointer());
 
 		if (!HasObject(id)) {
 			return id;

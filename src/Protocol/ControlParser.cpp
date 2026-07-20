@@ -1,60 +1,55 @@
 #include "ControlParser.hpp"
 
+#include "ParserHelpers.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
 bool CommandAddUser::ParseRequest(
 	const CowBuffer<uint8_t> buffer,
 	Request &request)
 {
-	int32_t command;
-	int32_t nameLength;
-	uint64_t baseLength = sizeof(command) + KEY_SIZE + sizeof(nameLength);
+	uint64_t baseLength = sizeof(int32_t) + Crypto::X25519::KEY_SIZE;
 
 	if (buffer.Size() < baseLength) {
 		return false;
 	}
 
-	command = *buffer.SwitchType<int32_t>();
-
-	if (command != COMMAND_ADD_USER) {
+	if (*buffer.SwitchType<int32_t>() != COMMAND_ADD_USER) {
 		return false;
 	}
 
-	request.Key = buffer.Pointer(sizeof(command));
+	request.Key = buffer.Pointer(sizeof(int32_t));
 
-	nameLength = *buffer.SwitchType<int32_t>(sizeof(command) + KEY_SIZE);
+	uint64_t offset = baseLength;
 
-	if (nameLength > 200 || nameLength <= 0) {
+	if (!ParseString(buffer, offset, request.Name, 500)) {
 		return false;
 	}
 
-	if (buffer.Size() != baseLength + nameLength) {
+	if (request.Name.Length() == 0 || offset != buffer.Size()) {
 		return false;
 	}
-
-	request.Name = String(
-		buffer.SwitchType<char>(baseLength),
-		nameLength);
 
 	return true;
 }
 
 CowBuffer<uint8_t> CommandAddUser::BuildRequest(const Request &request)
 {
-	int32_t command = COMMAND_ADD_USER;
-	int32_t nameLength = request.Name.Length();
-
 	CowBuffer<uint8_t> buffer(
-		sizeof(command) + KEY_SIZE + sizeof(nameLength) +
-		nameLength);
+		sizeof(int32_t) + Crypto::X25519::KEY_SIZE +
+		BuiltStringSize(request.Name));
 
-	*buffer.SwitchType<int32_t>() = command;
-	memcpy(buffer.Pointer(sizeof(command)), request.Key, KEY_SIZE);
-	*buffer.SwitchType<int32_t>(sizeof(command) + KEY_SIZE) = nameLength;
+	uint64_t offset = 0;
+
+	*buffer.SwitchType<int32_t>(offset) = COMMAND_ADD_USER;
+	offset += sizeof(int32_t);
+
 	memcpy(
-		buffer.Pointer(sizeof(command) + KEY_SIZE + sizeof(nameLength)),
-		request.Name.CStr(),
-		request.Name.Length());
+		buffer.Pointer(offset),
+		request.Key.Key,
+		Crypto::X25519::KEY_SIZE);
+	offset += Crypto::X25519::KEY_SIZE;
+
+	BuildString(buffer, offset, request.Name);
 
 	return buffer;
 }
@@ -82,51 +77,39 @@ bool CommandRemoveUser::ParseRequest(
 	const CowBuffer<uint8_t> buffer,
 	Request &request)
 {
-	int32_t command;
-	int32_t nameLength;
-
-	uint64_t baseSize = sizeof(command) + sizeof(nameLength);
-
-	if (buffer.Size() < baseSize) {
+	if (buffer.Size() < sizeof(int32_t)) {
 		return false;
 	}
 
-	command = *buffer.SwitchType<int32_t>();
-
-	if (command != COMMAND_REMOVE_USER) {
+	if (*buffer.SwitchType<int32_t>() != COMMAND_REMOVE_USER) {
 		return false;
 	}
 
-	nameLength = *buffer.SwitchType<int32_t>(sizeof(command));
+	uint64_t offset = sizeof(int32_t);
 
-	if (nameLength > 200 || nameLength <= 0) {
+	if (!ParseString(buffer, offset, request.Name, 500)) {
 		return false;
 	}
 
-	if (buffer.Size() != baseSize + nameLength)
-	{
+	if (request.Name.Length() == 0 || offset != buffer.Size()) {
 		return false;
 	}
 
-	String name(buffer.SwitchType<char>(baseSize), nameLength);
-	request.Name = name;
 	return true;
 }
 
 CowBuffer<uint8_t> CommandRemoveUser::BuildRequest(const Request &request)
 {
-	int32_t command = COMMAND_REMOVE_USER;
-	int32_t nameLength = request.Name.Length();
+	CowBuffer<uint8_t> buffer(
+		sizeof(int32_t) + BuiltStringSize(request.Name));
 
-	CowBuffer<uint8_t> buffer(sizeof(command) + sizeof(nameLength) +
-		request.Name.Length());
+	uint64_t offset = 0;
 
-	*buffer.SwitchType<int32_t>() = command;
-	*buffer.SwitchType<int32_t>(sizeof(command)) = nameLength;
-	memcpy(
-		buffer.Pointer(sizeof(command) + sizeof(nameLength)),
-		request.Name.CStr(),
-		request.Name.Length());
+	*buffer.SwitchType<int32_t>(offset) = COMMAND_REMOVE_USER;
+	offset += sizeof(int32_t);
+
+	BuildString(buffer, offset, request.Name);
+
 	return buffer;
 }
 
@@ -217,45 +200,21 @@ bool CommandListUsers::ParseResponse(
 	uint64_t offset = baseSize;
 
 	for (int32_t i = 0; i < userCount; i++) {
-		const CowBuffer<uint8_t> sliceName = buffer.Slice(
-			offset,
-			buffer.Size() - offset);
-
-		int32_t nameLength;
-
-		if (sliceName.Size() < sizeof(nameLength)) {
+		if (!ParseString(buffer, offset, userData[i].Name, 500)) {
 			return false;
 		}
 
-		nameLength = *sliceName.SwitchType<int32_t>();
-
-		if (nameLength > 200 || nameLength <= 0) {
+		if (userData[i].Name.Length() == 0) {
 			return false;
 		}
-
-		if (sliceName.Size() < sizeof(nameLength) + nameLength) {
-			return false;
-		}
-
-		userData[i].Name = String(
-			sliceName.SwitchType<char>(sizeof(nameLength)),
-			nameLength);
-
-		offset += sizeof(nameLength) + nameLength;
-
-		const CowBuffer<uint8_t> sliceKey = buffer.Slice(
-			offset,
-			buffer.Size() - offset);
 
 		if (flags & ShowKeys) {
-			if (sliceKey.Size() < KEY_SIZE) {
+			if (buffer.Size() < offset + Crypto::X25519::KEY_SIZE) {
 				return false;
 			}
 
-			userData[i].Key = sliceKey.Pointer();
-			offset += KEY_SIZE;
-		} else {
-			userData[i].Key = nullptr;
+			userData[i].Key = buffer.Pointer(offset);
+			offset += Crypto::X25519::KEY_SIZE;
 		}
 	}
 
@@ -274,11 +233,10 @@ CowBuffer<uint8_t> CommandListUsers::BuildResponse(const Response &response)
 		sizeof(userCount);
 
 	for (int32_t i = 0 ; i < userCount; i++) {
-		bufferSize +=
-			sizeof(int32_t) + response.Data[i].Name.Length();
+		bufferSize += BuiltStringSize(response.Data[i].Name);
 
 		if (response.Flags & ShowKeys) {
-			bufferSize += KEY_SIZE;
+			bufferSize += Crypto::X25519::KEY_SIZE;
 		}
 	}
 
@@ -291,25 +249,193 @@ CowBuffer<uint8_t> CommandListUsers::BuildResponse(const Response &response)
 	uint64_t offset = sizeof(int32_t) * 3;
 
 	for (int32_t i = 0; i < userCount; i++) {
-		*buffer.SwitchType<int32_t>(offset) =
-			response.Data[i].Name.Length();
-		offset += sizeof(int32_t);
-
-		memcpy(
-			buffer.Pointer(offset),
-			response.Data[i].Name.CStr(),
-			response.Data[i].Name.Length());
-
-		offset += response.Data[i].Name.Length();
+		BuildString(buffer, offset, response.Data[i].Name);
 
 		if (response.Flags & ShowKeys) {
 			memcpy(
 				buffer.Pointer(offset),
-				response.Data[i].Key,
-				KEY_SIZE);
-			offset += KEY_SIZE;
+				response.Data[i].Key.Key,
+				Crypto::X25519::KEY_SIZE);
+			offset += Crypto::X25519::KEY_SIZE;
 		}
 	}
 
+	return buffer;
+}
+
+bool CommandFailBanListBanned::ParseResponse(
+	const CowBuffer<uint8_t> buffer,
+	Response &response)
+{
+	int32_t code;
+
+	if (buffer.Size() < sizeof(code)) {
+		return false;
+	}
+
+	code = *buffer.SwitchType<int32_t>();
+
+	if (code != OK) {
+		response.Code = code;
+		response.BannedIPList = CowBuffer<uint32_t>();
+		return true;
+	}
+
+	int32_t ipCount;
+
+	uint64_t baseSize = sizeof(code) + sizeof(ipCount);
+
+	if (buffer.Size() < baseSize) {
+		return false;
+	}
+
+	ipCount = *buffer.SwitchType<int32_t>(sizeof(code));
+
+	if (ipCount < 0) {
+		return false;
+	}
+
+	if (buffer.Size() != baseSize + ipCount * sizeof(uint32_t)) {
+		return false;
+	}
+
+	CowBuffer<uint32_t> ipList(ipCount);
+
+	for (int32_t i = 0; i < ipCount; i++) {
+		ipList[i] = *buffer.SwitchType<uint32_t>(
+			baseSize + i * sizeof(uint32_t));
+	}
+
+	response.Code = code;
+	response.BannedIPList = ipList;
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandFailBanListBanned::BuildResponse(
+	const Response &response)
+{
+	int32_t ipCount = response.BannedIPList.Size();
+
+	uint64_t bufferSize = sizeof(response.Code) + sizeof(ipCount) +
+		ipCount * sizeof(uint32_t);
+
+	CowBuffer<uint8_t> buffer(bufferSize);
+
+	*buffer.SwitchType<int32_t>() = response.Code;
+	*buffer.SwitchType<int32_t>(sizeof(response.Code)) = ipCount;
+
+	uint64_t offset = sizeof(response.Code) + sizeof(ipCount);
+
+	for (int32_t i = 0; i < ipCount; i++) {
+		*buffer.SwitchType<uint32_t>(offset) =
+			response.BannedIPList[i];
+		offset += sizeof(uint32_t);
+	}
+
+	return buffer;
+}
+
+bool CommandFailBanBan::ParseRequest(
+	const CowBuffer<uint8_t> buffer,
+	Request &request)
+{
+	int32_t command;
+
+	if (buffer.Size() != sizeof(command) + sizeof(request.IP)) {
+		return false;
+	}
+
+	command = *buffer.SwitchType<int32_t>();
+
+	if (command != COMMAND_FAILBAN_BAN) {
+		return false;
+	}
+
+	request.IP = *buffer.SwitchType<uint32_t>(sizeof(command));
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandFailBanBan::BuildRequest(const Request &request)
+{
+	int32_t command = COMMAND_FAILBAN_BAN;
+
+	CowBuffer<uint8_t> buffer(sizeof(command) + sizeof(request.IP));
+
+	*buffer.SwitchType<int32_t>() = command;
+	*buffer.SwitchType<uint32_t>(sizeof(command)) = request.IP;
+
+	return buffer;
+}
+
+bool CommandFailBanBan::ParseResponse(
+	const CowBuffer<uint8_t> buffer,
+	Response &response)
+{
+	if (buffer.Size() != sizeof(response.Code)) {
+		return false;
+	}
+
+	response.Code = *buffer.SwitchType<int32_t>();
+	return true;
+}
+
+CowBuffer<uint8_t> CommandFailBanBan::BuildResponse(const Response &response)
+{
+	CowBuffer<uint8_t> buffer(sizeof(response.Code));
+	*buffer.SwitchType<int32_t>() = response.Code;
+	return buffer;
+}
+
+bool CommandFailBanUnban::ParseRequest(
+	const CowBuffer<uint8_t> buffer,
+	Request &request)
+{
+	int32_t command;
+
+	if (buffer.Size() != sizeof(command) + sizeof(request.IP)) {
+		return false;
+	}
+
+	command = *buffer.SwitchType<int32_t>();
+
+	if (command != COMMAND_FAILBAN_UNBAN) {
+		return false;
+	}
+
+	request.IP = *buffer.SwitchType<uint32_t>(sizeof(command));
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandFailBanUnban::BuildRequest(const Request &request)
+{
+	int32_t command = COMMAND_FAILBAN_UNBAN;
+
+	CowBuffer<uint8_t> buffer(sizeof(command) + sizeof(request.IP));
+
+	*buffer.SwitchType<int32_t>() = command;
+	*buffer.SwitchType<uint32_t>(sizeof(command)) = request.IP;
+
+	return buffer;
+}
+
+bool CommandFailBanUnban::ParseResponse(
+	const CowBuffer<uint8_t> buffer,
+	Response &response)
+{
+	if (buffer.Size() != sizeof(response.Code)) {
+		return false;
+	}
+
+	response.Code = *buffer.SwitchType<int32_t>();
+	return true;
+}
+
+CowBuffer<uint8_t> CommandFailBanUnban::BuildResponse(const Response &response)
+{
+	CowBuffer<uint8_t> buffer(sizeof(response.Code));
+	*buffer.SwitchType<int32_t>() = response.Code;
 	return buffer;
 }

@@ -13,6 +13,8 @@ public:
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;
 
+	CowBuffer<String> GetControlHelp();
+
 private:
 	Root *_root;
 
@@ -20,7 +22,6 @@ private:
 	void RedrawContactList();
 	void RedrawCurrentChat();
 	void RedrawTextBox();
-	void RedrawHelp();
 
 	void ProcessChatListEvent(int event);
 	void ProcessChatScreenEvent(int event);

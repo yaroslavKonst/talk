@@ -7,8 +7,8 @@
 ClientSession::ClientSession(
 	Root *root,
 	int fd,
-	EncryptedStream &outES,
-	EncryptedStream &inES,
+	Crypto::X25519::EncryptedStream &outES,
+	Crypto::X25519::EncryptedStream &inES,
 	uint8_t outScramblerInit,
 	uint8_t inScramblerInit)
 {
@@ -83,6 +83,32 @@ void ClientSession::AddContact(String name)
 	_protocol->Send(CommandAddContact::BuildCommand(command), 0);
 }
 
+void ClientSession::UpdateContactKey(
+	String contactName,
+	const Crypto::X25519::PublicKeyContainer &key,
+	bool validated,
+	bool blocked,
+	bool setAsDefault)
+{
+	CommandUpdateContactKey::Command command;
+	command.ContactName = contactName;
+	command.Key = key;
+	command.Validated = validated;
+	command.Blocked = blocked;
+	command.SetAsDefault = setAsDefault;
+
+	_protocol->Send(CommandUpdateContactKey::BuildCommand(command), 0);
+}
+
+void ClientSession::BlockContact(String contactName, Contact::BlockStatus block)
+{
+	CommandBlockContact::Command command;
+	command.ContactName = contactName;
+	command.BlockStatus = (uint8_t)block;
+
+	_protocol->Send(CommandBlockContact::BuildCommand(command), 0);
+}
+
 bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 {
 	if (buffer.Size() < sizeof(int32_t)) {
@@ -102,6 +128,10 @@ bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessRequestID();
 	case SESSION_COMMAND_UPDATE_ID:
 		return ProcessUpdateID(buffer);
+	case SESSION_COMMAND_UPDATE_CONTACT_KEY:
+		return ProcessUpdateContactKey(buffer);
+	case SESSION_COMMAND_BLOCK_CONTACT:
+		return ProcessBlockContact(buffer);
 	default:
 		return false;
 	}
@@ -154,21 +184,6 @@ bool ClientSession::ProcessGetHostName(const CowBuffer<uint8_t> buffer)
 	return true;
 }
 
-bool ClientSession::ProcessAddContact(const CowBuffer<uint8_t> buffer)
-{
-	CommandAddContact::Command command;
-	bool parseResult = CommandAddContact::ParseCommand(buffer, command);
-
-	if (!parseResult) {
-		return false;
-	}
-
-	_root->Messages->GetContactStorage()->AddNewContact(
-		command.ContactName);
-	_root->Ui->Redraw();
-	return true;
-}
-
 bool ClientSession::ProcessRequestID()
 {
 	CommandRequestID::Response response;
@@ -188,5 +203,76 @@ bool ClientSession::ProcessUpdateID(const CowBuffer<uint8_t> buffer)
 	}
 
 	_root->Messages->SetKnownID(command.Id);
+	return true;
+}
+
+bool ClientSession::ProcessAddContact(const CowBuffer<uint8_t> buffer)
+{
+	CommandAddContact::Command command;
+	bool parseResult = CommandAddContact::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_root->Messages->GetContactStorage()->AddNewContact(
+		command.ContactName);
+	_root->Ui->Redraw();
+	return true;
+}
+
+bool ClientSession::ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer)
+{
+	CommandUpdateContactKey::Command command;
+	bool parseResult = CommandUpdateContactKey::ParseCommand(
+		buffer,
+		command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	ContactStorage *storage = _root->Messages->GetContactStorage();
+
+	if (!storage->HasContact(command.ContactName)) {
+		storage->AddNewContact(command.ContactName);
+	}
+
+	Contact *contact = storage->GetContact(command.ContactName);
+
+	contact->UpdateKey(
+		command.Key,
+		command.Validated,
+		command.Blocked);
+
+	if (command.SetAsDefault) {
+		contact->SetDefaultKey(command.Key);
+	}
+
+	_root->Ui->Redraw();
+	return true;
+}
+
+bool ClientSession::ProcessBlockContact(const CowBuffer<uint8_t> buffer)
+{
+	CommandBlockContact::Command command;
+	bool parseResult = CommandBlockContact::ParseCommand(
+		buffer,
+		command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	ContactStorage *storage = _root->Messages->GetContactStorage();
+
+	if (!storage->HasContact(command.ContactName)) {
+		storage->AddNewContact(command.ContactName);
+	}
+
+	Contact *contact = storage->GetContact(command.ContactName);
+
+	contact->SetBlockStatus((Contact::BlockStatus)command.BlockStatus);
+	_root->Ui->Redraw();
 	return true;
 }

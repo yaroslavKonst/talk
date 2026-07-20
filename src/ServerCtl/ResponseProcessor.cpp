@@ -74,7 +74,7 @@ static int ProcessGetKey(const CowBuffer<uint8_t> response)
 {
 	int32_t code;
 
-	if (response.Size() != sizeof(code) + KEY_SIZE) {
+	if (response.Size() != sizeof(code) + Crypto::X25519::KEY_SIZE) {
 		printf("Invalid response length.\n");
 		return 1;
 	}
@@ -86,7 +86,9 @@ static int ProcessGetKey(const CowBuffer<uint8_t> response)
 		return 1;
 	}
 
-	String keyHex = DataToHex(response.Pointer(sizeof(code)), KEY_SIZE);
+	String keyHex = DataToHex(
+		response.Pointer(sizeof(code)),
+		Crypto::X25519::KEY_SIZE);
 	printf("%s\n", keyHex.CStr());
 	return 0;
 }
@@ -112,7 +114,9 @@ static int ProcessListUsers(CowBuffer<uint8_t> response)
 		if (data.Flags) {
 			if (data.Flags & CommandListUsers::ShowKeys) {
 				String keyHex =
-					DataToHex(data.Data[i].Key, KEY_SIZE);
+					DataToHex(
+						data.Data[i].Key.Key,
+						Crypto::X25519::KEY_SIZE);
 				printf("%s\n", keyHex.CStr());
 			}
 
@@ -125,42 +129,23 @@ static int ProcessListUsers(CowBuffer<uint8_t> response)
 
 static int ProcessListBannedIP(CowBuffer<uint8_t> response)
 {
-	int32_t code;
+	CommandFailBanListBanned::Response resp;
+	bool parseResult = CommandFailBanListBanned::ParseResponse(
+		response,
+		resp);
 
-	if (response.Size() < sizeof(code)) {
-		printf("Response is too short.\n");
+	if (!parseResult) {
+		printf("Response is invalid.\n");
 		return 1;
 	}
 
-	code = *response.SwitchType<int32_t>();
-
-	if (code != OK) {
-		PrintError(code);
-		return 1;
-	}
-
-	response = response.Slice(sizeof(code), response.Size() - sizeof(code));
-
-	if (response.Size() % sizeof(uint32_t)) {
-		printf("Invalid response length.\n");
+	if (resp.Code != OK) {
+		PrintError(resp.Code);
 		return 2;
 	}
 
-	char ipStr[INET_ADDRSTRLEN];
-
-	for (unsigned int i = 0; i < response.Size() / sizeof(uint32_t); i++) {
-		uint32_t ip = *response.SwitchType<uint32_t>(
-			i * sizeof(uint32_t));
-
-		struct in_addr addr;
-		addr.s_addr = ip;
-
-		if (!inet_ntop(AF_INET, &addr, ipStr, INET_ADDRSTRLEN)) {
-			printf("Failed to write IP string.\n");
-			return 3;
-		}
-
-		printf("%s\n", ipStr);
+	for (unsigned int i = 0; i < resp.BannedIPList.Size(); i++) {
+		printf("%s\n", IPToString(resp.BannedIPList[i]).CStr());
 	}
 
 	return 0;
@@ -180,11 +165,11 @@ int ProcessResponse(
 		return ProcessResultCode(response);
 	} else if (commandId == COMMAND_LIST_USERS) {
 		return ProcessListUsers(response);
-	} else if (commandId == COMMAND_IP_LIST_BANNED) {
+	} else if (commandId == COMMAND_FAILBAN_LIST_BANNED) {
 		return ProcessListBannedIP(response);
-	} else if (commandId == COMMAND_IP_BAN) {
+	} else if (commandId == COMMAND_FAILBAN_BAN) {
 		return ProcessResultCode(response);
-	} else if (commandId == COMMAND_IP_UNBAN) {
+	} else if (commandId == COMMAND_FAILBAN_UNBAN) {
 		return ProcessResultCode(response);
 	} else if (commandId == COMMAND_RELOAD_CONFIG) {
 		return ProcessResultCode(response);

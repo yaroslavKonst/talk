@@ -3,92 +3,158 @@
 
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
-#include "../Crypto/CryptoDefinitions.hpp"
+#include "../Common/ObjectStorage.hpp"
+#include "../Crypto/Crypto.hpp"
 
 namespace Message
 {
-	enum class Type
+	enum class Type : uint8_t
 	{
-		Invalid = 0,
 		PointToPoint = 1,
 		Group = 2
 	};
 
 	Type GetMessageType(const CowBuffer<uint8_t> message);
 
-	struct HeaderPointToPoint
-	{
-		String Source;
-		uint8_t SourceKey[KEY_SIZE];
-
-		String Destination;
-		uint8_t DestinationKey[KEY_SIZE];
-
-		int64_t Timestamp;
-		int32_t Index;
-
-		uint64_t HeaderSize;
-		uint64_t MessageSize;
-
-		bool operator<(const HeaderPointToPoint &header) const;
-		bool operator==(const HeaderPointToPoint &header) const;
-	};
-
-	bool ParseHeader(
-		const CowBuffer<uint8_t> message,
-		HeaderPointToPoint &header);
-	CowBuffer<uint8_t> BuildHeader(const HeaderPointToPoint &header);
-	void WriteHeaderSize(HeaderPointToPoint &header);
-
-	struct HeaderGroup
-	{
-		String Source;
-		uint8_t SourceKey[KEY_SIZE];
-
-		String GroupName;
-		CowBuffer<CowBuffer<uint8_t>> GroupKeys;
-
-		int64_t Timestamp;
-		int32_t Index;
-
-		uint64_t HeaderSize;
-		uint64_t MessageSize;
-
-		bool operator<(const HeaderGroup &header) const;
-		bool operator==(const HeaderGroup &header) const;
-	};
-
-	bool ParseHeader(
-		const CowBuffer<uint8_t> message,
-		HeaderGroup &result);
-	CowBuffer<uint8_t> BuildHeader(const HeaderGroup &header);
-	void WriteHeaderSize(HeaderGroup &header);
-
-	struct Contents
-	{
-		String Text;
-		CowBuffer<uint8_t> Attachment;
-	};
-
-	bool ParseContents(
-		const CowBuffer<uint8_t> message,
-		Contents &contents);
-	CowBuffer<uint8_t> BuildContents(const Contents &contents);
-
 	enum class Attribute : int32_t
 	{
 		// Direction.
 		Inbound = 0x1,
 
-		// Inbound attributes.
+		// Attributes for all directions.
 		Unread = 0x2,
 
 		// Outbound attributes.
-		InProgress = 0x2,
-		ConnectionFailure = 0x4,
-		NonExistentAddress = 0x8,
-		MessageTooBig = 0x10
+		InProgress = 0x4,
+		ConnectionFailure = 0x8,
+		NonExistentAddress = 0x10,
+		MessageTooBig = 0x20,
+		Banned = 0x40
 	};
+
+	enum class ContentsEntryType : uint8_t
+	{
+		Text = 0,
+		Attachment = 1,
+		Key = 2,
+		Empty = 3,
+		Unsupported = 255
+	};
+
+	struct ContentsEntry
+	{
+		virtual ~ContentsEntry()
+		{ }
+
+		ContentsEntryType Type;
+	};
+
+	struct ContentsEntryText : public ContentsEntry
+	{
+		String Text;
+	};
+
+	struct ContentsEntryAttachment : public ContentsEntry
+	{
+		String AttachmentName;
+		CowBuffer<uint8_t> Attachment;
+	};
+
+	struct ContentsEntryKey : public ContentsEntry
+	{
+		String UserName;
+		Crypto::X25519::PublicKeyContainer Key;
+	};
+
+	struct ContentsEntryUnsupported : public ContentsEntry
+	{
+		uint8_t EntryTypeID;
+	};
+
+	struct Contents
+	{
+		~Contents();
+
+		CowBuffer<ContentsEntry*> Entries;
+	};
+
+	bool ParseContents(
+		const CowBuffer<uint8_t> message,
+		Contents &contents);
+
+	CowBuffer<uint8_t> BuildContents(
+		const Contents &contents,
+		uint64_t emptySize);
+
+	namespace X25519
+	{
+		struct HeaderPointToPoint
+		{
+			String Source;
+			Crypto::X25519::PublicKeyContainer SourceKey;
+
+			String Destination;
+			Crypto::X25519::PublicKeyContainer DestinationKey;
+
+			int64_t Timestamp;
+			int32_t Index;
+
+			ObjectStorage::ID ThreadID;
+
+			uint64_t MessageSize;
+			uint8_t Nonce[Crypto::X25519::NONCE_SIZE];
+
+			uint64_t HeaderSize;
+		};
+
+		bool ParseHeader(
+			const CowBuffer<uint8_t> message,
+			HeaderPointToPoint &header);
+		CowBuffer<uint8_t> BuildHeader(
+			const HeaderPointToPoint &header);
+		void WriteHeaderSize(HeaderPointToPoint &header);
+
+		enum
+		{
+			GroupKeyEntrySize =
+				Crypto::X25519::KEY_SIZE +
+				Crypto::X25519::CRYPTO_HEADER_SIZE +
+				Crypto::X25519::KEY_SIZE
+		};
+
+		struct GroupKeyEntry
+		{
+			Crypto::X25519::PublicKeyContainer DestinationKey;
+			uint8_t MAC[Crypto::X25519::MAC_SIZE];
+			uint8_t Nonce[Crypto::X25519::NONCE_SIZE];
+			uint8_t EncryptedKey[Crypto::X25519::KEY_SIZE];
+		};
+
+		struct HeaderGroup
+		{
+			String Source;
+			Crypto::X25519::PublicKeyContainer SourceKey;
+
+			String GroupName;
+			CowBuffer<GroupKeyEntry> GroupKeys;
+
+			int64_t Timestamp;
+			int32_t Index;
+
+			ObjectStorage::ID ThreadID;
+
+			uint64_t MessageSize;
+			uint8_t Nonce[Crypto::X25519::NONCE_SIZE];
+
+			uint64_t HeaderSize;
+		};
+
+		bool ParseHeader(
+			const CowBuffer<uint8_t> message,
+			HeaderGroup &result);
+		CowBuffer<uint8_t> BuildHeader(const HeaderGroup &header);
+		void WriteHeaderSize(HeaderGroup &header);
+	}
 };
 
 #endif

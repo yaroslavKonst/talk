@@ -1,23 +1,22 @@
 #ifndef _FAIL_BAN_HPP
 #define _FAIL_BAN_HPP
 
+#include "Config.hpp"
+#include "../Common/EventDispatcher.hpp"
 #include "../Common/BinaryFile.hpp"
 #include "../Common/CowBuffer.hpp"
+#include "../Common/Tree.hpp"
 
 // All IPv4 addresses are stored and processed in network byte order.
-class FailBan
+class FailBan :
+	public ConfigUser,
+	public TimeEventProcessor
 {
 public:
-	FailBan();
+	FailBan(EventDispatcher *dispatcher, Config *config);
 	~FailBan();
 
-	void SetEnabled(bool enabled);
-	void SetTries(int tries);
-
 	void RecordFailure(uint32_t ipv4);
-
-	int64_t GetCooldownTimestamp();
-	void Cooldown();
 
 	bool IsAllowed(uint32_t ipv4);
 	bool Ban(uint32_t ipv4);
@@ -25,67 +24,89 @@ public:
 
 	CowBuffer<uint32_t> ListBanned();
 
+	void ProcessTimeEvent() override;
+	void ReloadConfig() override;
+
 private:
-	struct Entry
+	EventDispatcher *_dispatcher;
+	Config *_config;
+
+	String _rootPath;
+
+	struct BannedEntry
 	{
 		uint32_t IPv4;
-		int IndexInFile;
+		int64_t UnbanTime;
 
-		Entry *Left;
-		Entry *Right;
-
-		Entry()
+		BannedEntry()
 		{
-			Left = nullptr;
-			Right = nullptr;
+			IPv4 = 0;
+			UnbanTime = 0;
 		}
 
-		~Entry()
+		BannedEntry(uint32_t ipv4)
 		{
-			if (Left) {
-				delete Left;
-			}
+			IPv4 = ipv4;
+			UnbanTime = 0;
+		}
 
-			if (Right) {
-				delete Right;
-			}
+		bool operator==(const BannedEntry &e) const
+		{
+			return IPv4 == e.IPv4;
+		}
+
+		bool operator<(const BannedEntry &e) const
+		{
+			return IPv4 < e.IPv4;
 		}
 	};
 
-	struct FreeIndex
+	struct SuspiciousEntry
 	{
-		int Index;
-		FreeIndex *Next;
+		uint32_t IPv4;
+		int32_t FailCount;
+		int64_t ActionTime;
+
+		SuspiciousEntry()
+		{
+			IPv4 = 0;
+			FailCount = 0;
+			ActionTime = 0;
+		}
+
+		SuspiciousEntry(uint32_t ipv4)
+		{
+			IPv4 = ipv4;
+			FailCount = 0;
+			ActionTime = 0;
+		}
+
+		bool operator==(const SuspiciousEntry &e) const
+		{
+			return IPv4 == e.IPv4;
+		}
+
+		bool operator<(const SuspiciousEntry &e) const
+		{
+			return IPv4 < e.IPv4;
+		}
 	};
 
-	Entry *_db;
-	bool Add(uint32_t ip, int index);
-	Entry **Find(uint32_t ip);
-	void Remove(Entry **entry);
-	int CountEntries(Entry *entry);
-	void FillArray(Entry *entry, uint32_t *array, int *index);
-
-	FreeIndex *_freeIndices;
+	Tree<BannedEntry> _bannedAddresses;
+	Tree<SuspiciousEntry> _suspiciousAddresses;
 
 	bool _enabled;
 	int _tries;
-
-	BinaryFile _file;
+	int64_t _banTime;
+	int64_t _cooldownInterval;
 
 	void Load();
-	void Free();
+	void LoadConfig();
 
-	struct Counter
-	{
-		uint32_t IPv4;
-		int FailureCount;
+	void CheckBanned();
+	void CheckSuspicious();
 
-		Counter *Next;
-	};
-
-	const int _CounterCount = 65536;
-	Counter **_counters;
-	int64_t _cooldownTimestamp;
+	void FailBanLog(String message);
 };
 
 #endif

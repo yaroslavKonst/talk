@@ -4,7 +4,7 @@
 #include "Screen.hpp"
 #include "Root.hpp"
 #include "UiHelpers.hpp"
-#include "ContactStorage.hpp"
+#include "../Message/ContactStorage.hpp"
 
 class ContactScreen : public Screen
 {
@@ -14,6 +14,8 @@ public:
 
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;
+
+	CowBuffer<String> GetControlHelp();
 
 private:
 	Root *_root;
@@ -28,7 +30,6 @@ private:
 	{
 		List,
 		Add,
-		Manage
 	};
 
 	Mode _mode;
@@ -36,9 +37,6 @@ private:
 	UiHelpers::TextBox _newContactName;
 	void DrawAddWindow();
 	Screen *ProcessAddEvent(int event);
-
-	void DrawManageWindow();
-	Screen *ProcessManageEvent(int event);
 };
 
 #endif

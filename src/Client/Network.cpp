@@ -139,7 +139,9 @@ bool Network::HandshakeActive()
 	return _handshake;
 }
 
-void Network::StartConnection(int fd, const uint8_t *serverKey)
+void Network::StartConnection(
+	int fd,
+	const Crypto::X25519::PublicKeyContainer &serverKey)
 {
 	SetTimestamp(GetUnixTime());
 
@@ -156,8 +158,8 @@ void Network::StartConnection(int fd, const uint8_t *serverKey)
 	_handshake = new ClientHandshake(
 		_fd,
 		name,
-		_root->PrivateKey,
-		_root->PublicKey,
+		*_root->PrivateKey,
+		*_root->PublicKey,
 		serverKey);
 
 	_root->Dispatcher->RegisterDescriptorProcessor(this);
@@ -171,6 +173,36 @@ bool Network::AddContact(String name)
 	}
 
 	_session->AddContact(name);
+	return true;
+}
+
+bool Network::UpdateContactKey(
+	String contactName,
+	const Crypto::X25519::PublicKeyContainer &key,
+	bool validated,
+	bool blocked,
+	bool setAsDefault)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->UpdateContactKey(
+		contactName,
+		key,
+		validated,
+		blocked,
+		setAsDefault);
+	return true;
+}
+
+bool Network::BlockContact(String contactName, Contact::BlockStatus block)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->BlockContact(contactName, block);
 	return true;
 }
 

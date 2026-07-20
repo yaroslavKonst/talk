@@ -5,14 +5,15 @@
 UserDB::UserDB(
 	EventDispatcher *dispatcher,
 	Config *config,
-	const uint8_t *privateKey,
-	const uint8_t *publicKey)
+	FailBan *failBan,
+	const Crypto::X25519::PrivateKeyContainer &privateKey,
+	const Crypto::X25519::PublicKeyContainer &publicKey) :
+	_privateKey(privateKey),
+	_publicKey(publicKey)
 {
 	_dispatcher = dispatcher;
 	_config = config;
-
-	_privateKey = privateKey;
-	_publicKey = publicKey;
+	_failBan = failBan;
 
 	_startupSessions = nullptr;
 	_timeQuantRequested = false;
@@ -54,7 +55,9 @@ User *UserDB::GetUser(String name)
 	return data->Key.user;
 }
 
-void UserDB::AddUser(String name, const uint8_t key[KEY_SIZE])
+void UserDB::AddUser(
+	String name,
+	const Crypto::X25519::PublicKeyContainer &key)
 {
 	if (HasUser(name)) {
 		THROW("User with name " + name + " already exists.");
@@ -124,6 +127,7 @@ void UserDB::AddSession(int fd, int32_t ip)
 		ip,
 		this,
 		_dispatcher,
+		_failBan,
 		_privateKey,
 		_publicKey);
 

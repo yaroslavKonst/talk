@@ -10,6 +10,10 @@ SERVER_MODULES =\
 	Server/ServerHandshake.o \
 	Server/ServerSession.o \
 	Server/GateSession.o \
+	Server/ObjectType.o \
+	Server/FailBan.o \
+	Message/ContactStorage.o \
+	Protocol/ParserHelpers.o \
 	Protocol/HandshakeParser.o \
 	Protocol/SessionProtocol.o \
 	Protocol/SessionParser.o \
@@ -32,12 +36,14 @@ SERVERCTL_MODULES=\
 	ServerCtl/ServerCtlMain.o \
 	ServerCtl/RequestBuilder.o \
 	ServerCtl/ResponseProcessor.o \
+	Protocol/ParserHelpers.o \
 	Protocol/ControlParser.o \
 	Common/UnixTime.o \
 	Common/MyString.o \
 	Common/Version.o \
 	Common/StreamReader.o \
-	Common/StreamWriter.o
+	Common/StreamWriter.o \
+	ThirdParty/monocypher.o
 
 CLIENT_MODULES=\
 	Client/Client.o \
@@ -46,7 +52,6 @@ CLIENT_MODULES=\
 	Client/Config.o \
 	Client/Network.o \
 	Client/ChatList.o \
-	Client/Chat.o \
 	Client/ClientHandshake.o \
 	Client/ClientSession.o \
 	Client/UI.o \
@@ -55,12 +60,16 @@ CLIENT_MODULES=\
 	Client/WorkScreen.o \
 	Client/LoginScreen.o \
 	Client/ContactScreen.o \
+	Client/ContactManageScreen.o \
 	Client/NotificationSystem.o \
-	Client/ContactStorage.o \
+	Message/ContactStorage.o \
+	Message/Message.o \
+	Protocol/ParserHelpers.o \
 	Protocol/HandshakeParser.o \
 	Protocol/SessionProtocol.o \
 	Protocol/SessionParser.o \
 	Common/MyString.o \
+	Common/UTF8.o \
 	Common/Version.o \
 	Common/SignalHandling.o \
 	Common/IniFile.o \

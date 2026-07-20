@@ -10,11 +10,14 @@
 ListeningSocket::ListeningSocket(
 	UserDB *users,
 	EventDispatcher *dispatcher,
-	Config *config)
+	Config *config,
+	FailBan *failBan)
 {
 	_dispatcher = dispatcher;
 	_users = users;
 	_config = config;
+	_failBan = failBan;
+
 	_socketFd = -1;
 
 	_config->RegisterConfigUser(this);
@@ -44,13 +47,13 @@ void ListeningSocket::ProcessRead()
 		return;
 	}
 
-	/*bool allowed = _failBan.IsAllowed(addr.sin_addr.s_addr);
+	bool allowed = _failBan->IsAllowed(addr.sin_addr.s_addr);
 
 	if (!allowed) {
 		shutdown(fd, SHUT_RDWR);
 		close(fd);
 		return;
-	}*/
+	}
 
 	MakeNonblocking(fd);
 

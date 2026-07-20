@@ -6,7 +6,16 @@ export CXX = g++ -Wall -O3 -g
 export OBJ_FLAG = -c
 export STATIC_FLAG = -static
 
-.PHONY: all server client clean install installserver installclient tests
+.PHONY: \
+	all \
+	server \
+	client \
+	clean \
+	install \
+	installserver \
+	installclient \
+	tests \
+	testrun
 
 all:
 	cd src && $(MAKE) all
@@ -19,6 +28,9 @@ client:
 
 tests: all
 	cd tests && $(MAKE)
+
+testrun: tests
+	cd tests && $(MAKE) run
 
 clean:
 	rm -rf $(BUILD_DIR)

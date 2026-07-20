@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 #include <sys/stat.h>
+#include <cstdio>
 
 #include "Root.hpp"
 #include "Network.hpp"
@@ -9,6 +10,8 @@
 #include "ChatList.hpp"
 #include "../Common/SignalHandling.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/Hex.hpp"
+#include "../Common/File.hpp"
 #include "../Crypto/Crypto.hpp"
 #include "../ThirdParty/monocypher.h"
 
@@ -22,16 +25,14 @@ Client::Client()
 
 Client::~Client()
 {
-	crypto_wipe(_privateKey, KEY_SIZE);
-	crypto_wipe(_publicKey, KEY_SIZE);
 }
 
 int Client::Run()
 {
 	Root root;
 
-	root.PrivateKey = _privateKey;
-	root.PublicKey = _publicKey;
+	root.PrivateKey = &_privateKey;
+	root.PublicKey = &_publicKey;
 
 	EventDispatcher dispatcher(2000);
 	root.Dispatcher = &dispatcher;
@@ -87,11 +88,47 @@ void Client::GetPassword()
 	password.Wipe();
 }
 
+static void CheckAccountPresence(const Crypto::X25519::PublicKeyContainer &key)
+{
+	String path = "storage/" + DataToHex(key.Key, Crypto::X25519::KEY_SIZE);
+
+	if (FileExists(path)) {
+		return;
+	}
+
+	printf("Account with given key is not found. "
+		"Create new account? [y/N] ");
+	fflush(stdout);
+
+	String answer;
+
+	while (answer.Length() < 100) {
+		char c;
+		int res = read(0, &c, 1);
+
+		if (res <= 0 || c == '\n') {
+			break;
+		}
+
+		answer += c;
+	}
+
+	answer = answer.ToLowerCase();
+
+	if (answer == "y" || answer == "yes") {
+		return;
+	}
+
+	THROW("Account creation cancelled. Exit.");
+}
+
 void Client::GenerateKeys(const String &password)
 {
-	uint8_t salt[SALT_SIZE];
-	GetSalt("talk.salt", salt);
+	uint8_t salt[Crypto::X25519::SALT_SIZE];
+	Crypto::X25519::GetSalt("talk.salt", salt);
 	DeriveKey(password.CStr(), salt, _privateKey);
-	crypto_wipe(salt, SALT_SIZE);
+	crypto_wipe(salt, Crypto::X25519::SALT_SIZE);
 	GeneratePublicKey(_privateKey, _publicKey);
+
+	CheckAccountPresence(_publicKey);
 }

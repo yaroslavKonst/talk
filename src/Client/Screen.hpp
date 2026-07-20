@@ -13,6 +13,8 @@ public:
 	virtual void Redraw() = 0;
 	void ProcessResize();
 
+	virtual CowBuffer<String> GetControlHelp() = 0;
+
 protected:
 	int _rows;
 	int _columns;
