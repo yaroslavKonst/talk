@@ -16,6 +16,9 @@ FailBan::FailBan(EventDispatcher *dispatcher, Config *config)
 	_dispatcher = dispatcher;
 	_config = config;
 
+	_traverseBannedEntry = nullptr;
+	_traverseSuspiciousEntry = nullptr;
+
 	Load();
 	LoadConfig();
 
@@ -26,6 +29,7 @@ FailBan::FailBan(EventDispatcher *dispatcher, Config *config)
 FailBan::~FailBan()
 {
 	_config->UnregisterConfigUser(this);
+	_dispatcher->UnregisterQuantProcessor(this);
 	_dispatcher->UnregisterTimeProcessor(this);
 }
 
@@ -51,6 +55,11 @@ void FailBan::RecordFailure(uint32_t ipv4)
 
 	if (entry->Key.FailCount < _tries) {
 		return;
+	}
+
+	if (_traverseSuspiciousEntry == entry) {
+		_traverseSuspiciousEntry =
+			_suspiciousAddresses.Next(_traverseSuspiciousEntry);
 	}
 
 	_suspiciousAddresses.RemoveEntry(entry);
@@ -93,6 +102,11 @@ bool FailBan::Unban(uint32_t ipv4)
 
 	DeleteFile(_rootPath + "/" + IPToString(ipv4));
 
+	if (_traverseBannedEntry == entry) {
+		_traverseBannedEntry =
+			_bannedAddresses.Next(_traverseBannedEntry);
+	}
+
 	_bannedAddresses.RemoveEntry(entry);
 
 	FailBanLog(IPToString(ipv4) + " is unbanned.");
@@ -128,8 +142,26 @@ CowBuffer<uint32_t> FailBan::ListBanned()
 
 void FailBan::ProcessTimeEvent()
 {
+	if (_traverseBannedEntry || _traverseSuspiciousEntry) {
+		return;
+	}
+
+	_traverseBannedEntry = _bannedAddresses.FindSmallest();
+	_traverseSuspiciousEntry = _suspiciousAddresses.FindSmallest();
+
+	if (_traverseBannedEntry || _traverseSuspiciousEntry) {
+		_dispatcher->RegisterQuantProcessor(this);
+	}
+}
+
+void FailBan::ProcessQuant()
+{
 	CheckBanned();
 	CheckSuspicious();
+
+	if (_traverseBannedEntry || _traverseSuspiciousEntry) {
+		_dispatcher->RegisterQuantProcessor(this);
+	}
 }
 
 void FailBan::ReloadConfig()
@@ -165,6 +197,8 @@ void FailBan::Load()
 
 		_bannedAddresses.AddEntry(entry);
 	}
+
+	ProcessTimeEvent();
 }
 
 void FailBan::LoadConfig()
@@ -180,48 +214,48 @@ void FailBan::LoadConfig()
 
 void FailBan::CheckBanned()
 {
-	Tree<BannedEntry>::Entry *entry = _bannedAddresses.FindSmallest();
+	if (!_traverseBannedEntry) {
+		return;
+	}
 
-	while (entry) {
-		if (entry->Key.UnbanTime <= GetUnixTime()) {
-			uint32_t ip = entry->Key.IPv4;
-			entry = _bannedAddresses.Next(entry);
-			Unban(ip);
-		} else {
-			entry = _bannedAddresses.Next(entry);
-		}
+	Tree<BannedEntry>::Entry *entry = _traverseBannedEntry;
+	_traverseBannedEntry = _bannedAddresses.Next(_traverseBannedEntry);
+
+	if (entry->Key.UnbanTime <= GetUnixTime()) {
+		uint32_t ip = entry->Key.IPv4;
+		Unban(ip);
 	}
 }
 
 void FailBan::CheckSuspicious()
 {
-	Tree<SuspiciousEntry>::Entry *entry =
-		_suspiciousAddresses.FindSmallest();
+	if (!_traverseSuspiciousEntry) {
+		return;
+	}
 
-	while (entry) {
-		Tree<SuspiciousEntry>::Entry *current = entry;
-		entry = _suspiciousAddresses.Next(entry);
+	Tree<SuspiciousEntry>::Entry *entry = _traverseSuspiciousEntry;
+	_traverseSuspiciousEntry =
+		_suspiciousAddresses.Next(_traverseSuspiciousEntry);
 
-		if (current->Key.ActionTime + _cooldownInterval > GetUnixTime())
-		{
-			continue;
-		}
+	if (entry->Key.ActionTime + _cooldownInterval > GetUnixTime())
+	{
+		return;
+	}
 
-		if (current->Key.FailCount > 1) {
-			current->Key.FailCount -= 1;
-			current->Key.ActionTime = GetUnixTime();
+	if (entry->Key.FailCount > 1) {
+		entry->Key.FailCount -= 1;
+		entry->Key.ActionTime = GetUnixTime();
 
-			FailBanLog("Cooldown for " +
-				IPToString(current->Key.IPv4) +
-				". Fails: " +
-				ToString(current->Key.FailCount) + ".");
-		} else {
-			FailBanLog("Cooldown for " +
-				IPToString(current->Key.IPv4) +
-				". Address is clear.");
+		FailBanLog("Cooldown for " +
+			IPToString(entry->Key.IPv4) +
+			". Fails: " +
+			ToString(entry->Key.FailCount) + ".");
+	} else {
+		FailBanLog("Cooldown for " +
+			IPToString(entry->Key.IPv4) +
+			". Address is clear.");
 
-			_suspiciousAddresses.RemoveEntry(current);
-		}
+		_suspiciousAddresses.RemoveEntry(entry);
 	}
 }
 

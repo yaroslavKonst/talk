@@ -10,7 +10,8 @@
 // All IPv4 addresses are stored and processed in network byte order.
 class FailBan :
 	public ConfigUser,
-	public TimeEventProcessor
+	public TimeEventProcessor,
+	public QuantEventProcessor
 {
 public:
 	FailBan(EventDispatcher *dispatcher, Config *config);
@@ -25,6 +26,7 @@ public:
 	CowBuffer<uint32_t> ListBanned();
 
 	void ProcessTimeEvent() override;
+	void ProcessQuant() override;
 	void ReloadConfig() override;
 
 private:
@@ -94,6 +96,9 @@ private:
 
 	Tree<BannedEntry> _bannedAddresses;
 	Tree<SuspiciousEntry> _suspiciousAddresses;
+
+	Tree<BannedEntry>::Entry *_traverseBannedEntry;
+	Tree<SuspiciousEntry>::Entry *_traverseSuspiciousEntry;
 
 	bool _enabled;
 	int _tries;

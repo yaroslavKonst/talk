@@ -108,6 +108,8 @@ void EventDispatcher::RegisterDescriptorProcessor(
 				oldPollFds,
 				sizeof(*_pollFds) * _reservedFds);
 			delete[] oldPollFds;
+
+			_reservedFds *= 2;
 		}
 	}
 
@@ -171,7 +173,9 @@ void EventDispatcher::UnregisterQuantProcessor(
 				_quantProcessorLast = prev;
 			}
 
-			delete curr;
+			QuantProcessorNode *tmp = curr;
+			curr = curr->Next;
+			delete tmp;
 		} else {
 			prev = curr;
 			curr = curr->Next;

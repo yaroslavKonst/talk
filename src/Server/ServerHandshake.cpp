@@ -52,8 +52,6 @@ ServerHandshake::~ServerHandshake()
 		_fd = -1;
 
 		_failBan->RecordFailure(_ip);
-	} else {
-		HandshakeLog(_user->GetName(), "Handshake success.");
 	}
 
 	if (_reader) {
@@ -318,6 +316,7 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 	}
 
 	HandshakeLog(_user->GetName(), "Challenge accepted.");
+	HandshakeLog(_user->GetName(), "Handshake success.");
 
 	_user->AddSession(
 		_fd,

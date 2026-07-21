@@ -9,7 +9,6 @@ class ContactStorage;
 
 class Contact
 {
-	//friend class ContactStorage;
 public:
 	enum class BlockStatus : uint8_t
 	{
