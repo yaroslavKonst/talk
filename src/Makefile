@@ -71,6 +71,7 @@ CLIENT_MODULES=\
 	Common/MyString.o \
 	Common/UTF8.o \
 	Common/Version.o \
+	Common/Resolver.o \
 	Common/SignalHandling.o \
 	Common/IniFile.o \
 	Common/BinaryFile.o \

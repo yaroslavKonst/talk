@@ -315,13 +315,11 @@ void ContactManageScreen::DrawManageKeyWindow()
 	int baseY = _rows / 2;
 	int baseX = _columns / 2;
 
-	int xOffset = Crypto::X25519::KEY_SIZE + 3;
-
 	UiHelpers::ClearScreen(
 		baseY - 4,
 		baseY + 4,
-		baseX - xOffset - 3,
-		baseX + xOffset + 3);
+		0,
+		_columns - 1);
 
 	Contact *contact = _contacts->GetContact(_contactName);
 
@@ -335,8 +333,8 @@ void ContactManageScreen::DrawManageKeyWindow()
 	UiHelpers::DrawFrame(
 		baseY - 3,
 		baseY + 3,
-		baseX - xOffset - 2,
-		baseX + xOffset + 2,
+		1,
+		_columns - 2,
 		"Manage " + keyHex,
 		COLOR_PAIR(YELLOW_TEXT));
 

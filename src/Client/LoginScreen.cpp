@@ -13,6 +13,7 @@
 #include "WorkScreen.hpp"
 #include "../Common/Hex.hpp"
 #include "../Common/File.hpp"
+#include "../Common/Resolver.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
 LoginScreen::LoginScreen(Root *root)
@@ -23,7 +24,7 @@ LoginScreen::LoginScreen(Root *root)
 
 	_root = root;
 
-	_ip.Caption = "IP address: ";
+	_ip.Caption = "Host name: ";
 	_port.Caption = "Port: ";
 	_serverKeyHex.Caption = "Server public key: ";
 
@@ -86,6 +87,8 @@ static bool LegalIpChar(int event)
 {
 	return
 		(event >= '0' && event <= '9') ||
+		(event >= 'a' && event <= 'z') ||
+		(event >= 'A' && event <= 'Z') ||
 		event == '.' ||
 		event == '\b';
 }
@@ -206,20 +209,23 @@ Screen *LoginScreen::ProcessConnection()
 	Crypto::X25519::PublicKeyContainer serverKey;
 	HexToData(_serverKeyHex.Text, serverKey.Key);
 
-	uint16_t port = atoi(_port.Text.CStr());
+	void *blockHandle = _root->Ui->BlockNotify("Connecting...");
 
-	if (port == 0) {
-		_root->Ui->Notify("Invalid port number.");
+	Resolver resolver(_root->Dispatcher);
+	resolver.Resolve(_ip.Text, _port.Text, SOCK_STREAM);
+	int res = resolver.GetResolveStatus();
+
+	if (res) {
+		_root->Ui->BlockCancel(blockHandle);
+		_root->Ui->Notify("Failed to resolve host name.");
 		return this;
 	}
 
-	struct sockaddr_in addr;
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	int res = inet_aton(_ip.Text.CStr(), &addr.sin_addr);
+	struct addrinfo *addrs = resolver.GetResolveResult();
 
-	if (!res) {
-		_root->Ui->Notify("Invalid IP address.");
+	if (!addrs) {
+		_root->Ui->BlockCancel(blockHandle);
+		_root->Ui->Notify("Host name has no addresses.");
 		return this;
 	}
 
@@ -231,24 +237,41 @@ Screen *LoginScreen::ProcessConnection()
 		_modified = false;
 	}
 
-	void *blockHandle = _root->Ui->BlockNotify("Connecting...");
+	int socketFd = -1;
 
-	int socketFd = socket(AF_INET, SOCK_STREAM, 0);
+	while (addrs) {
+		socketFd = socket(addrs->ai_family, addrs->ai_socktype, 0);
+
+		if (socketFd == -1) {
+			addrs = addrs->ai_next;
+			continue;
+		}
+
+		res = connect(
+			socketFd,
+			addrs->ai_addr,
+			addrs->ai_addrlen);
+
+		if (res != -1) {
+			break;
+		}
+
+		close(socketFd);
+		addrs = addrs->ai_next;
+	}
+
+	resolver.Clear();
 
 	if (socketFd == -1) {
 		_root->Ui->BlockCancel(blockHandle);
-		_root->Ui->Notify("Failed to create socket.");
+		_root->Ui->Notify(
+			String("Failed to create socket: ") +
+			strerror(errno) + ".");
 		return this;
 	}
 
-	res = connect(
-		socketFd,
-		(struct sockaddr*)&addr,
-		sizeof(addr));
-
 	if (res == -1) {
 		_root->Ui->BlockCancel(blockHandle);
-		close(socketFd);
 		_root->Ui->Notify(
 			String("Failed to connect: ") + strerror(errno) + ".");
 		return this;
