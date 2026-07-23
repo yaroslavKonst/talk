@@ -9,7 +9,7 @@ in order to make it harder for an eavesdropper to identify the protocol
 and parse the data.
 
 The client and the server are assumed to know each other's public keys.
-It as achieved by key exchange during user registration on the server.
+It is achieved by key exchange during user registration on the server.
 
 The client protocol is expected to run over TCP connection.
 
@@ -89,7 +89,7 @@ Before encryption the sender increases nonce value by one.
 
 The receiver checks whether the nonce in received message is greater than
 stored from previous message. If it is not so, the message is discarded
-and not decrypted. If the messasge was decrypted, the receiver stores its
+and not decrypted. If the message was decrypted, the receiver stores its
 nonce value for next message check.
 
 Step 1: Syn
@@ -357,7 +357,7 @@ Each item in the sequence has its unique 32 byte identifier.
 
 When it is needed to synchronize local client's database with the server's
 database the server needs to know the ID recorded by the client. This ID
-points on the latest item in the event sequence that was sent to the client.
+points to the latest item in the event sequence that was sent to the client.
 
 | REQUEST_ID |
 
@@ -630,10 +630,10 @@ subscriptions.
 When a user logs in and opens a chat, the client sends a presence subscription
 request to the peer. If presence data sharing is allowed, the server sends
 user status and adds a subscription, so it will automatically send status
-updates when necessary without requests. A subscription has a limitied
+updates when necessary without requests. A subscription has a limited
 duration to prevent its infinite lifetime. In the end of subscription
 the server notifies the requesting server about it. The requesting server can
-stop the subscription in any time if it is not needed. For example, if the
+stop the subscription at any time if it is not needed. For example, if the
 user logged out.
 
 Requesting presence:

@@ -4,42 +4,136 @@ Overview
 
 Gate protocol is used for communication between servers.
 
+It is expected to run over TCP connection.
+
 Handshake
 #########
 #########
 
+Notes on cryptography
+#####################
+
+Key exchange and derivation scheme: keys are derived from the same shared
+secret calculated via key exchange. The shared secret is then hashed with
+the requesting server public key, the responding server public key and salt
+(or a concatenation of salts if multiple must be used).
+
+The hash size is twice as big as key. Then hash is split into two parts,
+each part becomes a key for one direction in duplex channels.
+This scheme is used for generation of all symmetric keys.
+
+Nonce is a counter in big endian byte order. Sender must initialize the nonce.
+Several first bytes are initialized as zeroes to provide a space for the
+nonce value to grow. All subsequent bytes can be initialized as random values.
+Receiver initializes its stored nonce value as zero.
+
+Before encryption the sender increases nonce value by one.
+
+The receiver checks whether the nonce in received message is greater than
+stored from previous message. If it is not so, the message is discarded
+and not decrypted, the session is closed. If the message was decrypted,
+the receiver stores its nonce value for next message check.
+In case of decryption failure the session is closed.
+
+Handshake scheme
+################
+
 requesting server                                    responding server
 | -----------------------------------------------------------------> |
-| | protocol version | encryption scheme | req server name |...      |
-|                              | req server public key | signature | |
+|                                                                    |
+|                         +----------------+                         |
+|                         | Signed variant |                         |
+|                         +----------------+                         |
+|                                                                    |
+| | message size | protocol version | encryption scheme |...         |
+|                                                                    |
+|      ...| requesting server name | session public key |...         |
+|                                                                    |
+|                                         ...| salt 1 | signature |  |
+|                                                                    |
+|                                 OR                                 |
+|                                                                    |
+|                        +------------------+                        |
+|                        | Unsigned variant |                        |
+|                        +------------------+                        |
+|                                                                    |
+| | message size | protocol version | encryption scheme |...         |
+|                                                                    |
+|        ...| requesting server name | session public key | salt 1 | |
 |                                                                    |
 |                                                     +--------------|
 |                                                     | verification |
 |                                                     +--------------|
 |                                                                    |
 | <----------------------------------------------------------------- |
-|       | res server name | res server public key | signature |      |
+|                                                                    |
+|                         +----------------+                         |
+|                         | Signed variant |                         |
+|                         +----------------+                         |
+|                                                                    |
+|  | message size | protocol version | encryption scheme |...        |
+|                                                                    |
+|        ...| responding server name | session public key |...       |
+|                                                                    |
+|                                         ...| salt 2 | signature |  |
+|                                                                    |
+|                                 OR                                 |
+|                                                                    |
+|                        +------------------+                        |
+|                        | Unsigned variant |                        |
+|                        +------------------+                        |
+|                                                                    |
+|  | message size | protocol version | encryption scheme |...        |
+|                                                                    |
+|       ...| responding server name | session public key | salt 2 |  |
+|                                                                    |
 |                                OR                                  |
-|                  | REQUEST_RATE_LIMIT_REACHED |                    |
-|                                OR                                  |
-|                 | UNSUPPORTED_ENCRYPTION_SCHEME |                  |
-|                                OR                                  |
-|                 | UNSUPPORTED_PROTOCOL_VERSION |                   |
+|                  | message size | error code |                     |
 |                                                                    |
 |--------------+                                                     |
 | verification |                                                     |
 |--------------+                                                     |
+|                                                                    |
+| -----------------------------------------------------------------> |
+|                         | status code |                            |
 |                                                                    |
 |--------------------------------+  +--------------------------------|
 |     Session key generation     |  |     Session key generation     |
 | if verification was successful |  | if verification was successful |
 |--------------------------------+  +--------------------------------|
 
+"message size": 32 bit unsigned integer;
+"protocol version": 32 bit integer;
+"encryption scheme": 32 bit integer;
+all server names are strings with length prefix (see TypeFormats);
+"session public key": byte array with public key of the selected
+                      encryption scheme;
+salts are 32 byte arrays.
+
+Signatures sign the whole message if present.
+
+Session public keys are public parts of one-time key pairs that are used only
+in this session.
+
+Session keys are derived from key pairs by key exchange and use salt 1 and
+salt 2 concatenation during hashing.
+
+Error codes are 32 bit integers.
+Error code list:
+REQUEST_RATE_LIMIT_REACHED
+UNSUPPORTED_PROTOCOL_VERSION
+UNSUPPORTED_ENCRYPTION_SCHEME
+VERIFICATION_FAILURE
+
+Status code is 32 bit integer and can be
+SUCCESS
+VERIFICATION_FAILURE
+
 Verification
 ############
 
 In case of verification failure the server may immediately close the connection
-or response with error code.
+or respond with error code.
 
 Verification of IP host names
 -----------------------------
@@ -50,8 +144,7 @@ steps:
   IP address as in the host name.
 
 In this case the signature can't be checked. So, the server can apply
-restrictions to the recieved data. For example, decline spam reports
-and mark received messages to warn the user.
+restrictions to the received data. For example, decline spam reports.
 
 Verification of DNS host names
 -----------------------------
@@ -64,6 +157,16 @@ steps:
   it must include a string "talkdkey=SIGNATURE_PUBLIC_KEY_HEX". All other text
   is ignored;
 * received data signature is checked using public key from DNS.
+
+If DNS does not have key record step 4 can be omitted. Otherwise the request
+must be signed. If DNS has key record unsigned handshakes must lead to
+verification failure.
+
+Note
+----
+
+Unsigned handshake provides protection only against eavesdropping, not
+against MITM.
 
 DoS protection
 ##############
@@ -78,17 +181,49 @@ Session
 #######
 
 The session protocol is based on commands with the following structure:
-| command id | optional payload |
+| command size | MAC | nonce | command id | payload |
+
+Response:
+| response size | MAC | nonce | payload |
+
+All commands and responses are encrypted with session keys. From this
+point only command id and payload fields will be shown on the diagrams.
+But all commands and responses have to be encrypted.
+
+MAC and encryption cover command identifiers and payloads of commands and
+responses.
+
+All size fields introduced in this subsection are 64 bit unsigned integers,
+command identifier is a 32 bit integer.
 
 After the session start the server which initiated the session becomes the
 session leader.
 
 The session leader can initiate actions during the session, the other
 server must not initiate any actions. When the session leader has finished
-all planned actions it can send the END command. After it the other server
-becomes the session leader, it can send commands to initiate actions. In
-this case the session continues. Or the other server may immediately send
-the END command. In this case the session is closed.
+all planned actions it must close connection.
+
+Both the connection initiator and responding server may maintain connection
+timeouts. Timeout occurs if connection is not used for data transmission.
+If timeout is reached the server can close connection.
+
+Maximum message size request
+############################
+
+Servers may define maximum command sizes. These limits apply to everything:
+command payloads, maximum message header and body sizes.
+
+If the message size field has too big value the message receiver may
+immediately close session.
+
+It may be useful to check maximum allowed command size beforehand.
+
+sender                                   receiver
+| --------------------------------------------> |
+|           | GET_MAX_COMMAND_SIZE |            |
+|                                               |
+| <-------------------------------------------- |
+|   | maximum size (64 bit unsigned integer) |  |
 
 User public key request
 #######################
@@ -111,11 +246,11 @@ does not want to disclose user key for some reason.
 Message delivery
 ################
 
-Message delivery has the fillowing scheme.
+Message delivery has the following scheme.
 
 sender                                                      receiver
 | ---------------------------------------------------------------> |
-|        | MESSAGE | message header | message body size |          |
+|                  | MESSAGE | message header |                    |
 |                                                                  |
 |                                                   +--------------|
 |                                                   | verification |
@@ -126,7 +261,7 @@ sender                                                      receiver
 |  | TEXT | rejection reason description in human readable form |  |
 |                                                                  |
 | <--------------------------------------------------------------- |
-|                | MESSAGE | verification status |                 |
+|                     | verification status |                      |
 |                                                                  |
 |----------------------------------+                               |
 | End of message transmission with |                               |
@@ -145,7 +280,7 @@ sender                                                      receiver
 
 Message header verification may involve the following checks:
 * destination fields must contain existing user and valid key;
-* source field must contain correst source server name (relaying messages from
+* source field must contain correct source server name (relaying messages from
   other servers is not allowed);
 * message body size limit;
 * spam filter;
@@ -154,7 +289,7 @@ Message header verification may involve the following checks:
 
 If any verification step is failed, then message delivery is interrupted,
 sender may be informed about rejection reason via verification status.
-Message receiver can provide more detailed error descriprion via text message.
+Message receiver can provide more detailed error description via text message.
 
 Header verification status list:
 ACCEPT -- header is OK, proceed.
@@ -263,17 +398,38 @@ block lists, spam filters etc.
 
 Stream control logic is described in the client protocol specification.
 
+Since it may take a significant amount of time to answer or the channel may
+be unused for some time during active stream connection it is allowed to
+send keep alive commands during stream sessions to prevent session timeout.
+
+Keep alive messages are allowed only after STREAM_REQUEST response if
+response is WAITING_FOR_ANSWER and until STREAM_END command or DECLINE peer
+response.
+
+sender                                   receiver
+| <-------------------------------------------> |
+|                | KEEP_ALIVE |                 |
+
+Sender is responsible for timeout tracking. If session is near timeout time
+sender must send KEEP_ALIVE command. Receiver must respond with the same
+command.
+
 User presence
 #############
 
 Detailed description of presence status sharing is available in Client protocol
 specification.
 
+All data that is marked as encrypted, MAC and nonce fields are processed by
+client software that has access to user private keys. It allows to ensure
+authenticity and consistency of presence data.
+
 Subscription:
 sender                                                               receiver
 | ------------------------------------------------------------------------> |
 | | PRESENCE_SUBSCRIBE | name | key | timestamp | MAC | nonce |...          |
-|                                                   | encrypted user name | |
+|                                                                           |
+|                                                ...| encrypted user name | |
 |                                                                           |
 |                                                            +--------------|
 |                                                            | verification |
@@ -296,9 +452,11 @@ Presence status update:
 sender                                                               receiver
 | ------------------------------------------------------------------------> |
 | | PRESENCE_STATUS | presence status | name | key | MAC | nonce |...       |
-|                                                 | encrypted response |    |
-|                                     \--------------------------------/    |
-|                                                  optional                 |
+|                                     \---------------------------...       |
+|                                                    optional               |
+|                                                                           |
+|                                              ...| encrypted response |    |
+|                                              ...---------------------/    |
 
 Presence status list:
 OFFLINE -- all clients are offline or don't want to respond.
@@ -321,8 +479,8 @@ spam. The size of the list is the spam score of the address.
 Each entry in the list must be signed by the server's key in order to prevent
 spam reporting from nonexistent servers.
 
-The servers may exchange their spam databases during commections.
-During data acquirement the receiving server must verify each line.
+The servers may exchange their spam databases during connections.
+During data acquisition the receiving server must verify each line.
 
 The lifetime of one spam entry is one year. After this period it must be
 deleted from the spam database.
