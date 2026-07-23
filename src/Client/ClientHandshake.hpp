@@ -24,6 +24,7 @@ public:
 	bool ProcessWrite();
 
 	bool ConnectionSuccessful();
+	bool ErrorState();
 
 	Crypto::X25519::EncryptedStream &GetOutES()
 	{
@@ -52,7 +53,8 @@ private:
 	{
 		WaitingSynAckSize,
 		WaitingSynAck,
-		Ready
+		Ready,
+		Error
 	};
 
 	State _state;

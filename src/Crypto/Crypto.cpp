@@ -132,11 +132,7 @@ namespace Crypto
 	{
 		static void UpdateNonce(uint8_t nonce[NONCE_SIZE])
 		{
-			int64_t t = GetUnixTime();
-
-			memcpy(nonce, &t, sizeof(t));
-
-			for (int i = NONCE_SIZE - 1; i >= (int)sizeof(t); i--) {
+			for (int i = NONCE_SIZE - 1; i >= 0; i--) {
 				if (nonce[i] < 255) {
 					nonce[i] += 1;
 					break;
@@ -150,17 +146,7 @@ namespace Crypto
 			const uint8_t prevNonce[NONCE_SIZE],
 			const uint8_t nonce[NONCE_SIZE])
 		{
-			int64_t prevT;
-			int64_t t;
-
-			memcpy(&prevT, prevNonce, sizeof(t));
-			memcpy(&t, nonce, sizeof(t));
-
-			if (t < prevT) {
-				return false;
-			}
-
-			for (int i = sizeof(t); i < NONCE_SIZE; i++) {
+			for (int i = 0; i < NONCE_SIZE; i++) {
 				if (prevNonce[i] < nonce[i]) {
 					return true;
 				} else if (prevNonce[i] > nonce[i]) {
@@ -173,13 +159,8 @@ namespace Crypto
 
 		void InitNonce(uint8_t nonce[NONCE_SIZE])
 		{
-			int64_t t = GetUnixTime();
-			memcpy(nonce, &t, sizeof(t));
-
-			int offset = sizeof(t);
-
-			memset(nonce + offset, 0, 2);
-			offset += 2;
+			memset(nonce, 0, 2);
+			int offset = 2;
 
 			GenerateRandomData(
 				NONCE_SIZE - offset,
@@ -343,7 +324,7 @@ namespace Crypto
 			crypto_x25519_public_key(publicKey.Key, privateKey.Key);
 		}
 
-		void GenerateSessionKeys(
+		bool GenerateSessionKeys(
 			const PrivateKeyContainer &privateKey,
 			const PublicKeyContainer &publicKey,
 			const PublicKeyContainer &peerPublicKey,
@@ -357,6 +338,13 @@ namespace Crypto
 				sharedSecret,
 				privateKey.Key,
 				peerPublicKey.Key);
+
+			uint8_t zeroBuffer[KEY_SIZE];
+			memset(zeroBuffer, 0, KEY_SIZE);
+
+			if (!crypto_verify32(sharedSecret, zeroBuffer)) {
+				return false;
+			}
 
 			uint8_t sharedKeys[KEY_SIZE * 2];
 			crypto_blake2b_ctx ctx;
@@ -399,6 +387,8 @@ namespace Crypto
 
 			crypto_wipe(sharedSecret, KEY_SIZE);
 			crypto_wipe(sharedKeys, KEY_SIZE * 2);
+
+			return true;
 		}
 
 		void GenerateEphemeralKeyPair(

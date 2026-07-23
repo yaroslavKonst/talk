@@ -15,6 +15,8 @@ ClientHandshake::ClientHandshake(
 {
 	_root = root;
 
+	_state = State::Error;
+
 	_fd = fd;
 	_name = name;
 
@@ -113,6 +115,11 @@ bool ClientHandshake::ConnectionSuccessful()
 	return _state == State::Ready && !_writer && !_reader;
 }
 
+bool ClientHandshake::ErrorState()
+{
+	return _state == State::Error;
+}
+
 void ClientHandshake::InitSyn()
 {
 	_salt1 = CowBuffer<uint8_t>(32);
@@ -142,7 +149,7 @@ void ClientHandshake::InitSyn()
 
 	Crypto::X25519::SymmetricKeyContainer unusedKey;
 
-	Crypto::X25519::GenerateSessionKeys(
+	bool validSessionKeys = Crypto::X25519::GenerateSessionKeys(
 		oneTimePrivateKey,
 		oneTimePublicKey,
 		_serverPublicKey,
@@ -150,6 +157,12 @@ void ClientHandshake::InitSyn()
 		oneTimeES.Key,
 		unusedKey,
 		true);
+
+	if (!validSessionKeys) {
+		_root->Ui->Notify("Key exchange failed for user name.");
+		_state = State::Error;
+		return;
+	}
 
 	data.OneTimeKey = oneTimePublicKey;
 
@@ -245,7 +258,7 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
-	Crypto::X25519::GenerateSessionKeys(
+	bool validSessionKeys = Crypto::X25519::GenerateSessionKeys(
 		_privateKey,
 		_publicKey,
 		_serverPublicKey,
@@ -253,6 +266,11 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 		_inES.Key,
 		_outES.Key,
 		true);
+
+	if (!validSessionKeys) {
+		_root->Ui->Notify("Key exchange failed for handshake keys.");
+		return false;
+	}
 
 	Crypto::X25519::InitNonce(_outES.Nonce);
 	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
@@ -301,7 +319,7 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 
 	_writer = new StreamWriter(_fd, outBuffer);
 
-	Crypto::X25519::GenerateSessionKeys(
+	validSessionKeys = Crypto::X25519::GenerateSessionKeys(
 		ephemeralPrivateKey,
 		ephemeralPublicKey,
 		data.ServerSessionPublicKey,
@@ -309,6 +327,11 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 		_inES.Key,
 		_outES.Key,
 		true);
+
+	if (!validSessionKeys) {
+		_root->Ui->Notify("Key exchange failed for session keys.");
+		return false;
+	}
 
 	Crypto::X25519::InitNonce(_outES.Nonce);
 	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);

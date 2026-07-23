@@ -179,7 +179,7 @@ namespace Crypto
 			const PrivateKeyContainer &privateKey,
 			PublicKeyContainer &publicKey);
 
-		void GenerateSessionKeys(
+		bool GenerateSessionKeys(
 			const PrivateKeyContainer &privateKey,
 			const PublicKeyContainer &publicKey,
 			const PublicKeyContainer &peerPublicKey,
@@ -193,9 +193,9 @@ namespace Crypto
 			PublicKeyContainer &publicKey);
 
 		void GenerateSignature(
-			const uint8_t seed[KEY_SIZE],
+			uint8_t seed[KEY_SIZE],
 			SignaturePrivateKeyContainer &signaturePrivateKey,
-			SignaturePublicKeyContainer signaturePublicKey);
+			SignaturePublicKeyContainer &signaturePublicKey);
 
 		void GetSalt(String file, uint8_t salt[SALT_SIZE]);
 

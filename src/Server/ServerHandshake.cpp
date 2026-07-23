@@ -239,7 +239,14 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 	_salt1 = data.Salt1;
 
 	GenerateEphemeralKeys();
-	GenerateHandshakeKeys();
+
+	if (!GenerateHandshakeKeys()) {
+		HandshakeLog(
+			userName,
+			"Key exchange failed for handshake keys.");
+		_storage->MarkSessionForRemoval(this);
+		return;
+	}
 
 	HandshakeSynAck::Data outData;
 	outData.ProtocolVersion = data.ProtocolVersion;
@@ -339,7 +346,7 @@ String ServerHandshake::DecryptUserNameFromSyn(
 	Crypto::X25519::SymmetricKeyContainer userNameKey;
 	Crypto::X25519::SymmetricKeyContainer unusedKey;
 
-	Crypto::X25519::GenerateSessionKeys(
+	bool validSessionKeys = Crypto::X25519::GenerateSessionKeys(
 		_privateKey,
 		_publicKey,
 		data.OneTimeKey,
@@ -347,6 +354,12 @@ String ServerHandshake::DecryptUserNameFromSyn(
 		userNameKey,
 		unusedKey,
 		false);
+
+	if (!validSessionKeys) {
+		HandshakeLog("", "Key exchange failed for user name.");
+		_storage->MarkSessionForRemoval(this);
+		return "";
+	}
 
 	Crypto::X25519::EncryptedStream userNameStream;
 	userNameStream.Key = userNameKey;
@@ -377,9 +390,9 @@ void ServerHandshake::GenerateEphemeralKeys()
 		_ephemeralPublicKey);
 }
 
-void ServerHandshake::GenerateHandshakeKeys()
+bool ServerHandshake::GenerateHandshakeKeys()
 {
-	GenerateSessionKeys(
+	bool validSessionKeys = GenerateSessionKeys(
 		_privateKey,
 		_publicKey,
 		_user->GetPublicKey(),
@@ -388,8 +401,14 @@ void ServerHandshake::GenerateHandshakeKeys()
 		_inES.Key,
 		false);
 
+	if (!validSessionKeys) {
+		return false;
+	}
+
 	Crypto::X25519::InitNonce(_outES.Nonce);
 	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
+
+	return true;
 }
 
 void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
@@ -435,12 +454,11 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 	}
 
 	HandshakeLog(_user->GetName(), "Challenge accepted.");
-	HandshakeLog(_user->GetName(), "Handshake success.");
 
 	Crypto::X25519::EncryptedStream outStream;
 	Crypto::X25519::EncryptedStream inStream;
 
-	Crypto::X25519::GenerateSessionKeys(
+	bool validSessionKeys = Crypto::X25519::GenerateSessionKeys(
 		_ephemeralPrivateKey,
 		_ephemeralPublicKey,
 		data.ClientSessionPublicKey,
@@ -449,8 +467,18 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 		inStream.Key,
 		false);
 
+	if (!validSessionKeys) {
+		HandshakeLog(
+			_user->GetName(),
+			"Key exchange failed for session keys.");
+		_storage->MarkSessionForRemoval(this);
+		return;
+	}
+
 	Crypto::X25519::InitNonce(outStream.Nonce);
 	memset(inStream.Nonce, 0, Crypto::X25519::NONCE_SIZE);
+
+	HandshakeLog(_user->GetName(), "Handshake success.");
 
 	_user->AddSession(
 		_fd,

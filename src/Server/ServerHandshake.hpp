@@ -67,7 +67,7 @@ private:
 		const HandshakeSyn::Data &data,
 		const CowBuffer<uint8_t> buffer);
 	void GenerateEphemeralKeys();
-	void GenerateHandshakeKeys();
+	bool GenerateHandshakeKeys();
 
 	void ProcessAck(CowBuffer<uint8_t> buffer);
 

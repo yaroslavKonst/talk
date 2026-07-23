@@ -163,6 +163,11 @@ void Network::StartConnection(
 		*_root->PublicKey,
 		serverKey);
 
+	if (_handshake->ErrorState()) {
+		CloseConnection();
+		return;
+	}
+
 	_root->Dispatcher->RegisterDescriptorProcessor(this);
 	_root->Dispatcher->RegisterTimeProcessor(this);
 }
