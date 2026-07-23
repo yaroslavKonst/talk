@@ -151,14 +151,14 @@ namespace Crypto
 		CowBuffer<uint8_t> Encrypt(
 			const CowBuffer<uint8_t> plaintext,
 			EncryptedStream &stream,
-			const uint8_t *addData = nullptr,
-			uint64_t addSize = 0);
+			const CowBuffer<uint8_t> addData =
+				CowBuffer<uint8_t>());
 
 		CowBuffer<uint8_t> Decrypt(
 			const CowBuffer<uint8_t> cyphertext,
-			struct EncryptedStream &stream,
-			const uint8_t *addData = nullptr,
-			uint64_t addSize = 0);
+			EncryptedStream &stream,
+			const CowBuffer<uint8_t> addData =
+				CowBuffer<uint8_t>());
 
 		void Sign(
 			const CowBuffer<uint8_t> data,
@@ -183,13 +183,17 @@ namespace Crypto
 			const PrivateKeyContainer &privateKey,
 			const PublicKeyContainer &publicKey,
 			const PublicKeyContainer &peerPublicKey,
-			int64_t addition,
+			const CowBuffer<uint8_t> addition,
 			SymmetricKeyContainer &sessionKey1,
 			SymmetricKeyContainer &sessionKey2,
 			bool invert = false);
 
+		void GenerateEphemeralKeyPair(
+			PrivateKeyContainer &privateKey,
+			PublicKeyContainer &publicKey);
+
 		void GenerateSignature(
-			uint8_t seed[KEY_SIZE],
+			const uint8_t seed[KEY_SIZE],
 			SignaturePrivateKeyContainer &signaturePrivateKey,
 			SignaturePublicKeyContainer signaturePublicKey);
 

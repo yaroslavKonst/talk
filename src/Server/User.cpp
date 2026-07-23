@@ -70,8 +70,8 @@ User::~User()
 
 void User::AddSession(
 	int fd,
-	Crypto::X25519::EncryptedStream *outES,
-	Crypto::X25519::EncryptedStream *inES,
+	const Crypto::X25519::EncryptedStream &outES,
+	const Crypto::X25519::EncryptedStream &inES,
 	uint8_t outScramblerInit,
 	uint8_t inScramblerInit)
 {

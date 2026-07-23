@@ -80,7 +80,7 @@ static void WriteEntryData(
 		const Message::ContentsEntryKey *e =
 			static_cast<const Message::ContentsEntryKey*>(entry);
 		BuildString(buffer, offset, e->UserName);
-		*buffer.SwitchType<int32_t>(offset) = e->Key.KeyType;
+		*buffer.SwitchType<int32_t>(offset) = e->KeyType;
 		offset += sizeof(int32_t);
 		memcpy(buffer.Pointer(offset), e->Key.Key, KEY_SIZE);
 		offset += KEY_SIZE;
@@ -216,6 +216,7 @@ bool Message::ParseContents(
 			e->Type = ContentsEntryType::Key;
 			e->UserName = userName;
 
+			e->Key.KeyType = *data.SwitchType<int32_t>(dataOffset);
 			dataOffset += sizeof(int32_t);
 
 			memcpy(

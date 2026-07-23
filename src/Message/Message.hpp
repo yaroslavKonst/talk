@@ -63,6 +63,7 @@ namespace Message
 	struct ContentsEntryKey : public ContentsEntry
 	{
 		String UserName;
+		int32_t KeyType;
 		Crypto::X25519::PublicKeyContainer Key;
 	};
 

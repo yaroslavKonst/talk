@@ -156,6 +156,7 @@ void Network::StartConnection(
 	}
 
 	_handshake = new ClientHandshake(
+		_root,
 		_fd,
 		name,
 		*_root->PrivateKey,

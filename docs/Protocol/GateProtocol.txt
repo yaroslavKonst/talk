@@ -21,6 +21,10 @@ requesting server                                    responding server
 |       | res server name | res server public key | signature |      |
 |                                OR                                  |
 |                  | REQUEST_RATE_LIMIT_REACHED |                    |
+|                                OR                                  |
+|                 | UNSUPPORTED_ENCRYPTION_SCHEME |                  |
+|                                OR                                  |
+|                 | UNSUPPORTED_PROTOCOL_VERSION |                   |
 |                                                                    |
 |--------------+                                                     |
 | verification |                                                     |

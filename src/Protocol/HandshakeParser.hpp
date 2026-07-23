@@ -3,59 +3,66 @@
 
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
-#include "../Crypto/CryptoDefinitions.hpp"
+#include "../Crypto/Crypto.hpp"
+
+#define HANDSHAKE_RESPONSE_UNSUPPORTED_PROTOCOL_VERSION 1
+#define HANDSHAKE_RESPONSE_UNSUPPORTED_ENCRYPTION_SCHEME 2
 
 namespace Handshake
 {
 	enum
 	{
-		ChallengeSize = 64,
-		EncryptedChallengeSize =
-			ChallengeSize +
-			Crypto::X25519::CRYPTO_HEADER_SIZE
+		ChallengeSize = 64
 	};
 }
 
+// Parser for Syn before encryption.
 namespace HandshakeSyn
 {
 	struct Data
 	{
 		int32_t ProtocolVersion;
 		int32_t EncryptionScheme;
-		String Name;
+		CowBuffer<uint8_t> Salt1;
+		CowBuffer<uint8_t> OneTimeSalt;
+		Crypto::X25519::PublicKeyContainer OneTimeKey;
+		CowBuffer<uint8_t> EncryptedName; // | MAC | nonce | name |
 	};
 
 	bool Parse(const CowBuffer<uint8_t> buffer, Data &result);
 	CowBuffer<uint8_t> Build(const Data &data);
 }
 
+// Parser for decrypted SynAck.
 namespace HandshakeSynAck
 {
-	enum
-	{
-		Length = sizeof(int64_t) + Handshake::EncryptedChallengeSize
-	};
-
 	struct Data
 	{
-		int64_t Timestamp;
-		const uint8_t *Challenge;
+		int32_t ProtocolVersion;
+		int32_t EncryptionScheme;
+		CowBuffer<uint8_t> Challenge;
+		Crypto::X25519::PublicKeyContainer ServerSessionPublicKey;
+		CowBuffer<uint8_t> Salt2;
 	};
 
 	bool Parse(const CowBuffer<uint8_t> buffer, Data &result);
 	CowBuffer<uint8_t> Build(const Data &data);
 }
 
+// Parser for decrypted Ack.
 namespace HandshakeAck
 {
-	enum
+	enum : uint64_t
 	{
-		Length = Handshake::EncryptedChallengeSize
+		Length =
+			(uint64_t)Handshake::ChallengeSize +
+			(uint64_t)Crypto::X25519::KEY_SIZE
 	};
 
 	struct Data
 	{
-		const uint8_t *Challenge;
+		CowBuffer<uint8_t> Challenge;
+		Crypto::X25519::PublicKeyContainer ClientSessionPublicKey;
 	};
 
 	bool Parse(const CowBuffer<uint8_t> buffer, Data &result);

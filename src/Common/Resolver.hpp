@@ -18,7 +18,9 @@ public:
 	virtual void ResolveCompleted() = 0;
 };
 
-class Resolver : public DescriptorEventProcessor
+class Resolver :
+	public DescriptorEventProcessor,
+	public QuantEventProcessor
 {
 public:
 	Resolver(EventDispatcher *dispatcher);
@@ -37,6 +39,8 @@ public:
 	bool RequestWrite() override;
 	void ProcessRead() override;
 	void ProcessWrite() override;
+
+	void ProcessQuant() override;
 
 private:
 	EventDispatcher *_dispatcher;

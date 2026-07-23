@@ -20,11 +20,15 @@ Resolver::Resolver(EventDispatcher *dispatcher)
 
 Resolver::~Resolver()
 {
-	if (_fd[0] != -1) {
-		ProcessRead();
-	}
+	_dispatcher->UnregisterQuantProcessor(this);
+
+	_resolverUser = nullptr;
 
 	try {
+		if (_fd[0] != -1) {
+			ProcessRead();
+		}
+
 		Clear();
 	} catch (const Exception &ex) {
 		Log("Resolver: " + ex.What());
@@ -169,14 +173,19 @@ void Resolver::ProcessRead()
 		THROW("Failed to join thread.");
 	}
 
-	if (_resolverUser) {
-		_resolverUser->ResolveCompleted();
-	}
+	_dispatcher->RegisterQuantProcessor(this);
 }
 
 void Resolver::ProcessWrite()
 {
 	THROW("This method must never be called.");
+}
+
+void Resolver::ProcessQuant()
+{
+	if (_resolverUser) {
+		_resolverUser->ResolveCompleted();
+	}
 }
 
 void *Resolver::ThreadFunction(void *data)

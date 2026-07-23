@@ -98,4 +98,6 @@ all active streams in the group and all active users.
 Any change in the list is sent to all clients that participate in group
 stream.
 
-TODO.
+When the client connects to group stream, the server sends a list of
+all existing streams to the client. Then the client may send requests to join
+or leave each stream.

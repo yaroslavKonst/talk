@@ -11,6 +11,8 @@ and parse the data.
 The client and the server are assumed to know each other's public keys.
 It as achieved by key exchange during user registration on the server.
 
+The client protocol is expected to run over TCP connection.
+
 Some types used in this document are described in TypeFormats.txt.
 
 Handshake
@@ -25,62 +27,209 @@ It consists of three steps.
 
 client                                                         server
 | ----------------------------------------------------------------> |
-| | scrambler init | protocol version | encryption scheme | name |  |
+| | scrambler init | syn size |...                                  |
+|                  \-----------...                                  |
+|                                                                   |
+|     ...| protocol version | encryption scheme |...                |
+|     ...----------------------------------------...                |
+|                   authenticated                                   |
+|                                                                   |
+|       ...| random salt 1 | one time salt | one time key |...      |
+|       ...-----------------------------------------------/         |
+|                                                                   |
+|                                      ...| MAC | nonce | name |    |
+|                                                       \------/    |
+|                                                       encrypted   |
 |                                                                   |
 | <---------------------------------------------------------------- |
-|    | scrambler init | timestamp | encrypted challenge (key1) |    |
+| | scrambler init | SynAck size | MAC | nonce |...                 |
+|                  \-------------/                                  |
+|                   authenticated                                   |
+|                                                                   |
+|            ...| protocol version | encryption scheme |...         |
+|               \---------------------------------------...         |
+|                                                                   |
+|      ...| challenge | server session public key | random salt 2 | |
+|      ...--------------------------------------------------------/ |
+|                    encrypted                                      |
+|                               OR                                  |
+|  | scrambler init | SynAck size | UNSUPPORTED_ENCRYPTION_SCHEME | |
+|                               OR                                  |
+|  | scrambler init | SynAck size | UNSUPPORTED_PROTOCOL_VERSION |  |
 |                                                                   |
 | ----------------------------------------------------------------> |
-|                 | encrypted challenge (key2) |                    |
+| | MAC | nonce | challenge response | client session public key |  |
+|               \------------------------------------------------/  |
+|                                  encrypted                        |
+|                                                                   |
+|------------------------+                 +------------------------|
+| Session key generation |                 | Session key generation |
+|------------------------+                 +------------------------|
+
+Notes on cryptography
+#####################
+
+Key exchange and derivation scheme: keys are derived from the same shared
+secret calculated via key exchange. The shared secret is then hashed with
+the server public key, the client public key and salt (or a concatenation
+of salts if multiple must be used).
+
+The hash size is twice as big as key. Then hash is split into two parts,
+each part becomes a key for one direction in duplex channels.
+This scheme is used for generation of all symmetric keys.
+For encryption in channels with only one direction only the first resulting
+key is used.
+
+Nonce is a counter in big endian byte order. Sender must initialize the nonce.
+Several first bytes are initialized as zeroes to provide a space for the
+nonce value to grow. All subsequent bytes can be initialized as random values.
+Receiver initializes its stored nonce value as zero.
+
+Before encryption the sender increases nonce value by one.
+
+The receiver checks whether the nonce in received message is greater than
+stored from previous message. If it is not so, the message is discarded
+and not decrypted. If the messasge was decrypted, the receiver stores its
+nonce value for next message check.
 
 Step 1: Syn
 ###########
 
 client                                                         server
 | ----------------------------------------------------------------> |
-| | scrambler init | protocol version | encryption scheme | name |  |
+| | scrambler init | syn size |...                                  |
+|                  \-----------...                                  |
+|                                                                   |
+|     ...| protocol version | encryption scheme |...                |
+|     ...----------------------------------------...                |
+|                   authenticated                                   |
+|                                                                   |
+|       ...| random salt 1 | one time salt | one time key |...      |
+|       ...-----------------------------------------------/         |
+|                                                                   |
+|                                      ...| MAC | nonce | name |    |
+|                                                       \------/    |
+|                                                       encrypted   |
 
 "scrambler init": byte;
+"syn size": 32 bit unsigned integer, length of all fields except
+            scrambler init;
 "protocol version": 32 bit integer;
 "encryption scheme": 32 bit integer;
-"name": string.
+"random salt 1": 32 random bytes;
+"one time salt": 32 random bytes;
+"one time key": public key of selected encryption scheme;
+"name": name string without prefix with string size.
 
-The client sends its user name to the server. Name is prepended by a
-scrambler init.
+The client generates random salt 1 and generates handshake keys using its
+private key, stored server public key and salt 1.
+A pair of handshake keys is used only during handshake for authentication.
+Each key is used for one direction: key 1 is used from server to client,
+key 2 is used from client to server.
 
-The server checks whether the user with this name exists. If so,
-the server uses the current time as salt and generates two keys that
-will be used as session keys. Each key is used for one direction.
+The client generates one time salt and generates one time key pair
+to encrypt the user name and sign the whole Syn message.
+
+Then the client generates a symmetric key for name encryption by exchanging
+between one time private key and stored server public key.
+
+Then the client sends its encrypted user name, one time key and salts to
+the server.
+One time keys for user name are wiped.
+
+All encrypted and authenticated fields are protected by one MAC.
+User name is encrypted, other authenticated data is processed as associated
+data in single AEAD call.
+
+The server checks protocol version and encryption scheme.
+
+Then the server uses the one time salt and key to generate a symmetric key.
+This key allows to decrypt the user name and proceed to its verification.
+
+Then the server uses the salt 1 and generates two handshake session keys by
+key exchange between server private key and stored client public key.
+
+If the syn size field is too big to have a valid user name the server can
+state that handshake is failed and close the connection.
 
 Step 2: SynAck
 ##############
 
-client                                                     server
-| <------------------------------------------------------------ |
-|  | scrambler init | timestamp | encrypted challenge (key1) |  |
+client                                                         server
+| <---------------------------------------------------------------- |
+| | scrambler init | SynAck size | MAC | nonce |...                 |
+|                  \-------------/                                  |
+|                   authenticated                                   |
+|                                                                   |
+|            ...| protocol version | encryption scheme |...         |
+|               \---------------------------------------...         |
+|                                                                   |
+|      ...| challenge | server session public key | random salt 2 | |
+|      ...--------------------------------------------------------/ |
+|                    encrypted                                      |
+|                               OR                                  |
+|  | scrambler init | SynAck size | UNSUPPORTED_ENCRYPTION_SCHEME | |
+|                               OR                                  |
+|  | scrambler init | SynAck size | UNSUPPORTED_PROTOCOL_VERSION |  |
 
 "scrambler init": byte;
-"timestamp": a 64-bit signed integer.
-"encrypted challenge": | MAC | nonce | encrypted challenge bytes |
+"SynAck size": 32 bit unsigned integer, message size without scrambler init;
+"protocol version": 32 bit integer;
+"encryption scheme": 32 bit integer;
+"challenge": 64 bytes;
+"server session public key": key size for selected encryption scheme;
+"random salt 2": 32 random bytes.
 
-The server generates random 64 byte challenge and encrypts it with its
-session key. Then the server sends encrypted challenge and timestamp
-used for key generation to the client.
+Notifications about unsupported protocol properties are 32 bit integers.
+
+The server generates new key pair that will be used for session key
+generation only for this session.
+
+The server generates random 64 byte challenge and salt 2.
+
+The protocol version and encryption scheme are added to the message
+to allow client to check whether the server received the proper values of
+these parameters.
+
+Then the server encrypts all data with the handshake key 1 and
+sends it to the client.
+
+If the client asked for unsupported protocol the server must send notification
+about it and close the connection.
 
 Step 3: Ack
 ###########
 
-client                                                     server
-| ------------------------------------------------------------> |
-|               | encrypted challenge (key2) |                  |
+client                                                         server
+| ----------------------------------------------------------------> |
+| | MAC | nonce | challenge response | client session public key |  |
+|               \------------------------------------------------/  |
+|                                  encrypted                        |
 
-The client receives timestamp and challende from the server, generates session
-keys, decrypts the challenge and encrypts it with another session key. Then
-the client sends encrypted challenge back to the server. On this point
-the client considers that the handshake is finished successfully.
+The client receives SynAck from the server and decrypts it.
+The client must check the correctness of protocol version and encryption
+scheme.
+
+Then the client generates a new key pair for the new session.
+
+Then the client sends challenge response and its session public key both
+encrypted by handshake key 2 back to the server.
+On this point the client considers that the handshake is finished successfully.
+
+Since the messages on the client side are decrypted with handshake key 1 and
+encrypted by another one the challenge will be received, decrypted and
+encrypted with another key. It allows the server to verify whether the
+client has the appropriate private key.
 
 The server decrypts the challenge and verifies it. If it is correct then
 the server considers that the handshake is finished successfully.
+
+When handshake is considered successful, the client and the server generate
+session keys by exchange between one time key pairs. The session keys are
+additionally hashed with salt 1 and salt 2. Key 1 is used for server to client
+direction, key 2 is used for the opposite direction.
+
+After the session key generation one time key pairs are wiped.
 
 In case of failure any side must interrupt the session by closing the TCP
 connection. Timeout is also considered as a failure and can cause consequences
@@ -101,6 +250,50 @@ Session
 After the successful handshake the client and the server have encrypted
 duplex channel for communication. Each direction has its own session key.
 
+Low level protocol structure
+############################
+
+On low level the protocol maintains a set of channels.
+Each channel has a static priority: channels with lower index have higher
+priority.
+
+When a message is sent, it is split into chunks at most 4 KB of size.
+Chunk length can not be zero.
+
+If multiple channels have enqueued chunks to be sent, a chunk from
+a channel with higher priority is selected.
+
+Each chunk is sent with a length prefix and channel ID:
+| chunk size | MAC | nonce | channel ID | payload |
+                           \----------------------/
+                                   encrypted
+
+Chunks are encrypted before being sent via the underlying TCP connection
+after stream selection. Since nonces are assigned only at encryption time,
+after stream selection, the nonce counter is maintained per direction at
+the connection level, not per channel.
+
+Chunk size (64 bit unsigned integer) covers MAC, nonce, channel ID and
+payload size.
+
+High level protocol structure
+#############################
+
+Data arrays are sent over the channel system in length prefixed manner:
+| data length (64 bit unsigned integer) | payload |
+
+When the data array is going to be sent, it is assigned to a channel number
+that must be used during transmission.
+
+Command structure
+#################
+
+Commands are sent as data arrays.
+Larger commands (for example, message sending commands) must be sent via
+channels with low priority since large commands may be transmitted for a
+significant period of time so smaller commands must have an ability to
+pass via channels with high priority during large command transmission.
+
 Command structure:
 | command id | optional payload |
 
@@ -109,6 +302,10 @@ structure:
 | command id | optional payload |
 
 "Command id": 32-bit unsigned integer.
+
+If the same command may be sent both by server and client, this command
+must not have answer since it will be impossible to distinguish answers
+from original commands.
 
 Command list
 ############
@@ -188,6 +385,11 @@ ID. It does not need a response.
 
 It must be sent after database item transmission to ensure consistency.
 
+The server may send the same item several times if the client's
+database has lost consistency and the client requested the wrong item.
+The client must be ready for such situation and silently ignore received
+items that are already in the client's local database.
+
 Managing contacts and their keys
 --------------------------------
 
@@ -202,6 +404,8 @@ contact list.
 "key": user key, 32 byte array.
 "validated": byte, considered as logical value. Whether to consider this key
              as checked for authenticity.
+"blocked": byte, considered as logical value. Whether to accept messages
+           containing this key.
 "default": byte, considered as logical value. Whether to use the key for
            new messages.
 

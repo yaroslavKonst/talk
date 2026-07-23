@@ -3,6 +3,7 @@
 
 #include "User.hpp"
 #include "FailBan.hpp"
+#include "../Protocol/HandshakeParser.hpp"
 #include "../Common/EventDispatcher.hpp"
 #include "../Common/StreamReader.hpp"
 #include "../Common/StreamWriter.hpp"
@@ -44,9 +45,10 @@ private:
 
 	enum class State
 	{
-		WaitingSize,
+		WaitingSynSize,
 		WaitingSyn,
-		WaitingAck
+		WaitingAck,
+		SendAllAndExit
 	};
 
 	State _state;
@@ -56,16 +58,29 @@ private:
 	const Crypto::X25519::PrivateKeyContainer &_privateKey;
 	const Crypto::X25519::PublicKeyContainer &_publicKey;
 
-	void ProcessSize(CowBuffer<uint8_t> buffer);
+	void ProcessSynSize(CowBuffer<uint8_t> buffer);
+
 	void ProcessSyn(CowBuffer<uint8_t> buffer);
+	bool CheckProtocolVersion(const HandshakeSyn::Data &data);
+	bool CheckEncryptionScheme(const HandshakeSyn::Data &data);
+	String DecryptUserNameFromSyn(
+		const HandshakeSyn::Data &data,
+		const CowBuffer<uint8_t> buffer);
+	void GenerateEphemeralKeys();
+	void GenerateHandshakeKeys();
+
 	void ProcessAck(CowBuffer<uint8_t> buffer);
 
 	Crypto::X25519::EncryptedStream _inES;
 	Crypto::X25519::EncryptedStream _outES;
 	User *_user;
-	CowBuffer<uint8_t> _nameSize;
 
+	CowBuffer<uint8_t> _synSize;
 	CowBuffer<uint8_t> _challenge;
+	Crypto::X25519::PrivateKeyContainer _ephemeralPrivateKey;
+	Crypto::X25519::PublicKeyContainer _ephemeralPublicKey;
+	CowBuffer<uint8_t> _salt1;
+	CowBuffer<uint8_t> _salt2;
 
 	uint8_t _inScramblerInit;
 	uint8_t _outScramblerInit;

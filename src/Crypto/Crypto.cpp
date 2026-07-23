@@ -207,8 +207,7 @@ namespace Crypto
 		CowBuffer<uint8_t> Encrypt(
 			const CowBuffer<uint8_t> plaintext,
 			EncryptedStream &stream,
-			const uint8_t *addData,
-			uint64_t addSize)
+			const CowBuffer<uint8_t> addData)
 		{
 			CowBuffer<uint8_t> result(
 				MAC_SIZE + NONCE_SIZE + plaintext.Size());
@@ -227,8 +226,8 @@ namespace Crypto
 				mac,
 				stream.Key.Key,
 				nonce,
-				addData,
-				addSize,
+				addData.Pointer(),
+				addData.Size(),
 				plaintext.Pointer(),
 				plaintext.Size());
 
@@ -238,8 +237,7 @@ namespace Crypto
 		CowBuffer<uint8_t> Decrypt(
 			const CowBuffer<uint8_t> cyphertext,
 			EncryptedStream &stream,
-			const uint8_t *addData,
-			uint64_t addSize)
+			const CowBuffer<uint8_t> addData)
 		{
 			if (cyphertext.Size() <= MAC_SIZE + NONCE_SIZE) {
 				return CowBuffer<uint8_t>();
@@ -264,8 +262,8 @@ namespace Crypto
 				mac,
 				stream.Key.Key,
 				nonce,
-				addData,
-				addSize,
+				addData.Pointer(),
+				addData.Size(),
 				message,
 				result.Size());
 
@@ -349,7 +347,7 @@ namespace Crypto
 			const PrivateKeyContainer &privateKey,
 			const PublicKeyContainer &publicKey,
 			const PublicKeyContainer &peerPublicKey,
-			int64_t addition,
+			const CowBuffer<uint8_t> addition,
 			SymmetricKeyContainer &sessionKey1,
 			SymmetricKeyContainer &sessionKey2,
 			bool invert)
@@ -384,10 +382,12 @@ namespace Crypto
 					KEY_SIZE);
 			}
 
-			crypto_blake2b_update(
-				&ctx,
-				(uint8_t*)&addition,
-				sizeof(addition));
+			if (addition.Size() > 0) {
+				crypto_blake2b_update(
+					&ctx,
+					addition.Pointer(),
+					addition.Size());
+			}
 
 			crypto_blake2b_final(&ctx, sharedKeys);
 
@@ -399,6 +399,30 @@ namespace Crypto
 
 			crypto_wipe(sharedSecret, KEY_SIZE);
 			crypto_wipe(sharedKeys, KEY_SIZE * 2);
+		}
+
+		void GenerateEphemeralKeyPair(
+			PrivateKeyContainer &privateKey,
+			PublicKeyContainer &publicKey)
+		{
+			CowBuffer<uint8_t> sourceData(512);
+
+			Crypto::GenerateRandomData(
+				sourceData.Size(),
+				sourceData.Pointer(),
+				false);
+
+			CowBuffer<uint8_t> hash = Crypto::GetHash(
+				sourceData,
+				Crypto::X25519::KEY_SIZE);
+
+			privateKey = hash.Pointer();
+
+			memset(hash.Pointer(), 0, hash.Size());
+
+			Crypto::X25519::GeneratePublicKey(
+				privateKey,
+				publicKey);
 		}
 
 		void GenerateSignature(

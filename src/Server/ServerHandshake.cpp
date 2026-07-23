@@ -4,7 +4,6 @@
 #include <sys/socket.h>
 
 #include "User.hpp"
-#include "../Protocol/HandshakeParser.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Log.hpp"
@@ -26,13 +25,13 @@ ServerHandshake::ServerHandshake(
 
 	_fd = fd;
 	_ip = ip;
-	_state = State::WaitingSize;
+	_state = State::WaitingSynSize;
 	_storage = storage;
 	_dispatcher = dispatcher;
 	_failBan = failBan;
 
 	_user = nullptr;
-	_reader = new StreamReader(fd, sizeof(int32_t) * 3 + 1);
+	_reader = new StreamReader(fd, sizeof(int32_t) + 1);
 	_writer = nullptr;
 
 	_dispatcher->RegisterDescriptorProcessor(this);
@@ -110,8 +109,8 @@ void ServerHandshake::ProcessRead()
 	delete _reader;
 	_reader = nullptr;
 
-	if (_state == State::WaitingSize) {
-		ProcessSize(buffer);
+	if (_state == State::WaitingSynSize) {
+		ProcessSynSize(buffer);
 	} else if (_state == State::WaitingSyn) {
 		ProcessSyn(buffer);
 	} else if (_state == State::WaitingAck) {
@@ -131,7 +130,9 @@ void ServerHandshake::ProcessWrite()
 
 	if (!writeSuccess) {
 		delete _writer;
+		_writer = nullptr;
 		_storage->MarkSessionForRemoval(this);
+		return;
 	}
 
 	bool writeEnded = _writer->WritingEnd();
@@ -139,6 +140,10 @@ void ServerHandshake::ProcessWrite()
 	if (writeEnded) {
 		delete _writer;
 		_writer = nullptr;
+
+		if (_state == State::SendAllAndExit) {
+			_storage->MarkSessionForRemoval(this);
+		}
 	}
 }
 
@@ -158,9 +163,9 @@ void ServerHandshake::ProcessTimeEvent()
 	HandshakeLog(_user ? _user->GetName() : "", "Timeout.");
 }
 
-void ServerHandshake::ProcessSize(CowBuffer<uint8_t> buffer)
+void ServerHandshake::ProcessSynSize(CowBuffer<uint8_t> buffer)
 {
-	if (buffer.Size() != sizeof(int32_t) * 3 + 1) {
+	if (buffer.Size() != sizeof(int32_t) + 1) {
 		HandshakeLog("", "Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
@@ -174,16 +179,16 @@ void ServerHandshake::ProcessSize(CowBuffer<uint8_t> buffer)
 		buffer.Size(),
 		_inScramblerInit);
 
-	int32_t nameLength = *buffer.SwitchType<int32_t>(sizeof(int32_t) * 2);
+	uint32_t synLength = *buffer.SwitchType<uint32_t>();
 
-	if (nameLength > 500 || nameLength <= 0) {
-		HandshakeLog("", "Invalid size.");
+	if (synLength > 1024 || !synLength) {
+		HandshakeLog("", "Invalid Syn size.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
-	_nameSize = buffer;
-	_reader = new StreamReader(_fd, nameLength);
+	_synSize = buffer;
+	_reader = new StreamReader(_fd, synLength - sizeof(uint32_t));
 	_state = State::WaitingSyn;
 }
 
@@ -195,61 +200,78 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 		_inScramblerInit);
 
 	HandshakeSyn::Data data;
-	bool parseResult = HandshakeSyn::Parse(_nameSize.Concat(buffer), data);
+	bool parseResult = HandshakeSyn::Parse(buffer, data);
 
 	if (!parseResult) {
-		HandshakeLog("", "Protocol violation.");
+		HandshakeLog("", "Syn protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
-	if (data.ProtocolVersion != 0) {
-		HandshakeLog("", "Unsupported protocol version.");
+	parseResult = CheckProtocolVersion(data);
+
+	if (!parseResult) {
+		return;
+	}
+
+	parseResult = CheckEncryptionScheme(data);
+
+	if (!parseResult) {
+		return;
+	}
+
+	buffer = _synSize.Concat(buffer);
+
+	String userName = DecryptUserNameFromSyn(data, buffer);
+
+	if (!userName.Length()) {
+		return;
+	}
+
+	if (!_storage->HasUser(userName)) {
+		HandshakeLog(userName, "Invalid user.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
-	if (data.EncryptionScheme != Crypto::X25519::SCHEME_ID) {
-		HandshakeLog("", "Unsupported encryption scheme.");
-		_storage->MarkSessionForRemoval(this);
-		return;
-	}
-
-	if (!_storage->HasUser(data.Name)) {
-		HandshakeLog(data.Name, "Invalid user.");
-		_storage->MarkSessionForRemoval(this);
-		return;
-	}
-
-	_user = _storage->GetUser(data.Name);
+	_user = _storage->GetUser(userName);
 	_state = State::WaitingAck;
+	_salt1 = data.Salt1;
 
-	int64_t timestamp = GetUnixTime();
+	GenerateEphemeralKeys();
+	GenerateHandshakeKeys();
 
-	GenerateSessionKeys(
-		_privateKey,
-		_publicKey,
-		_user->GetPublicKey(),
-		timestamp,
-		_outES.Key,
-		_inES.Key);
+	HandshakeSynAck::Data outData;
+	outData.ProtocolVersion = data.ProtocolVersion;
+	outData.EncryptionScheme = data.EncryptionScheme;
 
-	Crypto::X25519::InitNonce(_outES.Nonce);
-	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
-
-	_challenge = CowBuffer<uint8_t>(Handshake::ChallengeSize);
+	outData.Challenge = CowBuffer<uint8_t>(Handshake::ChallengeSize);
 	Crypto::GenerateRandomData(
-		_challenge.Size(),
-		_challenge.Pointer(),
+		outData.Challenge.Size(),
+		outData.Challenge.Pointer(),
 		false);
 
-	CowBuffer<uint8_t> encryptedChallenge = Encrypt(_challenge, _outES);
+	_challenge = outData.Challenge;
 
-	HandshakeSynAck::Data response;
-	response.Timestamp = timestamp;
-	response.Challenge = encryptedChallenge.Pointer();
+	outData.ServerSessionPublicKey = _ephemeralPublicKey;
 
-	CowBuffer<uint8_t> responseData = HandshakeSynAck::Build(response);
+	_salt2 = CowBuffer<uint8_t>(32);
+	Crypto::GenerateRandomData(
+		_salt2.Size(),
+		_salt2.Pointer(),
+		false);
+
+	outData.Salt2 = _salt2;
+
+	CowBuffer<uint8_t> outBuffer = HandshakeSynAck::Build(outData);
+
+	CowBuffer<uint8_t> outSizeBuffer(sizeof(uint32_t));
+	*outSizeBuffer.SwitchType<uint32_t>() = outBuffer.Size() +
+		sizeof(uint32_t) + Crypto::X25519::CRYPTO_HEADER_SIZE;
+
+	outBuffer = Encrypt(outBuffer, _outES, outSizeBuffer);
+
+	outBuffer = outSizeBuffer.Concat(outBuffer);
 
 	Crypto::GenerateRandomData(
 		sizeof(_outScramblerInit),
@@ -260,17 +282,121 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 	outScrambler[0] = _outScramblerInit;
 
 	_outScramblerInit = Crypto::ApplyScrambler(
-		responseData.Pointer(),
-		responseData.Size(),
+		outBuffer.Pointer(),
+		outBuffer.Size(),
 		_outScramblerInit);
 
-	_writer = new StreamWriter(_fd, outScrambler.Concat(responseData));
-	_reader = new StreamReader(_fd, HandshakeAck::Length);
+	_writer = new StreamWriter(_fd, outScrambler.Concat(outBuffer));
+	_reader = new StreamReader(
+		_fd,
+		HandshakeAck::Length + Crypto::X25519::CRYPTO_HEADER_SIZE);
+}
+
+bool ServerHandshake::CheckProtocolVersion(const HandshakeSyn::Data &data)
+{
+	if (data.ProtocolVersion == 0) {
+		return true;
+	}
+
+	HandshakeLog("", "Unsupported protocol version.");
+
+	CowBuffer<uint8_t> response(sizeof(int32_t) * 2);
+
+	*response.SwitchType<uint32_t>() = response.Size();
+	*response.SwitchType<int32_t>(sizeof(uint32_t)) =
+		HANDSHAKE_RESPONSE_UNSUPPORTED_PROTOCOL_VERSION;
+
+	_writer = new StreamWriter(_fd, Crypto::ApplyScrambler(response));
+	_state = State::SendAllAndExit;
+
+	return false;
+}
+
+bool ServerHandshake::CheckEncryptionScheme(const HandshakeSyn::Data &data)
+{
+	if (data.EncryptionScheme == Crypto::X25519::SCHEME_ID) {
+		return true;
+	}
+
+	HandshakeLog("", "Unsupported encryption scheme.");
+
+	CowBuffer<uint8_t> response(sizeof(int32_t) * 2);
+
+	*response.SwitchType<uint32_t>() = response.Size();
+	*response.SwitchType<int32_t>(sizeof(uint32_t)) =
+		HANDSHAKE_RESPONSE_UNSUPPORTED_ENCRYPTION_SCHEME;
+
+	_writer = new StreamWriter(_fd, Crypto::ApplyScrambler(response));
+	_state = State::SendAllAndExit;
+
+	return false;
+}
+
+String ServerHandshake::DecryptUserNameFromSyn(
+	const HandshakeSyn::Data &data,
+	const CowBuffer<uint8_t> buffer)
+{
+	Crypto::X25519::SymmetricKeyContainer userNameKey;
+	Crypto::X25519::SymmetricKeyContainer unusedKey;
+
+	Crypto::X25519::GenerateSessionKeys(
+		_privateKey,
+		_publicKey,
+		data.OneTimeKey,
+		data.OneTimeSalt,
+		userNameKey,
+		unusedKey,
+		false);
+
+	Crypto::X25519::EncryptedStream userNameStream;
+	userNameStream.Key = userNameKey;
+	memset(userNameStream.Nonce, 0, Crypto::X25519::NONCE_SIZE);
+
+	CowBuffer<uint8_t> userNameString = Crypto::X25519::Decrypt(
+		data.EncryptedName,
+		userNameStream,
+		buffer.Slice(0, sizeof(int32_t) * 3 + 32 * 3));
+
+	if (!userNameString.Size()) {
+		HandshakeLog("", "User name decryption failed.");
+		_storage->MarkSessionForRemoval(this);
+		return "";
+	}
+
+	String userName(
+		userNameString.SwitchType<char>(),
+		userNameString.Size());
+
+	return userName;
+}
+
+void ServerHandshake::GenerateEphemeralKeys()
+{
+	Crypto::X25519::GenerateEphemeralKeyPair(
+		_ephemeralPrivateKey,
+		_ephemeralPublicKey);
+}
+
+void ServerHandshake::GenerateHandshakeKeys()
+{
+	GenerateSessionKeys(
+		_privateKey,
+		_publicKey,
+		_user->GetPublicKey(),
+		_salt1,
+		_outES.Key,
+		_inES.Key,
+		false);
+
+	Crypto::X25519::InitNonce(_outES.Nonce);
+	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
 }
 
 void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 {
-	if (buffer.Size() != HandshakeAck::Length) {
+	if (buffer.Size() !=
+		HandshakeAck::Length + Crypto::X25519::CRYPTO_HEADER_SIZE)
+	{
 		HandshakeLog(_user->GetName(), "Protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
@@ -281,33 +407,26 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 		buffer.Size(),
 		_inScramblerInit);
 
-	HandshakeAck::Data data;
-	bool parseResult = HandshakeAck::Parse(buffer, data);
+	buffer = Decrypt(buffer, _inES);
 
-	if (!parseResult) {
-		HandshakeLog(_user->GetName(), "Protocol violation.");
+	if (!buffer.Size()) {
+		HandshakeLog(_user->GetName(), "Challenge decryption failure.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
-	CowBuffer<uint8_t> encryptedChallenge(
-		Handshake::EncryptedChallengeSize);
-	memcpy(
-		encryptedChallenge.Pointer(),
-		data.Challenge,
-		encryptedChallenge.Size());
+	HandshakeAck::Data data;
+	bool parseResult = HandshakeAck::Parse(buffer, data);
 
-	CowBuffer<uint8_t> challenge = Decrypt(encryptedChallenge, _inES);
-
-	if (challenge.Size() != Handshake::ChallengeSize) {
-		HandshakeLog(_user->GetName(), "Challenge failed.");
+	if (!parseResult) {
+		HandshakeLog(_user->GetName(), "Ack protocol violation.");
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
 	bool validChallenge = !crypto_verify64(
 		_challenge.Pointer(),
-		challenge.Pointer());
+		data.Challenge.Pointer());
 
 	if (!validChallenge) {
 		HandshakeLog(_user->GetName(), "Challenge failed.");
@@ -318,10 +437,25 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 	HandshakeLog(_user->GetName(), "Challenge accepted.");
 	HandshakeLog(_user->GetName(), "Handshake success.");
 
+	Crypto::X25519::EncryptedStream outStream;
+	Crypto::X25519::EncryptedStream inStream;
+
+	Crypto::X25519::GenerateSessionKeys(
+		_ephemeralPrivateKey,
+		_ephemeralPublicKey,
+		data.ClientSessionPublicKey,
+		_salt1.Concat(_salt2),
+		outStream.Key,
+		inStream.Key,
+		false);
+
+	Crypto::X25519::InitNonce(outStream.Nonce);
+	memset(inStream.Nonce, 0, Crypto::X25519::NONCE_SIZE);
+
 	_user->AddSession(
 		_fd,
-		&_outES,
-		&_inES,
+		outStream,
+		inStream,
 		_outScramblerInit,
 		_inScramblerInit);
 

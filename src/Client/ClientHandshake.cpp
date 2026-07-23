@@ -4,6 +4,7 @@
 #include "../Common/Exception.hpp"
 
 ClientHandshake::ClientHandshake(
+	Root *root,
 	int fd,
 	String name,
 	const Crypto::X25519::PrivateKeyContainer &privateKey,
@@ -12,6 +13,8 @@ ClientHandshake::ClientHandshake(
 	_privateKey(privateKey),
 	_publicKey(publicKey)
 {
+	_root = root;
+
 	_fd = fd;
 	_name = name;
 
@@ -74,7 +77,13 @@ bool ClientHandshake::ProcessRead()
 	delete _reader;
 	_reader = nullptr;
 
-	return ProcessSynAck(buffer);
+	if (_state == State::WaitingSynAckSize) {
+		return ProcessSynAckSize(buffer);
+	} else if (_state == State::WaitingSynAck) {
+		return ProcessSynAck(buffer);
+	}
+
+	return false;
 }
 
 bool ClientHandshake::ProcessWrite()
@@ -106,12 +115,61 @@ bool ClientHandshake::ConnectionSuccessful()
 
 void ClientHandshake::InitSyn()
 {
+	_salt1 = CowBuffer<uint8_t>(32);
+	Crypto::GenerateRandomData(_salt1.Size(), _salt1.Pointer(), false);
+
+	CowBuffer<uint8_t> oneTimeSalt(32);
+	Crypto::GenerateRandomData(
+		oneTimeSalt.Size(),
+		oneTimeSalt.Pointer(),
+		false);
+
 	HandshakeSyn::Data data;
 	data.ProtocolVersion = 0;
 	data.EncryptionScheme = Crypto::X25519::SCHEME_ID;
-	data.Name = _name;
+	data.Salt1 = _salt1;
+	data.OneTimeSalt = oneTimeSalt;
 
-	CowBuffer<uint8_t> buffer = HandshakeSyn::Build(data);
+	Crypto::X25519::PrivateKeyContainer oneTimePrivateKey;
+	Crypto::X25519::PublicKeyContainer oneTimePublicKey;
+
+	Crypto::X25519::GenerateEphemeralKeyPair(
+		oneTimePrivateKey,
+		oneTimePublicKey);
+
+	Crypto::X25519::EncryptedStream oneTimeES;
+	Crypto::X25519::InitNonce(oneTimeES.Nonce);
+
+	Crypto::X25519::SymmetricKeyContainer unusedKey;
+
+	Crypto::X25519::GenerateSessionKeys(
+		oneTimePrivateKey,
+		oneTimePublicKey,
+		_serverPublicKey,
+		oneTimeSalt,
+		oneTimeES.Key,
+		unusedKey,
+		true);
+
+	data.OneTimeKey = oneTimePublicKey;
+
+	CowBuffer<uint8_t> synHeader = HandshakeSyn::Build(data);
+
+	CowBuffer<uint8_t> synSize(sizeof(uint32_t));
+	*synSize.SwitchType<uint32_t>() = synSize.Size() + synHeader.Size() +
+		Crypto::X25519::CRYPTO_HEADER_SIZE + _name.Length();
+
+	synHeader = synSize.Concat(synHeader);
+
+	CowBuffer<uint8_t> userNameString(_name.Length());
+	memcpy(userNameString.Pointer(), _name.CStr(), _name.Length());
+
+	CowBuffer<uint8_t> encryptedUserName = Crypto::X25519::Encrypt(
+		userNameString,
+		oneTimeES,
+		synHeader);
+
+	CowBuffer<uint8_t> synBuffer = synHeader.Concat(encryptedUserName);
 
 	Crypto::GenerateRandomData(
 		sizeof(_outScramblerInit),
@@ -122,19 +180,19 @@ void ClientHandshake::InitSyn()
 	outScrambler[0] = _outScramblerInit;
 
 	_outScramblerInit = Crypto::ApplyScrambler(
-		buffer.Pointer(),
-		buffer.Size(),
+		synBuffer.Pointer(),
+		synBuffer.Size(),
 		_outScramblerInit);
 
-	_writer = new StreamWriter(_fd, outScrambler.Concat(buffer));
-	_reader = new StreamReader(_fd, HandshakeSynAck::Length + 1);
+	_writer = new StreamWriter(_fd, outScrambler.Concat(synBuffer));
+	_reader = new StreamReader(_fd, sizeof(uint32_t) + 1);
 
-	_state = State::WaitingSynAck;
+	_state = State::WaitingSynAckSize;
 }
 
-bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
+bool ClientHandshake::ProcessSynAckSize(CowBuffer<uint8_t> buffer)
 {
-	if (buffer.Size() != HandshakeSynAck::Length + 1) {
+	if (buffer.Size() != sizeof(uint32_t) + 1) {
 		return false;
 	}
 
@@ -146,10 +204,44 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 		buffer.Size(),
 		_inScramblerInit);
 
-	HandshakeSynAck::Data data;
-	bool parseResult = HandshakeSynAck::Parse(buffer, data);
+	uint32_t synAckSize = *buffer.SwitchType<uint32_t>();
 
-	if (!parseResult) {
+	if (synAckSize > 512) {
+		return false;
+	}
+
+	_synAckSize = buffer;
+
+	_reader = new StreamReader(_fd, synAckSize - sizeof(uint32_t));
+
+	_state = State::WaitingSynAck;
+	return true;
+}
+
+bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
+{
+	_inScramblerInit = Crypto::ApplyScrambler(
+		buffer.Pointer(),
+		buffer.Size(),
+		_inScramblerInit);
+
+	if (buffer.Size() == sizeof(int32_t)) {
+		int32_t errorStatus = *buffer.SwitchType<int32_t>();
+
+		if (errorStatus ==
+			HANDSHAKE_RESPONSE_UNSUPPORTED_PROTOCOL_VERSION)
+		{
+			_root->Ui->Notify("Unsupported protocol version.");
+		} else if (errorStatus ==
+			HANDSHAKE_RESPONSE_UNSUPPORTED_ENCRYPTION_SCHEME)
+		{
+			_root->Ui->Notify("Unsupported encryption scheme.");
+		} else {
+			_root->Ui->Notify(
+				"Unknown error code from server: " +
+				ToString(errorStatus) + ".");
+		}
+
 		return false;
 	}
 
@@ -157,7 +249,7 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 		_privateKey,
 		_publicKey,
 		_serverPublicKey,
-		data.Timestamp,
+		_salt1,
 		_inES.Key,
 		_outES.Key,
 		true);
@@ -165,32 +257,61 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 	Crypto::X25519::InitNonce(_outES.Nonce);
 	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
 
-	CowBuffer<uint8_t> encryptedChallenge(
-		Handshake::EncryptedChallengeSize);
-	memcpy(
-		encryptedChallenge.Pointer(),
-		data.Challenge,
-		encryptedChallenge.Size());
+	buffer = Crypto::X25519::Decrypt(buffer, _inES, _synAckSize);
 
-	CowBuffer<uint8_t> challenge = Decrypt(encryptedChallenge, _inES);
-
-	if (challenge.Size() != Handshake::ChallengeSize) {
+	if (!buffer.Size()) {
+		_root->Ui->Notify("Failed to decrypt SynAck.");
 		return false;
 	}
 
-	challenge = Encrypt(challenge, _outES);
+	HandshakeSynAck::Data data;
+	bool parseResult = HandshakeSynAck::Parse(buffer, data);
 
-	HandshakeAck::Data response;
-	response.Challenge = challenge.Pointer();
+	if (!parseResult) {
+		_root->Ui->Notify("Failed to parse SynAck.");
+		return false;
+	}
 
-	CowBuffer<uint8_t> responseData = HandshakeAck::Build(response);
+	if (data.ProtocolVersion != 0 ||
+		data.EncryptionScheme != Crypto::X25519::SCHEME_ID)
+	{
+		_root->Ui->Notify("Invalid protocol parameters in SynAck.");
+		return false;
+	}
+
+	Crypto::X25519::PrivateKeyContainer ephemeralPrivateKey;
+	Crypto::X25519::PublicKeyContainer ephemeralPublicKey;
+
+	Crypto::X25519::GenerateEphemeralKeyPair(
+		ephemeralPrivateKey,
+		ephemeralPublicKey);
+
+	HandshakeAck::Data outData;
+	outData.Challenge = data.Challenge;
+	outData.ClientSessionPublicKey = ephemeralPublicKey;
+
+	CowBuffer<uint8_t> outBuffer = HandshakeAck::Build(outData);
+
+	outBuffer = Encrypt(outBuffer, _outES);
 
 	_outScramblerInit = Crypto::ApplyScrambler(
-		responseData.Pointer(),
-		responseData.Size(),
+		outBuffer.Pointer(),
+		outBuffer.Size(),
 		_outScramblerInit);
 
-	_writer = new StreamWriter(_fd, responseData);
+	_writer = new StreamWriter(_fd, outBuffer);
+
+	Crypto::X25519::GenerateSessionKeys(
+		ephemeralPrivateKey,
+		ephemeralPublicKey,
+		data.ServerSessionPublicKey,
+		_salt1.Concat(data.Salt2),
+		_inES.Key,
+		_outES.Key,
+		true);
+
+	Crypto::X25519::InitNonce(_outES.Nonce);
+	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
 
 	_state = State::Ready;
 	return true;

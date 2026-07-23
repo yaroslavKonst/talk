@@ -1,6 +1,7 @@
 #ifndef _CLIENT_HANDSHAKE_HPP
 #define _CLIENT_HANDSHAKE_HPP
 
+#include "Root.hpp"
 #include "../Common/StreamReader.hpp"
 #include "../Common/StreamWriter.hpp"
 #include "../Crypto/Crypto.hpp"
@@ -9,6 +10,7 @@ class ClientHandshake
 {
 public:
 	ClientHandshake(
+		Root *root,
 		int fd,
 		String name,
 		const Crypto::X25519::PrivateKeyContainer &privateKey,
@@ -44,8 +46,11 @@ public:
 	}
 
 private:
+	Root *_root;
+
 	enum class State
 	{
+		WaitingSynAckSize,
 		WaitingSynAck,
 		Ready
 	};
@@ -63,10 +68,15 @@ private:
 	Crypto::X25519::EncryptedStream _outES;
 	Crypto::X25519::EncryptedStream _inES;
 
+	CowBuffer<uint8_t> _synAckSize;
+	CowBuffer<uint8_t> _salt1;
+
 	uint8_t _inScramblerInit;
 	uint8_t _outScramblerInit;
 
 	void InitSyn();
+
+	bool ProcessSynAckSize(CowBuffer<uint8_t> buffer);
 	bool ProcessSynAck(CowBuffer<uint8_t> buffer);
 };
 
