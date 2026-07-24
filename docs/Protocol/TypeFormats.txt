@@ -1,6 +1,12 @@
 This document describes representations of types that are used for
 data transmission.
 
+Integers
+########
+
+All integer numbers are sent in little-endian byte order if other is not
+explicitly stated in data unit specification.
+
 String
 ######
 

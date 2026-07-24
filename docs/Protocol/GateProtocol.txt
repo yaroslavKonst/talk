@@ -151,16 +151,16 @@ Verification of DNS host names
 
 If the host name is a DNS name then verification has the following
 steps:
-* the name is resolved;
-* resolved IP address is compared with the IP address of the connected host;
-* The server queries the TXT field on the same domain as the host,
-  it must include a string "talkdkey=SIGNATURE_PUBLIC_KEY_HEX". All other text
-  is ignored;
-* received data signature is checked using public key from DNS.
+1. the name is resolved;
+2. resolved IP address is compared with the IP address of the connected host;
+3. IP address and host name are checked via rDNS request;
+4. The server queries the TXT field on the same domain as the host,
+   it must include a string "talkdkey=SIGNATURE_PUBLIC_KEY_HEX". All other text
+   is ignored;
+5. received data signature is checked using public key from DNS.
 
-If DNS does not have key record step 4 can be omitted. Otherwise the request
-must be signed. If DNS has key record unsigned handshakes must lead to
-verification failure.
+If DNS does not have key record step 5 can be omitted. But if DNS has key
+record unsigned handshakes must lead to verification failure.
 
 Note
 ----
@@ -180,18 +180,32 @@ Session
 #######
 #######
 
-The session protocol is based on commands with the following structure:
-| command size | MAC | nonce | command id | payload |
+Low level protocol
+##################
 
-Response:
-| response size | MAC | nonce | payload |
+Low level protocol runs on top of underlying TCP connection.
 
-All commands and responses are encrypted with session keys. From this
-point only command id and payload fields will be shown on the diagrams.
-But all commands and responses have to be encrypted.
+It sends data as a chunk sequence with the following chunk format:
+| chunk size (32 bit unsigned integer) | MAC | nonce | payload |
 
-MAC and encryption cover command identifiers and payloads of commands and
-responses.
+Chunk size field value can not be zero or exceed 4 KB.
+It covers size of MAC, nonce and payload.
+
+All chunks are encrypted with session keys corresponding to chunk transmission
+direction. MAC and encryption cover payload.
+
+Session protocol
+################
+
+The session protocol runs on top of low level protocol and
+is based on commands with the following structure:
+| command size | command id | payload |
+
+Response structure:
+| response size | payload |
+
+Command size field covers command identifier and payload, response size
+field covers payload.
 
 All size fields introduced in this subsection are 64 bit unsigned integers,
 command identifier is a 32 bit integer.
@@ -204,14 +218,14 @@ server must not initiate any actions. When the session leader has finished
 all planned actions it must close connection.
 
 Both the connection initiator and responding server may maintain connection
-timeouts. Timeout occurs if connection is not used for data transmission.
-If timeout is reached the server can close connection.
+timeouts. Timeout occurs if connection is not used for data transmission
+for a period of time. If timeout is reached the server can close connection.
 
 Maximum message size request
 ############################
 
 Servers may define maximum command sizes. These limits apply to everything:
-command payloads, maximum message header and body sizes.
+command sizes, maximum message header and body sizes.
 
 If the message size field has too big value the message receiver may
 immediately close session.
