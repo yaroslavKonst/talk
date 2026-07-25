@@ -409,6 +409,7 @@ namespace Crypto
 			privateKey = hash.Pointer();
 
 			memset(hash.Pointer(), 0, hash.Size());
+			memset(sourceData.Pointer(), 0, sourceData.Size());
 
 			Crypto::X25519::GeneratePublicKey(
 				privateKey,
