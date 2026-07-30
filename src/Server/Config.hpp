@@ -72,6 +72,8 @@ private:
 	};
 
 	ConfUser *_confUsers;
+
+	void ConfigLog(String message);
 };
 
 #endif
