@@ -342,6 +342,20 @@ The server must send this command as a response to the client's request.
 The server must send it on its own without a request in case of configuration
 update.
 
+Maximum message size query
+--------------------------
+
+| GET_MAX_MESSAGE_SIZE |
+
+This command is sent by the client to query message size limit. Size limit
+is applied to all commands sent to the server from the client. If the client
+makes an attempt to send a command that exceeds limit the server may
+close the session immediately.
+
+Response sent by the server:
+| GET_MAX_MESSAGE_SIZE | maximum size |
+"maximum size": 64 bit unsigned integer.
+
 Managing database ID
 --------------------
 
@@ -434,18 +448,49 @@ Response:
 Managing messages
 -----------------
 
+| OFFER_MESSAGE | peer name | header hash |
+"peer name": string;
+"header hash": 32 byte array.
+
+This command is sent by the server to offer a new message to the client and
+prevent message transmission if the client already has a message with
+the same header hash.
+
+Client response:
+| OFFER_MESSAGE | answer |
+"answer": byte, whether to send message to the client.
+
 | SEND_MESSAGE | message data |
+"message data": array with concatenated message header and message body.
 This command is sent by the client or the server to send a new message.
 
-| UPDATE_MESSAGE | MAC | nonce | message header |...
-| attribute ID | attribute value |
-\--------------------------------/
-           encrypted
+| UPDATE_MESSAGE | peer name | message header hash |...
+...| attribute ID | attribute value |
+"peer name": string;
+"message header hash": 32 byte array;
+"attribute id": 32 bit insigned integer;
+"attribute value": byte.
 
 This message is sent by the client or the server to update message attribute.
 
-| DELETE_MESSAGE | message header hash |
+| DELETE_MESSAGE | peer name | message header hash |
+"peer name": string;
+"message header hash": 32 byte array.
+
 This message is sent by the client or the server to delete message.
+
+| REMOTE_MESSAGE_UPDATE | message header |...
+...| MAC | nonce | attribute ID | attribute value |
+                 \--------------------------------/
+                             encrypted
+
+This message is sent by the client to send message update to remote server.
+For example, it allows to notify the other user that the message was read.
+It has the same structure as original message but instead of message
+body it has encrypted attribute properties that must be sent. Header is a
+full copy of original message header, so encryption header (MAC, nonce)
+for this message is new and located outside of message header. In-header
+nonce is not used for encryption purpose.
 
 Managing groups
 ---------------
@@ -454,6 +499,7 @@ Group managing commands can be sent not only to the user's server,
 but on remote servers too (via the user's server). So, these commands use
 special headers for encryption and authentication:
 | group host | group host key | user name | user key | timestamp | MAC | nonce |
+
 The encrypted payload goes after the header.
 
 Response header has the same structure.

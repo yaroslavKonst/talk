@@ -39,6 +39,9 @@ Handshake scheme
 ################
 
 requesting server                                    responding server
+| <----------------------------------------------------------------- |
+|                         | initial status |                         |
+|                                                                    |
 | -----------------------------------------------------------------> |
 |                                                                    |
 |                         +----------------+                         |
@@ -102,6 +105,7 @@ requesting server                                    responding server
 | if verification was successful |  | if verification was successful |
 |--------------------------------+  +--------------------------------|
 
+"initial status": 32 bit integer;
 "message size": 32 bit unsigned integer;
 "protocol version": 32 bit integer;
 "encryption scheme": 32 bit integer;
@@ -118,9 +122,17 @@ in this session.
 Session keys are derived from key pairs by key exchange and use salt 1 and
 salt 2 concatenation during hashing.
 
+Initial status notifies connection initiator whether the responding server
+is ready for communication.
+
+Initial status list:
+PROCEED -- everything is clear, proceed to handshake.
+REQUEST_RATE_LIMIT_REACHED -- the IP address of requesting server is marked
+                              as exceeding maximum request rate. The requesting
+                              server must close connection and try again later.
+
 Error codes are 32 bit integers.
 Error code list:
-REQUEST_RATE_LIMIT_REACHED
 UNSUPPORTED_PROTOCOL_VERSION
 UNSUPPORTED_ENCRYPTION_SCHEME
 VERIFICATION_FAILURE
@@ -173,8 +185,13 @@ DoS protection
 
 The server may measure the rate of incoming requests. If the request rate
 for some IP address exceeds maximum allowed rate, then the server may
-send the "REQUEST_RATE_LIMIT_REACHED" command instead of Ack and close
+send "REQUEST_RATE_LIMIT_REACHED" as the initial status and close
 the connection.
+
+If the server opened a connection and does not proceed to handshake and
+requests, keeping the session idle, the responding server may consider such
+action as a DoS attack attempt and block connections from the requesting
+server IP address for some time defined in the responding server configuration.
 
 Session
 #######

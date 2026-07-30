@@ -1,5 +1,6 @@
 Control system
 --------------
+
 Control system does not use encryption and authentication because
 control port is available only via UNIX socket and is not exposed
 to the network.
@@ -27,6 +28,7 @@ unban IP         | result code |
 
 Storage structure
 -----------------
+
 Server:
   Event sequence storage:
     storage/users/owner_name/sequence/ObjectStorage
@@ -40,25 +42,42 @@ Server:
 Client:
   Message storage:
     storage/owner_key/storage/peer_name/ObjectStorage
-    Message attribute mask is stored in the beginning of message entry.
+    Entry structure:
+    | previous message | attributes | header size | message |
   Contact book:
     storage/owner_key/contacts/peer_name/peer_key
     Each file contains key properties.
 
 Server event sequence storage entry types
 -----------------------------------------
+
 New contact:
 | NEW_CONTACT | next entry id | contact name (string) |
 
 Contact key update:
 | UPDATE_CONTACT_KEY | next entry id | contact name (string) | key |...
-| validated (uint8_t) | blocked (uint8_t) | set as default (uint8_t) |
+...| validated (uint8_t) | blocked (uint8_t) | set as default (uint8_t) |
 
 Block contact:
 | BLOCK_CONTACT | next entry id | contact name (string) | is blocked (uint8_t) |
 
+Message:
+| MESSAGE | next entry id | peer name | header hash |
+
+Message update:
+| MESSAGE_UPDATE | next entry id | peer name | header hash |...
+...| attribute id | attribute value |
+
+Delete message:
+| DELETE_MESSAGE | next entry id | peer name | header hash |
+
+Remote message update:
+| REMOTE_MESSAGE_UPDATE | next entry id | message header |...
+...| MAC | nonce | attribute ID | attribute value |
+
 Configuration
 -------------
+
 Server configuration.
 talkd.conf in ini format.
     RestrictedMode
