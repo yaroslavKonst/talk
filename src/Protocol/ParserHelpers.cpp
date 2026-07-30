@@ -1,5 +1,7 @@
 #include "ParserHelpers.hpp"
 
+#include "../Common/Endianness.hpp"
+
 bool ParseString(
 	const CowBuffer<uint8_t> buffer,
 	uint64_t &offset,
@@ -10,7 +12,8 @@ bool ParseString(
 		return false;
 	}
 
-	uint32_t stringLength = *buffer.SwitchType<uint32_t>(offset);
+	uint32_t stringLength =
+		SetProtoEndian(*buffer.SwitchType<uint32_t>(offset));
 	offset += sizeof(uint32_t);
 
 	if (lengthLimit && stringLength > lengthLimit) {
@@ -32,7 +35,8 @@ void BuildString(
 	uint64_t &offset,
 	const String &text)
 {
-	*buffer.SwitchType<uint32_t>(offset) = text.Length();
+	*buffer.SwitchType<uint32_t>(offset) =
+		SetProtoEndian<uint32_t>(text.Length());
 	offset += sizeof(uint32_t);
 
 	memcpy(buffer.Pointer(offset), text.CStr(), text.Length());

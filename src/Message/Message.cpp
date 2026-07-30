@@ -5,6 +5,7 @@
 #include "../Protocol/ParserHelpers.hpp"
 #include "../Crypto/Crypto.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/Endianness.hpp"
 #include "../ThirdParty/monocypher.h"
 
 using namespace Crypto::X25519;
@@ -80,7 +81,8 @@ static void WriteEntryData(
 		const Message::ContentsEntryKey *e =
 			static_cast<const Message::ContentsEntryKey*>(entry);
 		BuildString(buffer, offset, e->UserName);
-		*buffer.SwitchType<int32_t>(offset) = e->KeyType;
+		*buffer.SwitchType<int32_t>(offset) =
+			SetProtoEndian(e->KeyType);
 		offset += sizeof(int32_t);
 		memcpy(buffer.Pointer(offset), e->Key.Key, KEY_SIZE);
 		offset += KEY_SIZE;
@@ -108,12 +110,40 @@ Message::Type Message::GetMessageType(const CowBuffer<uint8_t> message)
 	}
 }
 
+bool Message::AttributeAction::Has(
+	Message::Attribute attrs,
+	Message::Attribute flag)
+{
+	return (int32_t)attrs & (int32_t)flag;
+}
+
+Message::Attribute Message::AttributeAction::Set(
+	Message::Attribute attrs,
+	Message::Attribute flag)
+{
+	return (Attribute)((int32_t)attrs | (int32_t)flag);
+}
+
+Message::Attribute Message::AttributeAction::Clear(
+	Message::Attribute attrs,
+	Message::Attribute flag)
+{
+	return (Attribute)((int32_t)attrs & ~(int32_t)flag);
+}
+
 Message::Contents::~Contents()
+{
+	Clear();
+}
+
+void Message::Contents::Clear()
 {
 	for (uint64_t i = 0; i < Entries.Size(); i++) {
 		delete Entries[i];
 		Entries[i] = nullptr;
 	}
+
+	Entries = CowBuffer<ContentsEntry*>();
 }
 
 bool Message::ParseContents(
@@ -144,7 +174,8 @@ bool Message::ParseContents(
 		uint8_t entryTypeRaw = message[offset];
 		offset += 1;
 
-		uint64_t dataSize = *message.SwitchType<uint64_t>(offset);
+		uint64_t dataSize =
+			SetProtoEndian(*message.SwitchType<uint64_t>(offset));
 		offset += sizeof(uint64_t);
 
 		if (message.Size() < offset + dataSize) {
@@ -216,7 +247,8 @@ bool Message::ParseContents(
 			e->Type = ContentsEntryType::Key;
 			e->UserName = userName;
 
-			e->Key.KeyType = *data.SwitchType<int32_t>(dataOffset);
+			e->Key.KeyType = SetProtoEndian(
+				*data.SwitchType<int32_t>(dataOffset));
 			dataOffset += sizeof(int32_t);
 
 			memcpy(
@@ -312,7 +344,8 @@ CowBuffer<uint8_t> Message::BuildContents(
 		buffer[offset] = (uint8_t)entry->Type;
 		offset += 1;
 
-		*buffer.SwitchType<uint64_t>(offset) = dataSize;
+		*buffer.SwitchType<uint64_t>(offset) =
+			SetProtoEndian(dataSize);
 		offset += sizeof(uint64_t);
 
 		WriteEntryData(buffer, offset, entry);
@@ -322,7 +355,8 @@ CowBuffer<uint8_t> Message::BuildContents(
 		buffer[offset] = (uint8_t)ContentsEntryType::Empty;
 		offset += 1;
 
-		*buffer.SwitchType<uint64_t>(offset) = emptySize;
+		*buffer.SwitchType<uint64_t>(offset) =
+			SetProtoEndian(emptySize);
 		offset += sizeof(uint64_t);
 
 		Crypto::GenerateRandomData(
@@ -332,6 +366,27 @@ CowBuffer<uint8_t> Message::BuildContents(
 	}
 
 	return buffer;
+}
+
+bool Message::SplitFullUserName(
+	String fullName,
+	String &userName,
+	String &hostName)
+{
+	CowBuffer<String> parts = fullName.Split('@', false);
+
+	if (parts.Size() != 2) {
+		return false;
+	}
+
+	if (!parts[0].Length() || !parts[1].Length()) {
+		return false;
+	}
+
+	userName = parts[0];
+	hostName = parts[1];
+
+	return true;
 }
 
 bool Message::X25519::ParseHeader(
@@ -354,7 +409,7 @@ bool Message::X25519::ParseHeader(
 		return false;
 	}
 
-	if (*message.SwitchType<int32_t>(offset) != SCHEME_ID) {
+	if (SetProtoEndian(*message.SwitchType<int32_t>(offset)) != SCHEME_ID) {
 		return false;
 	}
 
@@ -399,7 +454,7 @@ bool Message::X25519::ParseHeader(
 		return false;
 	}
 
-	header.Timestamp = *message.SwitchType<int64_t>(offset);
+	header.Timestamp = SetProtoEndian(*message.SwitchType<int64_t>(offset));
 	offset += sizeof(header.Timestamp);
 
 	// Index.
@@ -407,7 +462,7 @@ bool Message::X25519::ParseHeader(
 		return false;
 	}
 
-	header.Index = *message.SwitchType<int32_t>(offset);
+	header.Index = SetProtoEndian(*message.SwitchType<int32_t>(offset));
 	offset += sizeof(header.Index);
 
 	// Thread ID.
@@ -425,7 +480,8 @@ bool Message::X25519::ParseHeader(
 		return false;
 	}
 
-	header.MessageSize = *message.SwitchType<uint64_t>(offset);
+	header.MessageSize =
+		SetProtoEndian(*message.SwitchType<uint64_t>(offset));
 	offset += sizeof(header.MessageSize);
 
 	// Nonce.
@@ -450,7 +506,8 @@ CowBuffer<uint8_t> Message::X25519::BuildHeader(
 	buffer[0] = (uint8_t)Type::PointToPoint;
 	uint64_t offset = 1;
 
-	*buffer.SwitchType<int32_t>(offset) = SCHEME_ID;
+	*buffer.SwitchType<int32_t>(offset) =
+		SetProtoEndian<int32_t>(SCHEME_ID);
 	offset += sizeof(int32_t);
 
 	BuildString(buffer, offset, header.Source);
@@ -463,19 +520,17 @@ CowBuffer<uint8_t> Message::X25519::BuildHeader(
 	memcpy(buffer.Pointer(offset), header.DestinationKey.Key, KEY_SIZE);
 	offset += KEY_SIZE;
 
-	*buffer.SwitchType<int64_t>(offset) = header.Timestamp;
+	*buffer.SwitchType<int64_t>(offset) = SetProtoEndian(header.Timestamp);
 	offset += sizeof(header.Timestamp);
 
-	*buffer.SwitchType<int32_t>(offset) = header.Index;
+	*buffer.SwitchType<int32_t>(offset) = SetProtoEndian(header.Index);
 	offset += sizeof(header.Index);
 
-	memcpy(
-		buffer.Pointer(offset),
-		header.ThreadID.GetValue(),
-		(uint64_t)ObjectStorage::Constants::IDSize);
+	header.ThreadID.GetValue(buffer.Pointer(offset));
 	offset += (uint64_t)ObjectStorage::Constants::IDSize;
 
-	*buffer.SwitchType<uint64_t>(offset) = header.MessageSize;
+	*buffer.SwitchType<uint64_t>(offset) =
+		SetProtoEndian(header.MessageSize);
 	offset += sizeof(header.MessageSize);
 
 	memcpy(buffer.Pointer(offset), header.Nonce, NONCE_SIZE);
@@ -520,7 +575,7 @@ bool Message::X25519::ParseHeader(
 		return false;
 	}
 
-	if (*message.SwitchType<int32_t>(offset) != SCHEME_ID) {
+	if (SetProtoEndian(*message.SwitchType<int32_t>(offset)) != SCHEME_ID) {
 		return false;
 	}
 
@@ -557,7 +612,7 @@ bool Message::X25519::ParseHeader(
 		return false;
 	}
 
-	int32_t keyCount = *message.SwitchType<int32_t>(offset);
+	int32_t keyCount = SetProtoEndian(*message.SwitchType<int32_t>(offset));
 	offset += sizeof(int32_t);
 
 	if (keyCount < 0) {
@@ -603,7 +658,7 @@ bool Message::X25519::ParseHeader(
 		return false;
 	}
 
-	header.Timestamp = *message.SwitchType<int64_t>(offset);
+	header.Timestamp = SetProtoEndian(*message.SwitchType<int64_t>(offset));
 	offset += sizeof(header.Timestamp);
 
 	// Index.
@@ -611,7 +666,7 @@ bool Message::X25519::ParseHeader(
 		return false;
 	}
 
-	header.Index = *message.SwitchType<int32_t>(offset);
+	header.Index = SetProtoEndian(*message.SwitchType<int32_t>(offset));
 	offset += sizeof(header.Index);
 
 	// Thread ID.
@@ -629,7 +684,8 @@ bool Message::X25519::ParseHeader(
 		return false;
 	}
 
-	header.MessageSize = *message.SwitchType<uint64_t>(offset);
+	header.MessageSize =
+		SetProtoEndian(*message.SwitchType<uint64_t>(offset));
 	offset += sizeof(header.MessageSize);
 
 	// Nonce.
@@ -653,7 +709,8 @@ CowBuffer<uint8_t> Message::X25519::BuildHeader(const HeaderGroup &header)
 	buffer[0] = (uint8_t)Type::Group;
 	uint64_t offset = 1;
 
-	*buffer.SwitchType<int32_t>(offset) = SCHEME_ID;
+	*buffer.SwitchType<int32_t>(offset) =
+		SetProtoEndian<int32_t>(SCHEME_ID);
 	offset += sizeof(int32_t);
 
 	BuildString(buffer, offset, header.Source);
@@ -663,7 +720,8 @@ CowBuffer<uint8_t> Message::X25519::BuildHeader(const HeaderGroup &header)
 
 	BuildString(buffer, offset, header.GroupName);
 
-	*buffer.SwitchType<int32_t>(offset) = (int32_t)header.GroupKeys.Size();
+	*buffer.SwitchType<int32_t>(offset) =
+		SetProtoEndian<int32_t>(header.GroupKeys.Size());
 	offset += sizeof(int32_t);
 
 	for (uint64_t i = 0; i < header.GroupKeys.Size(); i++) {
@@ -688,19 +746,17 @@ CowBuffer<uint8_t> Message::X25519::BuildHeader(const HeaderGroup &header)
 		offset += KEY_SIZE;
 	}
 
-	*buffer.SwitchType<int64_t>(offset) = header.Timestamp;
+	*buffer.SwitchType<int64_t>(offset) = SetProtoEndian(header.Timestamp);
 	offset += sizeof(header.Timestamp);
 
-	*buffer.SwitchType<int32_t>(offset) = header.Index;
+	*buffer.SwitchType<int32_t>(offset) = SetProtoEndian(header.Index);
 	offset += sizeof(header.Index);
 
-	memcpy(
-		buffer.Pointer(offset),
-		header.ThreadID.GetValue(),
-		(uint64_t)ObjectStorage::Constants::IDSize);
+	header.ThreadID.GetValue(buffer.Pointer(offset));
 	offset += (uint64_t)ObjectStorage::Constants::IDSize;
 
-	*buffer.SwitchType<uint64_t>(offset) = header.MessageSize;
+	*buffer.SwitchType<uint64_t>(offset) =
+		SetProtoEndian(header.MessageSize);
 	offset += sizeof(header.MessageSize);
 
 	memcpy(buffer.Pointer(offset), header.Nonce, NONCE_SIZE);

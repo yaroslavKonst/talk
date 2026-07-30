@@ -24,6 +24,7 @@ public:
 	int Length() const;
 
 	bool operator==(const String &s) const;
+	bool operator!=(const String &s) const;
 	bool operator<(const String &s) const;
 
 	CowBuffer<String> Split(char delim, bool removeEmpty) const;

@@ -10,8 +10,11 @@ SERVER_MODULES =\
 	Server/ServerHandshake.o \
 	Server/ServerSession.o \
 	Server/GateSession.o \
+	Server/SendPlanner.o \
 	Server/ObjectType.o \
 	Server/FailBan.o \
+	Server/RateLimiter.o \
+	Message/Message.o \
 	Message/ContactStorage.o \
 	Protocol/ParserHelpers.o \
 	Protocol/HandshakeParser.o \
@@ -52,6 +55,8 @@ CLIENT_MODULES=\
 	Client/Config.o \
 	Client/Network.o \
 	Client/ChatList.o \
+	Client/Chat.o \
+	Client/TextEditor.o \
 	Client/ClientHandshake.o \
 	Client/ClientSession.o \
 	Client/UI.o \
@@ -61,6 +66,8 @@ CLIENT_MODULES=\
 	Client/LoginScreen.o \
 	Client/ContactScreen.o \
 	Client/ContactManageScreen.o \
+	Client/ContactListScreen.o \
+	Client/MessageDescriptor.o \
 	Client/NotificationSystem.o \
 	Message/ContactStorage.o \
 	Message/Message.o \
@@ -114,10 +121,10 @@ $(BUILD_DIR)/talk: $(CLIENT_MODULES_ABS) | $(BUILD_DIRS)
 	$(CXX) -o $@ $(CLIENT_MODULES_ABS) $(CLIENT_LIBS)
 
 $(BUILD_DIR)/%.o: %.cpp | $(BUILD_DIRS)
-	$(CXX) $(OBJ_FLAG) -o $@ $<
+	$(CXX) $(ENDIANNESS) $(OBJ_FLAG) -o $@ $<
 
 $(BUILD_DIR)/%.o: %.c | $(BUILD_DIRS)
-	$(CC) $(OBJ_FLAG) -o $@ $<
+	$(CC) $(ENDIANNESS) $(OBJ_FLAG) -o $@ $<
 
 $(BUILD_DIRS):
 	mkdir -p $(BUILD_DIRS)
@@ -130,6 +137,8 @@ DEPS_ARGS := $(join $(DEPS_RES),$(DEPS_SOURCE))
 
 $(BUILD_DIR)/deps.mk: $(DEPS_SOURCE) $(DEPS_HEADER) | $(BUILD_DIRS)
 	truncate -s 0 $@
-	for ENTRY in $(DEPS_ARGS) ; do $(CXX) -MM `echo $$ENTRY | sed "s|:| |g"` >> $@ ; done
+	for ENTRY in $(DEPS_ARGS) ; do $(CXX) $(ENDIANNESS) -MM `echo $$ENTRY | sed "s|:| |g"` >> $@ ; done
 
 include $(BUILD_DIR)/deps.mk
+
+ENDIANNESS := -D$(shell $(BUILD_DIR)/Utils/EndiannessChecker)

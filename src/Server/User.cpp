@@ -6,6 +6,7 @@
 #include "../Common/File.hpp"
 #include "../Common/BinaryFile.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/Log.hpp"
 #include "../Protocol/ParserHelpers.hpp"
 #include "../ThirdParty/monocypher.h"
 
@@ -30,17 +31,26 @@ void User::RemoveUser(String name)
 	THROW("Not implemented.");
 }
 
-User::User(String name, EventDispatcher *dispatcher, Config *config) :
-	_objectStorage("storage/users/" + name + "/storage", dispatcher),
+User::User(
+	String name,
+	EventDispatcher *dispatcher,
+	Config *config,
+	UserStorage *userStorage) :
+	_objectStorage("storage/users/" + name + "/sequence", dispatcher),
 	_contactStorage("storage/users/" + name)
 {
 	_dispatcher = dispatcher;
 	_config = config;
+	_userStorage = userStorage;
 
 	_root = "storage/users/" + name;
 
 	if (!FileExists(_root)) {
 		THROW("User " + name + " does not exist.");
+	}
+
+	if (!FileExists(_root + "/storage")) {
+		CreateDirectory(_root + "/storage");
 	}
 
 	_name = name;
@@ -182,6 +192,85 @@ void User::BlockContact(String name, Contact::BlockStatus block)
 	AddNewObject(BlockContactObject::BuildData(data));
 }
 
+CowBuffer<CommandListContacts::Response::UserData> User::GetContactList()
+{
+	CowBuffer<String> userNames = _userStorage->ListUsers();
+
+	CowBuffer<CommandListContacts::Response::UserData> result(
+		userNames.Size());
+
+	for (uint32_t i = 0; i < userNames.Size(); i++) {
+		User *user = _userStorage->GetUser(userNames[i]);
+
+		result[i].Name = userNames[i] + "@" + _config->GetHostName();
+		result[i].Key = user->GetPublicKey();
+	}
+
+	return result;
+}
+
+bool User::SendMessage(const CowBuffer<uint8_t> message)
+{
+	Message::X25519::HeaderPointToPoint header;
+
+	bool parseResult = Message::X25519::ParseHeader(message, header);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	String userName;
+	String hostName;
+
+	parseResult = Message::SplitFullUserName(
+		header.Source,
+		userName,
+		hostName);
+
+	if (userName != _name) {
+		return false;
+	}
+
+	if (hostName != _config->GetHostName()) {
+		return false;
+	}
+
+	RegisterNewMessage(header, message, false);
+
+	return true;
+}
+
+CowBuffer<uint8_t> User::GetMessage(
+	String peerName,
+	const ObjectStorage::ID &messageID)
+{
+	ObjectStorage objectStorage(
+		_root + "/storage/" + peerName,
+		_dispatcher);
+
+	if (!objectStorage.HasObject(messageID)) {
+		return CowBuffer<uint8_t>();
+	}
+
+	return objectStorage.ReadObject(messageID);
+}
+
+void User::UpdateMessage(
+	String peerName,
+	const ObjectStorage::ID &messageID,
+	Message::Attribute attr,
+	bool value)
+{
+	UpdateMessageObject::Data data;
+
+	data.PeerName = peerName;
+	data.HeaderHash = messageID;
+	data.Attr = attr;
+	data.Value = value;
+
+	AddNewObject(UpdateMessageObject::BuildData(data));
+}
+
 void User::LoadPublicKey()
 {
 	BinaryFile file(_root + "/key", false);
@@ -210,13 +299,7 @@ void User::AddNewObject(const CowBuffer<uint8_t> object)
 	if (_objectStorage.HasRef(HEAD_REF)) {
 		ObjectStorage::ID prevItem = _objectStorage.GetRef(HEAD_REF);
 
-		CowBuffer<uint8_t> idValueBuffer(
-			(int)ObjectStorage::Constants::IDSize);
-
-		memcpy(
-			idValueBuffer.Pointer(),
-			itemId.GetValue(),
-			idValueBuffer.Size());
+		CowBuffer<uint8_t> idValueBuffer = itemId.GetValue();
 
 		_objectStorage.UpdateObject(
 			prevItem,
@@ -233,5 +316,55 @@ void User::AddNewObject(const CowBuffer<uint8_t> object)
 	while (s) {
 		s->Session->SendObjects();
 		s = s->Next;
+	}
+}
+
+void User::RegisterNewMessage(
+	const Message::X25519::HeaderPointToPoint &header,
+	const CowBuffer<uint8_t> message,
+	bool inbound)
+{
+	ObjectStorage::ID messageID = Crypto::GetHash(
+		message.Slice(0, header.HeaderSize),
+		(int)ObjectStorage::Constants::IDSize).Pointer();
+
+	String peerName;
+
+	if (inbound) {
+		peerName = header.Source;
+	} else {
+		peerName = header.Destination;
+	}
+
+	ObjectStorage objectStorage(
+		_root + "/storage/" + peerName,
+		_dispatcher);
+
+	if (objectStorage.HasObject(messageID)) {
+		return;
+	}
+
+	objectStorage.WriteObject(messageID, message);
+
+	MessageObject::Data data;
+	data.PeerName = peerName;
+	data.HeaderHash = messageID;
+
+	AddNewObject(MessageObject::BuildData(data));
+
+	if (!inbound) {
+		UpdateMessage(
+			peerName,
+			messageID,
+			Message::Attribute::Local,
+			false);
+
+		UpdateMessage(
+			peerName,
+			messageID,
+			Message::Attribute::InProgress,
+			true);
+
+		_userStorage->RegisterMessageForDelivery(header, messageID);
 	}
 }

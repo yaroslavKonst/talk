@@ -5,6 +5,7 @@
 
 #include "User.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/Endianness.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Log.hpp"
 #include "../Crypto/Crypto.hpp"
@@ -179,7 +180,7 @@ void ServerHandshake::ProcessSynSize(CowBuffer<uint8_t> buffer)
 		buffer.Size(),
 		_inScramblerInit);
 
-	uint32_t synLength = *buffer.SwitchType<uint32_t>();
+	uint32_t synLength = SetProtoEndian(*buffer.SwitchType<uint32_t>());
 
 	if (synLength > 1024 || !synLength) {
 		HandshakeLog("", "Invalid Syn size.");
@@ -273,8 +274,9 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 	CowBuffer<uint8_t> outBuffer = HandshakeSynAck::Build(outData);
 
 	CowBuffer<uint8_t> outSizeBuffer(sizeof(uint32_t));
-	*outSizeBuffer.SwitchType<uint32_t>() = outBuffer.Size() +
-		sizeof(uint32_t) + Crypto::X25519::CRYPTO_HEADER_SIZE;
+	*outSizeBuffer.SwitchType<uint32_t>() = SetProtoEndian<uint32_t>(
+		outBuffer.Size() +
+		sizeof(uint32_t) + Crypto::X25519::CRYPTO_HEADER_SIZE);
 
 	outBuffer = Encrypt(outBuffer, _outES, outSizeBuffer);
 
@@ -309,9 +311,11 @@ bool ServerHandshake::CheckProtocolVersion(const HandshakeSyn::Data &data)
 
 	CowBuffer<uint8_t> response(sizeof(int32_t) * 2);
 
-	*response.SwitchType<uint32_t>() = response.Size();
+	*response.SwitchType<uint32_t>() =
+		SetProtoEndian<uint32_t>(response.Size());
 	*response.SwitchType<int32_t>(sizeof(uint32_t)) =
-		HANDSHAKE_RESPONSE_UNSUPPORTED_PROTOCOL_VERSION;
+		SetProtoEndian<int32_t>(
+			HANDSHAKE_RESPONSE_UNSUPPORTED_PROTOCOL_VERSION);
 
 	_writer = new StreamWriter(_fd, Crypto::ApplyScrambler(response));
 	_state = State::SendAllAndExit;
@@ -329,9 +333,11 @@ bool ServerHandshake::CheckEncryptionScheme(const HandshakeSyn::Data &data)
 
 	CowBuffer<uint8_t> response(sizeof(int32_t) * 2);
 
-	*response.SwitchType<uint32_t>() = response.Size();
+	*response.SwitchType<uint32_t>() =
+		SetProtoEndian<uint32_t>(response.Size());
 	*response.SwitchType<int32_t>(sizeof(uint32_t)) =
-		HANDSHAKE_RESPONSE_UNSUPPORTED_ENCRYPTION_SCHEME;
+		SetProtoEndian<int32_t>(
+			HANDSHAKE_RESPONSE_UNSUPPORTED_ENCRYPTION_SCHEME);
 
 	_writer = new StreamWriter(_fd, Crypto::ApplyScrambler(response));
 	_state = State::SendAllAndExit;

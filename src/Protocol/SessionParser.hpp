@@ -8,15 +8,17 @@
 
 #define SESSION_COMMAND_KEEP_ALIVE 1
 #define SESSION_COMMAND_GET_HOST_NAME 2
-#define SESSION_COMMAND_REQUEST_ID 3
-#define SESSION_COMMAND_UPDATE_ID 4
-#define SESSION_COMMAND_ADD_CONTACT 5
-#define SESSION_COMMAND_UPDATE_CONTACT_KEY 6
-#define SESSION_COMMAND_BLOCK_CONTACT 7
-#define SESSION_COMMAND_LIST_CONTACTS 8
-#define SESSION_COMMAND_SEND_MESSAGE 9
-#define SESSION_COMMAND_UPDATE_MESSAGE 10
-#define SESSION_COMMAND_DELETE_MESSAGE 11
+#define SESSION_COMMAND_GET_MAX_MESSAGE_SIZE 3
+#define SESSION_COMMAND_REQUEST_ID 4
+#define SESSION_COMMAND_UPDATE_ID 5
+#define SESSION_COMMAND_ADD_CONTACT 6
+#define SESSION_COMMAND_UPDATE_CONTACT_KEY 7
+#define SESSION_COMMAND_BLOCK_CONTACT 8
+#define SESSION_COMMAND_LIST_CONTACTS 9
+#define SESSION_COMMAND_OFFER_MESSAGE 10
+#define SESSION_COMMAND_SEND_MESSAGE 11
+#define SESSION_COMMAND_UPDATE_MESSAGE 12
+#define SESSION_COMMAND_DELETE_MESSAGE 13
 
 #define SESSION_RESPONSE_OK 200
 #define SESSION_RESPONSE_ERROR 100
@@ -57,6 +59,19 @@ namespace CommandGetHostName
 	struct Response
 	{
 		String Name;
+	};
+
+	CowBuffer<uint8_t> BuildCommand();
+
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
+	CowBuffer<uint8_t> BuildResponse(const Response &data);
+};
+
+namespace CommandGetMaxMessageSize
+{
+	struct Response
+	{
+		uint64_t Value;
 	};
 
 	CowBuffer<uint8_t> BuildCommand();
@@ -127,23 +142,44 @@ namespace CommandBlockContact
 	CowBuffer<uint8_t> BuildCommand(const Command &command);
 }
 
-/*namespace CommandListContacts
+namespace CommandListContacts
 {
 	struct Response
 	{
 		struct UserData
 		{
-			const uint8_t *Key;
 			String Name;
+			Crypto::X25519::PublicKeyContainer Key;
 		};
 
 		CowBuffer<UserData> Data;
 	};
 
 	CowBuffer<uint8_t> BuildCommand();
+
 	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
 	CowBuffer<uint8_t> BuildResponse(const Response &data);
-}*/
+}
+
+namespace CommandOfferMessage
+{
+	struct Command
+	{
+		String PeerName;
+		CowBuffer<uint8_t> HeaderHash;
+	};
+
+	struct Response
+	{
+		uint8_t Answer;
+	};
+
+	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
+	CowBuffer<uint8_t> BuildCommand(const Command &data);
+
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
+	CowBuffer<uint8_t> BuildResponse(const Response &data);
+}
 
 namespace CommandSendMessage
 {

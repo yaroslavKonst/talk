@@ -32,6 +32,12 @@ public:
 		bool setAsDefault);
 	void BlockContact(String contactName, Contact::BlockStatus block);
 
+	void ListContacts();
+	void SetContactListProcessor(
+		NetworkEventProcessor::ContactListProcessor *processor);
+
+	void SendMessage(const CowBuffer<uint8_t> message);
+
 private:
 	Root *_root;
 
@@ -55,6 +61,12 @@ private:
 	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer);
 	bool ProcessBlockContact(const CowBuffer<uint8_t> buffer);
+	bool ProcessListContacts(const CowBuffer<uint8_t> buffer);
+	NetworkEventProcessor::ContactListProcessor *_contactListProcessor;
+
+	bool ProcessOfferMessage(const CowBuffer<uint8_t> buffer);
+	bool ProcessSendMessage(const CowBuffer<uint8_t> buffer);
+	bool ProcessUpdateMessage(const CowBuffer<uint8_t> buffer);
 };
 
 #endif

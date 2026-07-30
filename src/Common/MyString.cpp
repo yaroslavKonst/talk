@@ -166,6 +166,11 @@ bool String::operator==(const String &s) const
 	return true;
 }
 
+bool String::operator!=(const String &s) const
+{
+	return !operator==(s);
+}
+
 bool String::operator<(const String &s) const
 {
 	int length =

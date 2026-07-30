@@ -2,6 +2,7 @@
 
 #include "../Protocol/SessionParser.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/Endianness.hpp"
 #include "../Common/UnixTime.hpp"
 
 ClientSession::ClientSession(
@@ -19,6 +20,7 @@ ClientSession::ClientSession(
 	_outES = outES;
 
 	_keepAliveTimestamp = 0;
+	_contactListProcessor = nullptr;
 
 	_protocol = new SessionProtocol(
 		fd,
@@ -33,6 +35,13 @@ ClientSession::ClientSession(
 ClientSession::~ClientSession()
 {
 	delete _protocol;
+
+	if (_contactListProcessor) {
+		_contactListProcessor->ProcessContactList(
+			false,
+			CommandListContacts::Response());
+		_contactListProcessor = nullptr;
+	}
 }
 
 bool ClientSession::RequestRead()
@@ -109,13 +118,32 @@ void ClientSession::BlockContact(String contactName, Contact::BlockStatus block)
 	_protocol->Send(CommandBlockContact::BuildCommand(command), 0);
 }
 
+void ClientSession::ListContacts()
+{
+	_protocol->Send(CommandListContacts::BuildCommand(), 0);
+}
+
+void ClientSession::SetContactListProcessor(
+	NetworkEventProcessor::ContactListProcessor *processor)
+{
+	_contactListProcessor = processor;
+}
+
+void ClientSession::SendMessage(const CowBuffer<uint8_t> message)
+{
+	CommandSendMessage::Command command;
+	command.Message = message;
+
+	_protocol->Send(CommandSendMessage::BuildCommand(command), 1);
+}
+
 bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 {
 	if (buffer.Size() < sizeof(int32_t)) {
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
 	switch (command) {
 	case SESSION_COMMAND_KEEP_ALIVE:
@@ -132,6 +160,14 @@ bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessUpdateContactKey(buffer);
 	case SESSION_COMMAND_BLOCK_CONTACT:
 		return ProcessBlockContact(buffer);
+	case SESSION_COMMAND_LIST_CONTACTS:
+		return ProcessListContacts(buffer);
+	case SESSION_COMMAND_OFFER_MESSAGE:
+		return ProcessOfferMessage(buffer);
+	case SESSION_COMMAND_SEND_MESSAGE:
+		return ProcessSendMessage(buffer);
+	case SESSION_COMMAND_UPDATE_MESSAGE:
+		return ProcessUpdateMessage(buffer);
 	default:
 		return false;
 	}
@@ -274,5 +310,74 @@ bool ClientSession::ProcessBlockContact(const CowBuffer<uint8_t> buffer)
 
 	contact->SetBlockStatus((Contact::BlockStatus)command.BlockStatus);
 	_root->Ui->Redraw();
+	return true;
+}
+
+bool ClientSession::ProcessListContacts(const CowBuffer<uint8_t> buffer)
+{
+	CommandListContacts::Response response;
+	bool parseResult = CommandListContacts::ParseResponse(
+		buffer,
+		response);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	if (_contactListProcessor) {
+		_contactListProcessor->ProcessContactList(true, response);
+	}
+
+	return true;
+}
+
+bool ClientSession::ProcessOfferMessage(const CowBuffer<uint8_t> buffer)
+{
+	CommandOfferMessage::Command command;
+	bool parseResult = CommandOfferMessage::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	bool messageExists = _root->Messages->HasMessage(
+		command.PeerName,
+		command.HeaderHash.Pointer());
+
+	CommandOfferMessage::Response response;
+	response.Answer = !messageExists;
+
+	_protocol->Send(CommandOfferMessage::BuildResponse(response), 1);
+	return true;
+}
+
+bool ClientSession::ProcessSendMessage(const CowBuffer<uint8_t> buffer)
+{
+	CommandSendMessage::Command command;
+	bool parseResult = CommandSendMessage::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_root->Messages->DeliverMessage(command.Message);
+	return true;
+}
+
+bool ClientSession::ProcessUpdateMessage(const CowBuffer<uint8_t> buffer)
+{
+	CommandUpdateMessage::Command command;
+	bool parseResult = CommandUpdateMessage::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_root->Messages->UpdateMessage(
+		command.PeerName,
+		command.HeaderHash.Pointer(),
+		command.Attr,
+		command.AttrValue);
+
 	return true;
 }

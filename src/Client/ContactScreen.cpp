@@ -5,10 +5,12 @@
 #include "WorkScreen.hpp"
 #include "TextColor.hpp"
 #include "ContactManageScreen.hpp"
+#include "ContactListScreen.hpp"
 
-ContactScreen::ContactScreen(Root *root)
+ContactScreen::ContactScreen(Root *root, WorkScreen *workScreen)
 {
 	_root = root;
+	_workScreen = workScreen;
 	_contacts = root->Messages->GetContactStorage();
 	_currentContact = _contacts->GetFirstContact();
 
@@ -57,7 +59,7 @@ Screen *ContactScreen::ProcessEvent(int event)
 CowBuffer<String> ContactScreen::GetControlHelp()
 {
 	if (_mode == Mode::List) {
-		CowBuffer<String> result(6);
+		CowBuffer<String> result(7);
 		result[0] = "Back: " + _root->Conf->ContactBackName();
 		result[1] = "Up/Down: " + _root->Conf->ContactUpName() + "/" +
 			_root->Conf->ContactDownName();
@@ -65,6 +67,8 @@ CowBuffer<String> ContactScreen::GetControlHelp()
 		result[3] = "New: " + _root->Conf->ContactNewName();
 		result[4] = "Go to chat: " + _root->Conf->ContactToChatName();
 		result[5] = "Block/Unblock: " + _root->Conf->ContactBlockName();
+		result[6] = "Get contact list: " +
+			_root->Conf->ContactListContactsName();
 
 		return result;
 	} else if (_mode == Mode::Add) {
@@ -173,7 +177,7 @@ Screen *ContactScreen::ProcessListEvent(int event)
 		}
 
 		_root->Messages->SelectOrCreateChat(_currentContact);
-		_root->Messages->Activate();
+		_workScreen->ActivateCurrentChat();
 		return nullptr;
 	}
 
@@ -205,6 +209,15 @@ Screen *ContactScreen::ProcessListEvent(int event)
 		}
 
 		return this;
+	}
+
+	if (event == _root->Conf->ContactListContactsKey()) {
+		if (!_root->Network->ConnectionActive()) {
+			_root->Ui->Notify("No connection.");
+			return this;
+		}
+
+		return new ContactListScreen(_root);
 	}
 
 	return this;

@@ -3,7 +3,7 @@
 #include <cstring>
 
 #include "ParserHelpers.hpp"
-//#include "../Message/Message.hpp"
+#include "../Common/Endianness.hpp"
 
 bool CommandKeepAlive::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
@@ -13,28 +13,32 @@ bool CommandKeepAlive::ParseCommand(
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
 	if (command != SESSION_COMMAND_KEEP_ALIVE) {
 		return false;
 	}
 
-	result.Timestamp = *buffer.SwitchType<int64_t>(sizeof(int32_t));
+	result.Timestamp = SetProtoEndian(
+		*buffer.SwitchType<int64_t>(sizeof(int32_t)));
 	return true;
 }
 
 CowBuffer<uint8_t> CommandKeepAlive::BuildCommand(const Command &data)
 {
 	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(data.Timestamp));
-	*result.SwitchType<int32_t>() = SESSION_COMMAND_KEEP_ALIVE;
-	*result.SwitchType<int64_t>((sizeof(int32_t))) = data.Timestamp;
+	*result.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_KEEP_ALIVE);
+	*result.SwitchType<int64_t>((sizeof(int32_t))) =
+		SetProtoEndian(data.Timestamp);
 	return result;
 }
 
 CowBuffer<uint8_t> CommandGetHostName::BuildCommand()
 {
 	CowBuffer<uint8_t> buffer(sizeof(int32_t));
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_GET_HOST_NAME;
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_GET_HOST_NAME);
 	return buffer;
 }
 
@@ -46,7 +50,7 @@ bool CommandGetHostName::ParseResponse(
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
 	if (command != SESSION_COMMAND_GET_HOST_NAME) {
 		return false;
@@ -70,7 +74,8 @@ CowBuffer<uint8_t> CommandGetHostName::BuildResponse(const Response &data)
 	CowBuffer<uint8_t> buffer(
 		sizeof(int32_t) + BuiltStringSize(data.Name));
 
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_GET_HOST_NAME;
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_GET_HOST_NAME);
 
 	uint64_t offset = sizeof(int32_t);
 
@@ -79,10 +84,51 @@ CowBuffer<uint8_t> CommandGetHostName::BuildResponse(const Response &data)
 	return buffer;
 }
 
+CowBuffer<uint8_t> CommandGetMaxMessageSize::BuildCommand()
+{
+	CowBuffer<uint8_t> buffer(sizeof(int32_t));
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_GET_MAX_MESSAGE_SIZE);
+	return buffer;
+}
+
+bool CommandGetMaxMessageSize::ParseResponse(
+	const CowBuffer<uint8_t> buffer,
+	Response &result)
+{
+	if (buffer.Size() != sizeof(int32_t) + sizeof(result.Value)) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != SESSION_COMMAND_GET_MAX_MESSAGE_SIZE) {
+		return false;
+	}
+
+	result.Value =
+		SetProtoEndian(*buffer.SwitchType<uint64_t>(sizeof(int32_t)));
+	return true;
+}
+
+CowBuffer<uint8_t> CommandGetMaxMessageSize::BuildResponse(
+	const Response &data)
+{
+	CowBuffer<uint8_t> buffer(sizeof(int32_t) + sizeof(uint64_t));
+
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_GET_MAX_MESSAGE_SIZE);
+	*buffer.SwitchType<uint64_t>(sizeof(int32_t)) =
+		SetProtoEndian(data.Value);
+
+	return buffer;
+}
+
 CowBuffer<uint8_t> CommandRequestID::BuildCommand()
 {
 	CowBuffer<uint8_t> buffer(sizeof(int32_t));
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_REQUEST_ID;
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_REQUEST_ID);
 	return buffer;
 }
 
@@ -96,7 +142,9 @@ bool CommandRequestID::ParseResponse(
 		return false;
 	}
 
-	if (*buffer.SwitchType<int32_t>() != SESSION_COMMAND_REQUEST_ID) {
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != SESSION_COMMAND_REQUEST_ID) {
 		return false;
 	}
 
@@ -109,12 +157,10 @@ CowBuffer<uint8_t> CommandRequestID::BuildResponse(const Response &data)
 	CowBuffer<uint8_t> buffer(
 		sizeof(int32_t) + (int)ObjectStorage::Constants::IDSize);
 
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_REQUEST_ID;
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_REQUEST_ID);
 
-	memcpy(
-		buffer.Pointer(sizeof(int32_t)),
-		data.Id.GetValue(),
-		(int)ObjectStorage::Constants::IDSize);
+	data.Id.GetValue(buffer.Pointer(sizeof(int32_t)));
 
 	return buffer;
 }
@@ -130,7 +176,9 @@ bool CommandUpdateID::ParseCommand(
 		return false;
 	}
 
-	if (*buffer.SwitchType<int32_t>() != SESSION_COMMAND_UPDATE_ID) {
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != SESSION_COMMAND_UPDATE_ID) {
 		return false;
 	}
 
@@ -143,12 +191,10 @@ CowBuffer<uint8_t> CommandUpdateID::BuildCommand(const Command &command)
 	CowBuffer<uint8_t> buffer(
 		sizeof(int32_t) + (int)ObjectStorage::Constants::IDSize);
 
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_UPDATE_ID;
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_UPDATE_ID);
 
-	memcpy(
-		buffer.Pointer(sizeof(int32_t)),
-		command.Id.GetValue(),
-		(int)ObjectStorage::Constants::IDSize);
+	command.Id.GetValue(buffer.Pointer(sizeof(int32_t)));
 
 	return buffer;
 }
@@ -161,7 +207,7 @@ bool CommandAddContact::ParseCommand(
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
 	if (command != SESSION_COMMAND_ADD_CONTACT) {
 		return false;
@@ -185,7 +231,8 @@ CowBuffer<uint8_t> CommandAddContact::BuildCommand(const Command &command)
 	CowBuffer<uint8_t> buffer(
 		sizeof(int32_t) + BuiltStringSize(command.ContactName));
 
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_ADD_CONTACT;
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_ADD_CONTACT);
 
 	uint64_t offset = sizeof(int32_t);
 
@@ -202,7 +249,7 @@ bool CommandUpdateContactKey::ParseCommand(
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
 	if (command != SESSION_COMMAND_UPDATE_CONTACT_KEY) {
 		return false;
@@ -247,7 +294,8 @@ CowBuffer<uint8_t> CommandUpdateContactKey::BuildCommand(const Command &command)
 		BuiltStringSize(command.ContactName) +
 		tailSize);
 
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_UPDATE_CONTACT_KEY;
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_UPDATE_CONTACT_KEY);
 
 	uint64_t offset = sizeof(int32_t);
 
@@ -278,7 +326,7 @@ bool CommandBlockContact::ParseCommand(
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
 	if (command != SESSION_COMMAND_BLOCK_CONTACT) {
 		return false;
@@ -310,13 +358,187 @@ CowBuffer<uint8_t> CommandBlockContact::BuildCommand(const Command &command)
 		BuiltStringSize(command.ContactName) +
 		sizeof(uint8_t));
 
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_BLOCK_CONTACT;
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_BLOCK_CONTACT);
 
 	uint64_t offset = sizeof(int32_t);
 
 	BuildString(buffer, offset, command.ContactName);
 
 	*buffer.Pointer(offset) = command.BlockStatus;
+
+	return buffer;
+}
+
+CowBuffer<uint8_t> CommandListContacts::BuildCommand()
+{
+	CowBuffer<uint8_t> buffer(sizeof(int32_t));
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_LIST_CONTACTS);
+	return buffer;
+}
+
+bool CommandListContacts::ParseResponse(
+	const CowBuffer<uint8_t> buffer,
+	Response &result)
+{
+	if (buffer.Size() < sizeof(int32_t) + sizeof(uint32_t)) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != SESSION_COMMAND_LIST_CONTACTS) {
+		return false;
+	}
+
+	uint64_t offset = sizeof(int32_t);
+
+	uint32_t count = SetProtoEndian(*buffer.SwitchType<uint32_t>(offset));
+	offset += sizeof(uint32_t);
+
+	result.Data.Resize(count);
+
+	for (uint32_t i = 0; i < count; i++) {
+		if (!ParseString(buffer, offset, result.Data[i].Name, 500)) {
+			return false;
+		}
+
+		if (result.Data[i].Name.Length() == 0) {
+			return false;
+		}
+
+		if (buffer.Size() < offset + Crypto::X25519::KEY_SIZE) {
+			return false;
+		}
+
+		result.Data[i].Key = buffer.Pointer(offset);
+		offset += Crypto::X25519::KEY_SIZE;
+	}
+
+	if (offset != buffer.Size()) {
+		return false;
+	}
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandListContacts::BuildResponse(const Response &data)
+{
+	uint64_t size = sizeof(int32_t) + sizeof(uint32_t);
+
+	for (uint64_t i = 0; i < data.Data.Size(); i++) {
+		size += BuiltStringSize(data.Data[i].Name) +
+			Crypto::X25519::KEY_SIZE;
+	}
+
+	CowBuffer<uint8_t> buffer(size);
+
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_LIST_CONTACTS);
+
+	uint64_t offset = sizeof(int32_t);
+
+	*buffer.SwitchType<uint32_t>(offset) =
+		SetProtoEndian<uint32_t>(data.Data.Size());
+	offset += sizeof(uint32_t);
+
+	for (uint64_t i = 0; i < data.Data.Size(); i++) {
+		BuildString(buffer, offset, data.Data[i].Name);
+
+		memcpy(
+			buffer.Pointer(offset),
+			data.Data[i].Key.Key,
+			Crypto::X25519::KEY_SIZE);
+		offset += Crypto::X25519::KEY_SIZE;
+	}
+
+	return buffer;
+}
+
+bool CommandOfferMessage::ParseCommand(
+	const CowBuffer<uint8_t> buffer,
+	Command &result)
+{
+	if (buffer.Size() < sizeof(int32_t)) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != SESSION_COMMAND_OFFER_MESSAGE) {
+		return false;
+	}
+
+	uint64_t offset = sizeof(int32_t);
+
+	if (!ParseString(buffer, offset, result.PeerName, 500)) {
+		return false;
+	}
+
+	if (result.PeerName.Length() == 0) {
+		return false;
+	}
+
+	if (buffer.Size() != offset + (int)ObjectStorage::Constants::IDSize) {
+		return false;
+	}
+
+	result.HeaderHash = buffer.Slice(
+		offset,
+		(int)ObjectStorage::Constants::IDSize);
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandOfferMessage::BuildCommand(const Command &data)
+{
+	CowBuffer<uint8_t> buffer(
+		sizeof(int32_t) +
+		BuiltStringSize(data.PeerName) +
+		(int)ObjectStorage::Constants::IDSize);
+
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_OFFER_MESSAGE);
+
+	uint64_t offset = sizeof(int32_t);
+
+	BuildString(buffer, offset, data.PeerName);
+
+	memcpy(
+		buffer.Pointer(offset),
+		data.HeaderHash.Pointer(),
+		(int)ObjectStorage::Constants::IDSize);
+
+	return buffer;
+}
+
+bool CommandOfferMessage::ParseResponse(
+	const CowBuffer<uint8_t> buffer,
+	Response &result)
+{
+	if (buffer.Size() != sizeof(int32_t) + sizeof(result.Answer)) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != SESSION_COMMAND_OFFER_MESSAGE) {
+		return false;
+	}
+
+	result.Answer = *buffer.SwitchType<uint8_t>(sizeof(int32_t));
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandOfferMessage::BuildResponse(const Response &data)
+{
+	CowBuffer<uint8_t> buffer(sizeof(int32_t) + sizeof(data.Answer));
+
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_OFFER_MESSAGE);
+	*buffer.SwitchType<uint8_t>(sizeof(int32_t)) = data.Answer;
 
 	return buffer;
 }
@@ -329,7 +551,7 @@ bool CommandSendMessage::ParseCommand(
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
 	if (command != SESSION_COMMAND_SEND_MESSAGE) {
 		return false;
@@ -345,7 +567,8 @@ bool CommandSendMessage::ParseCommand(
 CowBuffer<uint8_t> CommandSendMessage::BuildCommand(const Command &data)
 {
 	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
-	*commandBuffer.SwitchType<int32_t>() = SESSION_COMMAND_SEND_MESSAGE;
+	*commandBuffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_SEND_MESSAGE);
 	return commandBuffer.Concat(data.Message);
 }
 
@@ -357,7 +580,7 @@ bool CommandUpdateMessage::ParseCommand(
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
 	if (command != SESSION_COMMAND_UPDATE_MESSAGE) {
 		return false;
@@ -387,7 +610,8 @@ bool CommandUpdateMessage::ParseCommand(
 		return false;
 	}
 
-	result.Attr = *buffer.SwitchType<Message::Attribute>(offset);
+	result.Attr =
+		SetProtoEndian(*buffer.SwitchType<Message::Attribute>(offset));
 	offset += sizeof(Message::Attribute);
 
 	if (buffer.Size() != offset + sizeof(uint8_t)) {
@@ -407,7 +631,8 @@ CowBuffer<uint8_t> CommandUpdateMessage::BuildCommand(const Command &data)
 		(int)ObjectStorage::Constants::IDSize +
 		sizeof(data.Attr) + sizeof(data.AttrValue));
 
-	*buffer.SwitchType<int32_t>() = SESSION_COMMAND_UPDATE_MESSAGE;
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_UPDATE_MESSAGE);
 
 	uint64_t offset = sizeof(int32_t);
 
@@ -419,7 +644,8 @@ CowBuffer<uint8_t> CommandUpdateMessage::BuildCommand(const Command &data)
 		(int)ObjectStorage::Constants::IDSize);
 	offset += (int)ObjectStorage::Constants::IDSize;
 
-	*buffer.SwitchType<Message::Attribute>(offset) = data.Attr;
+	*buffer.SwitchType<Message::Attribute>(offset) =
+		SetProtoEndian(data.Attr);
 	offset += sizeof(data.Attr);
 
 	*buffer.Pointer(offset) = data.AttrValue;

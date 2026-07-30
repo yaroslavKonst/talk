@@ -3,128 +3,191 @@
 
 #include "Root.hpp"
 #include "TextEditor.hpp"
+#include "MessageDescriptor.hpp"
 #include "../Message/Message.hpp"
 #include "../Crypto/Crypto.hpp"
 
-class MessageDecryptor
-{
-public:
-	MessageDecryptor(
-		const CowBuffer<uint8_t> *message,
-		Message::Contents *contents);
-
-	void Run();
-	bool End();
-
-private:
-	const CowBuffer<uint8_t> *_message;
-	int _offset;
-
-	CowBuffer<uint8_t> _decryptedPart;
-
-	Message::Contents *_contents;
-
-	CryptoStreamReader _streamReader;
-};
-
-class MessageEncryptor
-{
-public:
-	MessageEncryptor(
-		const Message::Contents *contents,
-		CowBuffer<uint8_t> *message);
-
-	void Run();
-	bool End();
-
-private:
-	const CowBuffer<uint8_t> *_message;
-	int _offset;
-
-	CowBuffer<uint8_t> _encryptedPart;
-
-	Message::Contents *_contents;
-
-	CryptoStreamWriter _streamWriter;
-};
-
-class MessageDescriptor : public QuantEventProcessor
-{
-public:
-	MessageDescriptor(Root *root);
-
-	ObjectStorage::ID Identifier;
-
-	Message::HeaderPointToPoint Header;
-	Message::Attribute Attrs;
-	Message::Contents Contents;
-
-	MessageDecryptor *Dec;
-
-	void ProcessQuant() override;
-	void SaveAttributes();
-
-private:
-	Root *_root;
-};
-
-class Chat
+class Chat : public QuantEventProcessor
 {
 public:
 	Chat(
 		Root *root,
-		String peerName,
-		ObjectStorage *objectStorage);
+		String peerName);
 	~Chat();
 
+	bool HasMessage(const ObjectStorage::ID &messageID);
 	bool HasUnread();
-
-	void SwitchUp();
-	void SwitchDown();
-
-	void MoveLeft();
-	void MoveRight();
-	void AddChar(int c);
 
 	void SendMessage();
 
-	void DeliverMessage(CowBuffer<uint8_t> message);
+	void DeliverMessage(const CowBuffer<uint8_t> message, bool local);
+	void UpdateMessage(
+		const ObjectStorage::ID &messageID,
+		Message::Attribute attr,
+		bool value);
 
-	void MarkReadCurrentMessage();
+	void ProcessQuant() override;
 
-	bool HasAttachment();
-	CowBuffer<uint8_t> ExtractAttachment();
+	CowBuffer<ObjectStorage::ID> ListThreads();
+	ObjectStorage::ID GetRootMessageForThread(
+		const ObjectStorage::ID &threadID);
 
-	void AddAttachment(const CowBuffer<uint8_t> attachment);
-	void ClearAttachment();
+	ObjectStorage::ID GetNextMessage(
+		const ObjectStorage::ID &identifier);
+	ObjectStorage::ID GetPreviousMessage(
+		const ObjectStorage::ID &identifier);
+
+	MessageDescriptor *GetMessageDescriptor(
+		const ObjectStorage::ID &identifier);
 
 private:
 	struct MessageNode
 	{
 		MessageNode *Next;
+		MessageNode *Previous;
 		MessageDescriptor *Descriptor;
 
 		MessageNode(MessageDescriptor *descr)
 		{
 			Next = nullptr;
+			Previous = nullptr;
 			Descriptor = descr;
+		}
+
+		~MessageNode()
+		{
+			if (Descriptor) {
+				delete Descriptor;
+				Descriptor = nullptr;
+			}
+		}
+	};
+
+	struct MessageTreeEntry
+	{
+		ObjectStorage::ID Identifier;
+		MessageNode *Node;
+
+		bool operator==(const MessageTreeEntry &e) const;
+		bool operator<(const MessageTreeEntry &e) const;
+
+		MessageTreeEntry()
+		{
+			Node = nullptr;
+		}
+
+		MessageTreeEntry(MessageNode *node)
+		{
+			Node = node;
+			Identifier = node->Descriptor->Identifier;
+		}
+
+		MessageTreeEntry(const ObjectStorage::ID &id)
+		{
+			Node = nullptr;
+			Identifier = id;
+		}
+	};
+
+	struct UnreadMessageTreeEntry
+	{
+		MessageNode *Node;
+
+		ObjectStorage::ID Identifier;
+		int64_t Timestamp;
+		int32_t Index;
+
+		bool operator==(const UnreadMessageTreeEntry &e) const;
+		bool operator<(const UnreadMessageTreeEntry &e) const;
+
+		UnreadMessageTreeEntry()
+		{
+			Node = nullptr;
+			Timestamp = 0;
+			Index = 0;
+		}
+
+		UnreadMessageTreeEntry(MessageNode *node)
+		{
+			Node = node;
+			Identifier = node->Descriptor->Identifier;
+			Timestamp = node->Descriptor->Header.Timestamp;
+			Index = node->Descriptor->Header.Index;
+		}
+
+		UnreadMessageTreeEntry(
+			const ObjectStorage::ID &id,
+			int64_t timestamp,
+			int32_t index)
+		{
+			Node = nullptr;
+			Identifier = id;
+			Timestamp = timestamp;
+			Index = index;
+		}
+
+		UnreadMessageTreeEntry(int64_t timestamp, int32_t index)
+		{
+			Node = nullptr;
+			Timestamp = timestamp;
+			Index = index;
 		}
 	};
 
 	Root *_root;
-	ObjectStorage *_objectStorage;
+	ObjectStorage _objectStorage;
 	String _peerName;
 
-	MessageNode *_messages;
+#warning May be unused.
+	ObjectStorage::ID _currentThreadID;
 	MessageNode *_currentMessage;
+	int64_t _currentMessageLine;
+
+	Tree<MessageTreeEntry> _messagesByID;
+	Tree<UnreadMessageTreeEntry> _unreadMessages;
 
 	void LoadMessages();
 	void UnloadMessages();
 
-	TextEditor _draftText;
-	CowBuffer<uint8_t> _draftAttachment;
+	void AddMessageToMain(
+		ObjectStorage::ID messageID,
+		const Message::X25519::HeaderPointToPoint &header,
+		const CowBuffer<uint8_t> message,
+		Message::Attribute attrs);
+	void AddMessageToThread(
+		ObjectStorage::ID messageID,
+		const Message::X25519::HeaderPointToPoint &header,
+		const CowBuffer<uint8_t> message,
+		Message::Attribute attrs);
+
+	struct DraftEntry
+	{
+		Message::ContentsEntryType Type;
+		DraftEntry *Next;
+
+		virtual ~DraftEntry()
+		{ }
+	};
+
+	struct DraftEntryText : public DraftEntry
+	{
+		TextEditor Editor;
+	};
+
+	struct DraftEntryAttachment : public DraftEntry
+	{
+		String Name;
+		CowBuffer<uint8_t> Data;
+	};
+
+	DraftEntry *_draft;
 
 	MessageEncryptor *_enc;
+	CowBuffer<uint8_t> _encMessage;
+	void *_encLock;
+
+	bool IsDraftEmpty();
+	void FreeDraft();
 };
 
 #endif

@@ -4,12 +4,13 @@
 #include "Screen.hpp"
 #include "Root.hpp"
 #include "UiHelpers.hpp"
+#include "WorkScreen.hpp"
 #include "../Message/ContactStorage.hpp"
 
 class ContactScreen : public Screen
 {
 public:
-	ContactScreen(Root *root);
+	ContactScreen(Root *root, WorkScreen *workScreen);
 	~ContactScreen();
 
 	void Redraw() override;
@@ -20,6 +21,7 @@ public:
 private:
 	Root *_root;
 	ContactStorage *_contacts;
+	WorkScreen *_workScreen;
 
 	String _currentContact;
 	void RedrawContactList();

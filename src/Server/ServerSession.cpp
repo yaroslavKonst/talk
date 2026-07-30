@@ -8,6 +8,7 @@
 #include "ObjectType.hpp"
 #include "../Protocol/SessionParser.hpp"
 #include "../Protocol/ParserHelpers.hpp"
+#include "../Common/Endianness.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Log.hpp"
 #include "../Common/Exception.hpp"
@@ -138,7 +139,7 @@ bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
 	switch (command) {
 	case SESSION_COMMAND_KEEP_ALIVE:
@@ -153,6 +154,12 @@ bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessUpdateContactKey(buffer);
 	case SESSION_COMMAND_BLOCK_CONTACT:
 		return ProcessBlockContact(buffer);
+	case SESSION_COMMAND_LIST_CONTACTS:
+		return ProcessListContacts();
+	case SESSION_COMMAND_SEND_MESSAGE:
+		return ProcessSendMessage(buffer);
+	case SESSION_COMMAND_OFFER_MESSAGE:
+		return ProcessOfferMessage(buffer);
 	default:
 		SessionLog("Unknown command.");
 		return false;
@@ -238,6 +245,55 @@ bool ServerSession::ProcessBlockContact(const CowBuffer<uint8_t> buffer)
 	return true;
 }
 
+bool ServerSession::ProcessListContacts()
+{
+	CommandListContacts::Response response;
+	response.Data = _storage->GetContactList();
+
+	_protocol->Send(CommandListContacts::BuildResponse(response), 0);
+	return true;
+}
+
+bool ServerSession::ProcessSendMessage(const CowBuffer<uint8_t> buffer)
+{
+	CommandSendMessage::Command command;
+	bool parseResult = CommandSendMessage::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	bool sendStatus = _storage->SendMessage(command.Message);
+
+	return sendStatus;
+}
+
+bool ServerSession::ProcessOfferMessage(const CowBuffer<uint8_t> buffer)
+{
+	CommandOfferMessage::Response response;
+	bool parseResult = CommandOfferMessage::ParseResponse(buffer, response);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	if (!_offeredMessagePeerName.Length() || _offeredMessageID.IsZero()) {
+		return false;
+	}
+
+	if (response.Answer) {
+		SendMessage();
+	} else {
+		_offeredMessagePeerName = String();
+		_offeredMessageID = ObjectStorage::ID();
+
+		SendID(_currentObjectID);
+		SendIDRequest();
+	}
+
+	return true;
+}
+
 void ServerSession::InitObjectTransmission()
 {
 	if (_objectTransmissionActive) {
@@ -271,10 +327,10 @@ void ServerSession::ObjectTransmissionStep(const ObjectStorage::ID &id)
 		return;
 	}
 
+	_currentObjectID = requiredObjectId;
+
 	CowBuffer<uint8_t> object = objectStorage->ReadObject(requiredObjectId);
 	SendObject(object);
-	SendID(requiredObjectId);
-	SendIDRequest();
 }
 
 void ServerSession::SendIDRequest()
@@ -325,6 +381,14 @@ void ServerSession::SendObject(const CowBuffer<uint8_t> object)
 	case (int)ObjectType::BlockContact:
 		SendBlockContact(object);
 		break;
+	case (int)ObjectType::Message:
+		SendOfferMessage(object);
+		break;
+	case (int)ObjectType::UpdateMessage:
+		SendMessageUpdate(object);
+		break;
+	default:
+		THROW("Unsupported database entry type.");
 	}
 }
 
@@ -343,6 +407,9 @@ void ServerSession::SendAddContact(const CowBuffer<uint8_t> object)
 	SessionLog("Sent add contact " + command.ContactName + ".");
 
 	_protocol->Send(CommandAddContact::BuildCommand(command), 1);
+
+	SendID(_currentObjectID);
+	SendIDRequest();
 }
 
 void ServerSession::SendUpdateContactKey(const CowBuffer<uint8_t> object)
@@ -364,6 +431,9 @@ void ServerSession::SendUpdateContactKey(const CowBuffer<uint8_t> object)
 	SessionLog("Sent update contact key for " + command.ContactName + ".");
 
 	_protocol->Send(CommandUpdateContactKey::BuildCommand(command), 1);
+
+	SendID(_currentObjectID);
+	SendIDRequest();
 }
 
 void ServerSession::SendBlockContact(const CowBuffer<uint8_t> object)
@@ -382,6 +452,65 @@ void ServerSession::SendBlockContact(const CowBuffer<uint8_t> object)
 	SessionLog("Sent block contact for " + command.ContactName + ".");
 
 	_protocol->Send(CommandBlockContact::BuildCommand(command), 1);
+
+	SendID(_currentObjectID);
+	SendIDRequest();
+}
+
+void ServerSession::SendOfferMessage(const CowBuffer<uint8_t> object)
+{
+	MessageObject::Data data;
+	bool parseResult = MessageObject::ParseData(object, data);
+
+	if (!parseResult) {
+		THROW("Corrupt database entry.");
+	}
+
+	CommandOfferMessage::Command command;
+	command.PeerName = data.PeerName;
+	command.HeaderHash = data.HeaderHash.GetValue();
+
+	_protocol->Send(CommandOfferMessage::BuildCommand(command), 1);
+}
+
+void ServerSession::SendMessage()
+{
+	CommandSendMessage::Command command;
+	command.Message = _storage->GetMessage(
+		_offeredMessagePeerName,
+		_offeredMessageID);
+
+	if (command.Message.Size()) {
+		_protocol->Send(CommandSendMessage::BuildCommand(command), 1);
+	}
+
+	_offeredMessagePeerName = String();
+	_offeredMessageID = ObjectStorage::ID();
+
+	SendID(_currentObjectID);
+	SendIDRequest();
+}
+
+void ServerSession::SendMessageUpdate(const CowBuffer<uint8_t> object)
+{
+	UpdateMessageObject::Data data;
+	bool parseResult = UpdateMessageObject::ParseData(object, data);
+
+	if (!parseResult) {
+		THROW("Corrupt database entry.");
+	}
+
+	CommandUpdateMessage::Command command;
+	command.PeerName = data.PeerName;
+	command.HeaderHash = data.HeaderHash.GetValue();
+
+	command.Attr = data.Attr;
+	command.AttrValue = data.Value;
+
+	_protocol->Send(CommandUpdateMessage::BuildCommand(command), 1);
+
+	SendID(_currentObjectID);
+	SendIDRequest();
 }
 
 void ServerSession::SessionLog(String message)

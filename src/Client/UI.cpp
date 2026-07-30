@@ -59,6 +59,10 @@ bool UI::ProcessEvent()
 		return true;
 	}
 
+	if (_rows < 24 || _columns < 80) {
+		return true;
+	}
+
 	bool notificationProcessed = _notifier.ProcessEvent(event);
 
 	if (notificationProcessed) {
@@ -107,6 +111,14 @@ void UI::ProcessResize()
 void UI::Redraw()
 {
 	UiHelpers::ClearScreen(0, _rows - 1, 0, _columns - 1);
+
+	if (_rows < 24 || _columns < 80) {
+		move(0, 1);
+		addstr("Terminal screen is too small.");
+		move(0, 0);
+		refresh();
+		return;
+	}
 
 	DrawUserData();
 	DrawConnectionState();
@@ -256,6 +268,10 @@ void UI::DrawControlHelp()
 		}
 
 		if (posX + totalLength > _columns) {
+			if (posX) {
+				totalLength -= 3;
+			}
+
 			posX = 0;
 			--posY;
 		}

@@ -38,6 +38,9 @@ public:
 	int32_t GetFailBanMaxTries();
 	int64_t GetFailBanCooldownInterval();
 
+	uint64_t GetRateLimiterMaxRequestsPerMinute();
+	uint64_t GetRateLimiterSessionTimeoutPenalty();
+
 private:
 	IniFile _configFile;
 
@@ -58,6 +61,9 @@ private:
 	int64_t _failBanBanTime;
 	int32_t _failBanMaxTries;
 	int64_t _failBanCooldownInterval;
+
+	uint64_t _rateLimiterMaxRequestsPerMinute;
+	uint64_t _rateLimiterSessionTimeoutPenalty;
 
 	struct ConfUser
 	{

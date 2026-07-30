@@ -1,6 +1,7 @@
 #include "SessionProtocol.hpp"
 
 #include "../Common/Exception.hpp"
+#include "../Common/Endianness.hpp"
 
 // BufferQueue.
 BufferQueue::BufferQueue()
@@ -120,7 +121,8 @@ CowBuffer<uint8_t> Multiplexer::GetData()
 
 			CowBuffer<uint8_t> size(sizeof(uint64_t));
 			*size.SwitchType<uint64_t>() =
-				_inProgressBuffers[i].Size();
+				SetProtoEndian<uint64_t>(
+					_inProgressBuffers[i].Size());
 
 			channel = channel.Concat(size);
 		}
@@ -194,7 +196,7 @@ bool Demultiplexer::AddData(CowBuffer<uint8_t> data)
 			return false;
 		}
 
-		uint64_t size = *data.SwitchType<uint64_t>();
+		uint64_t size = SetProtoEndian(*data.SwitchType<uint64_t>());
 
 		if (size > _inputSizeLimit || !size) {
 			return false;
@@ -327,7 +329,7 @@ bool SessionProtocol::Read()
 			THROW("Size was expected.");
 		}
 
-		uint64_t size = *buffer.SwitchType<uint8_t>();
+		uint64_t size = SetProtoEndian(*buffer.SwitchType<uint64_t>());
 
 		if (size > 4 * 1024 || !size) {
 			return false;
@@ -379,7 +381,8 @@ bool SessionProtocol::Write()
 	data = Encrypt(data, *_outES);
 
 	CowBuffer<uint8_t> sizeBuffer(sizeof(uint64_t));
-	*sizeBuffer.SwitchType<uint64_t>() = data.Size();
+	*sizeBuffer.SwitchType<uint64_t>() =
+		SetProtoEndian<uint64_t>(data.Size());
 	data = sizeBuffer.Concat(data);
 
 	_outScramblerInit = Crypto::ApplyScrambler(

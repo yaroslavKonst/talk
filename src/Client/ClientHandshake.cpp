@@ -2,6 +2,7 @@
 
 #include "../Protocol/HandshakeParser.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/Endianness.hpp"
 
 ClientHandshake::ClientHandshake(
 	Root *root,
@@ -169,8 +170,9 @@ void ClientHandshake::InitSyn()
 	CowBuffer<uint8_t> synHeader = HandshakeSyn::Build(data);
 
 	CowBuffer<uint8_t> synSize(sizeof(uint32_t));
-	*synSize.SwitchType<uint32_t>() = synSize.Size() + synHeader.Size() +
-		Crypto::X25519::CRYPTO_HEADER_SIZE + _name.Length();
+	*synSize.SwitchType<uint32_t>() = SetProtoEndian<uint32_t>(
+		synSize.Size() + synHeader.Size() +
+		Crypto::X25519::CRYPTO_HEADER_SIZE + _name.Length());
 
 	synHeader = synSize.Concat(synHeader);
 
@@ -217,7 +219,7 @@ bool ClientHandshake::ProcessSynAckSize(CowBuffer<uint8_t> buffer)
 		buffer.Size(),
 		_inScramblerInit);
 
-	uint32_t synAckSize = *buffer.SwitchType<uint32_t>();
+	uint32_t synAckSize = SetProtoEndian(*buffer.SwitchType<uint32_t>());
 
 	if (synAckSize > 512) {
 		return false;
@@ -239,7 +241,8 @@ bool ClientHandshake::ProcessSynAck(CowBuffer<uint8_t> buffer)
 		_inScramblerInit);
 
 	if (buffer.Size() == sizeof(int32_t)) {
-		int32_t errorStatus = *buffer.SwitchType<int32_t>();
+		int32_t errorStatus =
+			SetProtoEndian(*buffer.SwitchType<int32_t>());
 
 		if (errorStatus ==
 			HANDSHAKE_RESPONSE_UNSUPPORTED_PROTOCOL_VERSION)

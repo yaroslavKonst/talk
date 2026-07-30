@@ -82,13 +82,13 @@ public:
 		return _data->Data[index + _offset];
 	}
 
-	T *Pointer(int offset = 0)
+	T *Pointer(uint64_t offset = 0)
 	{
 		MakeExclusive();
 		return _data->Data + _offset + offset;
 	}
 
-	const T *Pointer(int offset = 0) const
+	const T *Pointer(uint64_t offset = 0) const
 	{
 		return _data->Data + _offset + offset;
 	}
@@ -155,13 +155,13 @@ public:
 	}
 
 	template <typename S>
-	const S *SwitchType(int offset = 0) const
+	const S *SwitchType(uint64_t offset = 0) const
 	{
 		return (S*)(Pointer() + offset);
 	}
 
 	template <typename S>
-	S *SwitchType(int offset = 0)
+	S *SwitchType(uint64_t offset = 0)
 	{
 		return (S*)(Pointer() + offset);
 	}

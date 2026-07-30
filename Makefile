@@ -10,6 +10,7 @@ export STATIC_FLAG = -static
 	all \
 	server \
 	client \
+	utils \
 	clean \
 	install \
 	installserver \
@@ -17,14 +18,17 @@ export STATIC_FLAG = -static
 	tests \
 	testrun
 
-all:
+all: utils
 	cd src && $(MAKE) all
 
-server:
+server: utils
 	cd src && $(MAKE) server
 
-client:
+client: utils
 	cd src && $(MAKE) client
+
+utils:
+	cd src/Utils && $(MAKE)
 
 tests: all
 	cd tests && $(MAKE)

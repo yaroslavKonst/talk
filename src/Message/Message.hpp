@@ -25,12 +25,20 @@ namespace Message
 		Unread = 0x2,
 
 		// Outbound attributes.
-		InProgress = 0x4,
-		ConnectionFailure = 0x8,
-		NonExistentAddress = 0x10,
-		MessageTooBig = 0x20,
-		Banned = 0x40
+		Local = 0x4,
+		InProgress = 0x8,
+		ConnectionFailure = 0x10,
+		NonExistentAddress = 0x20,
+		MessageTooBig = 0x40,
+		Banned = 0x80
 	};
+
+	namespace AttributeAction
+	{
+		bool Has(Attribute attrs, Attribute flag);
+		Attribute Set(Attribute attrs, Attribute flag);
+		Attribute Clear(Attribute attrs, Attribute flag);
+	}
 
 	enum class ContentsEntryType : uint8_t
 	{
@@ -76,6 +84,8 @@ namespace Message
 	{
 		~Contents();
 
+		void Clear();
+
 		CowBuffer<ContentsEntry*> Entries;
 	};
 
@@ -86,6 +96,11 @@ namespace Message
 	CowBuffer<uint8_t> BuildContents(
 		const Contents &contents,
 		uint64_t emptySize);
+
+	bool SplitFullUserName(
+		String fullName,
+		String &userName,
+		String &hostName);
 
 	namespace X25519
 	{

@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "../Crypto/Crypto.hpp"
+#include "../Common/Endianness.hpp"
 
 using namespace Crypto::X25519;
 
@@ -24,14 +25,16 @@ bool HandshakeSyn::Parse(const CowBuffer<uint8_t> buffer, Data &result)
 		return false;
 	}
 
-	result.ProtocolVersion = *buffer.SwitchType<int32_t>(offset);
+	result.ProtocolVersion =
+		SetProtoEndian(*buffer.SwitchType<int32_t>(offset));
 	offset += sizeof(int32_t);
 
 	if (buffer.Size() < offset + sizeof(int32_t)) {
 		return false;
 	}
 
-	result.EncryptionScheme = *buffer.SwitchType<int32_t>(offset);
+	result.EncryptionScheme =
+		SetProtoEndian(*buffer.SwitchType<int32_t>(offset));
 	offset += sizeof(int32_t);
 
 	if (buffer.Size() < offset + SaltSize) {
@@ -83,10 +86,12 @@ CowBuffer<uint8_t> HandshakeSyn::Build(const Data &data)
 	CowBuffer<uint8_t> result(size);
 	uint64_t offset = 0;
 
-	*result.SwitchType<int32_t>(offset) = data.ProtocolVersion;
+	*result.SwitchType<int32_t>(offset) =
+		SetProtoEndian(data.ProtocolVersion);
 	offset += sizeof(int32_t);
 
-	*result.SwitchType<int32_t>(offset) = data.EncryptionScheme;
+	*result.SwitchType<int32_t>(offset) =
+		SetProtoEndian(data.EncryptionScheme);
 	offset += sizeof(int32_t);
 
 	memcpy(
@@ -122,10 +127,12 @@ bool HandshakeSynAck::Parse(const CowBuffer<uint8_t> buffer, Data &result)
 
 	uint64_t offset = 0;
 
-	result.ProtocolVersion = *buffer.SwitchType<int32_t>(offset);
+	result.ProtocolVersion =
+		SetProtoEndian(*buffer.SwitchType<int32_t>(offset));
 	offset += sizeof(int32_t);
 
-	result.EncryptionScheme = *buffer.SwitchType<int32_t>(offset);
+	result.EncryptionScheme =
+		SetProtoEndian(*buffer.SwitchType<int32_t>(offset));
 	offset += sizeof(int32_t);
 
 	result.Challenge = buffer.Slice(offset, Handshake::ChallengeSize);
@@ -144,10 +151,12 @@ CowBuffer<uint8_t> HandshakeSynAck::Build(const Data &data)
 	CowBuffer<uint8_t> result(SynAckLength);
 	uint64_t offset = 0;
 
-	*result.SwitchType<int32_t>(offset) = data.ProtocolVersion;
+	*result.SwitchType<int32_t>(offset) =
+		SetProtoEndian(data.ProtocolVersion);
 	offset += sizeof(int32_t);
 
-	*result.SwitchType<int32_t>(offset) = data.EncryptionScheme;
+	*result.SwitchType<int32_t>(offset) =
+		SetProtoEndian(data.EncryptionScheme);
 	offset += sizeof(int32_t);
 
 	memcpy(

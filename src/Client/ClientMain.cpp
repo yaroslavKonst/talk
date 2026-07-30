@@ -14,7 +14,6 @@ int main(int argc, char **argv)
 	}
 	catch (Exception &ex) {
 		printf("%s\n", ex.Message().CStr());
-		printf("%s\n", ex.What().CStr());
 	}
 
 	return 100;

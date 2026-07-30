@@ -57,6 +57,46 @@ public:
 		return _keyNames[(int)Keys::WorkContact];
 	}
 
+	int WorkListSelectKey()
+	{
+		return _keys[(int)Keys::WorkListSelect];
+	}
+
+	String WorkListSelectName()
+	{
+		return _keyNames[(int)Keys::WorkListSelect];
+	}
+
+	int WorkListUpKey()
+	{
+		return _keys[(int)Keys::WorkListUp];
+	}
+
+	String WorkListUpName()
+	{
+		return _keyNames[(int)Keys::WorkListUp];
+	}
+
+	int WorkListDownKey()
+	{
+		return _keys[(int)Keys::WorkListDown];
+	}
+
+	String WorkListDownName()
+	{
+		return _keyNames[(int)Keys::WorkListDown];
+	}
+
+	int WorkChatBackKey()
+	{
+		return _keys[(int)Keys::WorkChatBack];
+	}
+
+	String WorkChatBackName()
+	{
+		return _keyNames[(int)Keys::WorkChatBack];
+	}
+
 	int LoginBackKey()
 	{
 		return _keys[(int)Keys::LoginBack];
@@ -167,6 +207,16 @@ public:
 		return _keyNames[(int)Keys::ContactBlock];
 	}
 
+	int ContactListContactsKey()
+	{
+		return _keys[(int)Keys::ContactListContacts];
+	}
+
+	String ContactListContactsName()
+	{
+		return _keyNames[(int)Keys::ContactListContacts];
+	}
+
 	int NotificationConfirmKey()
 	{
 		return _keys[(int)Keys::NotificationConfirm];
@@ -193,7 +243,6 @@ private:
 		WorkListSelect,
 		WorkListUp,
 		WorkListDown,
-		WorkListUpdate,
 
 		WorkChatType,
 		WorkChatUp,
@@ -219,6 +268,7 @@ private:
 		ContactNew,
 		ContactToChat,
 		ContactBlock,
+		ContactListContacts,
 
 		VoiceStart,
 		VoiceEnd,

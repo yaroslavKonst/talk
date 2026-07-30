@@ -34,6 +34,12 @@ static const char *FailBanCooldownSettingValue = "14400";
 static const char *FailBanBanTimeSetting = "BanInterval";
 static const char *FailBanBanTimeSettingValue = "86400";
 
+static const char *RateLimiterSection = "RateLimiter";
+static const char *RateLimiterMaxRequestsPerMinute = "MaxRequestsPerMinute";
+static const char *RateLimiterMaxRequestsPerMinuteValue = "60";
+static const char *RateLimiterSessionTimeoutPenalty = "SessionTimeoutPenalty";
+static const char *RateLimiterSessionTimeoutPenaltyValue = "600";
+
 Config::Config() : _configFile("talkd.conf")
 {
 	_listeningAddress = 0;
@@ -141,6 +147,16 @@ int64_t Config::GetFailBanCooldownInterval()
 	return _failBanCooldownInterval;
 }
 
+uint64_t Config::GetRateLimiterMaxRequestsPerMinute()
+{
+	return _rateLimiterMaxRequestsPerMinute;
+}
+
+uint64_t Config::GetRateLimiterSessionTimeoutPenalty()
+{
+	return _rateLimiterSessionTimeoutPenalty;
+}
+
 void Config::Init()
 {
 	if (!FileExists(_configFile.GetPath())) {
@@ -180,6 +196,15 @@ void Config::Init()
 			FailBanSection,
 			FailBanBanTimeSetting,
 			FailBanBanTimeSettingValue);
+
+		_configFile.Set(
+			RateLimiterSection,
+			RateLimiterMaxRequestsPerMinute,
+			RateLimiterMaxRequestsPerMinuteValue);
+		_configFile.Set(
+			RateLimiterSection,
+			RateLimiterSessionTimeoutPenalty,
+			RateLimiterSessionTimeoutPenaltyValue);
 
 		_configFile.Write();
 	}
@@ -290,6 +315,25 @@ void Config::Validate()
 		THROW("FailBan cooldown setting must be positive integer.");
 	}
 
+	// Rate limiter.
+	int64_t rateLimiterMaxRequestsPerMinute = atoll(_configFile.Get(
+		RateLimiterSection,
+		RateLimiterMaxRequestsPerMinute).CStr());
+
+	if (rateLimiterMaxRequestsPerMinute <= 0) {
+		THROW("RateLimiter max requests rate setting must be "
+			"positive integer.");
+	}
+
+	int64_t rateLimiterSessionTimeoutPenalty = atoll(_configFile.Get(
+		RateLimiterSection,
+		RateLimiterSessionTimeoutPenalty).CStr());
+
+	if (rateLimiterSessionTimeoutPenalty <= 0) {
+		THROW("RateLimiter session timeout penalty setting must be "
+			"positive integer.");
+	}
+
 	// Writing new parameters.
 	_listeningAddress = addr.s_addr;
 	_listeningPort = port;
@@ -305,4 +349,7 @@ void Config::Validate()
 	_failBanBanTime = failBanBanTime;
 	_failBanMaxTries = failBanMaxTries;
 	_failBanCooldownInterval = failBanCooldownInterval;
+
+	_rateLimiterMaxRequestsPerMinute = rateLimiterMaxRequestsPerMinute;
+	_rateLimiterSessionTimeoutPenalty = rateLimiterSessionTimeoutPenalty;
 }

@@ -4,5 +4,6 @@
 #include <cstdint>
 
 int64_t GetUnixTime();
+int64_t GetMonotonicMillisecondTime();
 
 #endif

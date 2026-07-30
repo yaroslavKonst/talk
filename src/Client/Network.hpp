@@ -44,6 +44,11 @@ public:
 		String contactName,
 		Contact::BlockStatus block) override;
 
+	bool ListContacts();
+	bool SetContactListProcessor(ContactListProcessor *processor);
+
+	bool SendMessage(const CowBuffer<uint8_t> message);
+
 private:
 	int _fd;
 	Root *_root;

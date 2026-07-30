@@ -14,6 +14,7 @@ UserDB::UserDB(
 	_dispatcher = dispatcher;
 	_config = config;
 	_failBan = failBan;
+	_sendPlanner = nullptr;
 
 	_startupSessions = nullptr;
 	_timeQuantRequested = false;
@@ -36,6 +37,11 @@ UserDB::~UserDB()
 	}
 
 	FreeUserData();
+}
+
+void UserDB::SetSendPlanner(SendPlannerBase *sendPlanner)
+{
+	_sendPlanner = sendPlanner;
 }
 
 bool UserDB::HasUser(String name)
@@ -65,7 +71,7 @@ void UserDB::AddUser(
 
 	User::CreateUser(name, key);
 
-	User *user = new User(name, _dispatcher, _config);
+	User *user = new User(name, _dispatcher, _config, this);
 	_usersByName.AddEntry(user);
 }
 
@@ -171,6 +177,17 @@ void UserDB::ProcessQuant()
 	}
 }
 
+void UserDB::RegisterMessageForDelivery(
+	const Message::X25519::HeaderPointToPoint &header,
+	const ObjectStorage::ID &messageID)
+{
+	if (!_sendPlanner) {
+		THROW("Send planner is not registered.");
+	}
+
+	_sendPlanner->RegisterMessageForDelivery(header, messageID);
+}
+
 UserDB::UserByName::UserByName()
 {
 	user = nullptr;
@@ -210,7 +227,11 @@ void UserDB::LoadUserData()
 	CowBuffer<String> userNames = ListDirectory(root);
 
 	for (unsigned int i = 0; i < userNames.Size(); i++) {
-		User *user = new User(userNames[i], _dispatcher, _config);
+		User *user = new User(
+			userNames[i],
+			_dispatcher,
+			_config,
+			this);
 		_usersByName.AddEntry(user);
 	}
 }

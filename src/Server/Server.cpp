@@ -7,7 +7,9 @@
 #include "ListeningSocket.hpp"
 #include "ControlSocket.hpp"
 #include "GateSession.hpp"
+#include "SendPlanner.hpp"
 #include "FailBan.hpp"
+#include "RateLimiter.hpp"
 #include "../Common/SignalHandling.hpp"
 #include "../Common/Log.hpp"
 #include "../Common/EventDispatcher.hpp"
@@ -33,7 +35,9 @@ int Server::Run()
 	EventDispatcher dispatcher(10000);
 	Config config;
 	FailBan failBan(&dispatcher, &config);
+	RateLimiter rateLimiter(&dispatcher, &config);
 	UserDB users(&dispatcher, &config, &failBan, _privateKey, _publicKey);
+	SendPlanner sendPlanner(&dispatcher, &users);
 	ListeningSocket listeningSocket(&users, &dispatcher, &config, &failBan);
 	ControlSocket controlSocket(
 		&users,
@@ -55,21 +59,6 @@ int Server::Run()
 
 	return 0;
 }
-
-/*void Server::LoadRestrictedMode()
-{
-	String restrictedModeValue = _configFile.Get("", RestrictedModeSetting);
-
-	if (restrictedModeValue == "Yes") {
-		_restrictedMode = true;
-	} else if (restrictedModeValue == "No") {
-		_restrictedMode = false;
-	} else {
-		THROW("Invalid RestrictedMode value. "
-			"Expected 'Yes' or 'No'.");
-	}
-
-}*/
 
 void Server::GetPassword()
 {

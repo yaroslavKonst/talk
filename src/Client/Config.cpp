@@ -43,6 +43,18 @@ namespace WorkScreenControls
 
 	static const char *Contact = "Manage Contacts";
 	static const char *ContactValue = "Ctrl-C";
+
+	static const char *ListSelect = "Select Chat";
+	static const char *ListSelectValue = "Enter";
+
+	static const char *ListUp = "Previous Chat";
+	static const char *ListUpValue = "Up";
+
+	static const char *ListDown = "Next Chat";
+	static const char *ListDownValue = "Down";
+
+	static const char *ChatBack = "Exit Chat";
+	static const char *ChatBackValue = "q";
 }
 
 namespace LoginScreenControls
@@ -86,6 +98,9 @@ namespace ContactScreenControls
 
 	static const char *Block = "Block User";
 	static const char *BlockValue = "Ctrl-B";
+
+	static const char *List = "Request Contact List";
+	static const char *ListValue = "Ctrl-U";
 }
 
 namespace NotificationControls
@@ -344,6 +359,10 @@ void Config::Init()
 			_configFile.Set(Section, Exit, ExitValue);
 			_configFile.Set(Section, Connect, ConnectValue);
 			_configFile.Set(Section, Contact, ContactValue);
+			_configFile.Set(Section, ListSelect, ListSelectValue);
+			_configFile.Set(Section, ListUp, ListUpValue);
+			_configFile.Set(Section, ListDown, ListDownValue);
+			_configFile.Set(Section, ChatBack, ChatBackValue);
 		}
 
 		{
@@ -363,6 +382,7 @@ void Config::Init()
 			_configFile.Set(Section, New, NewValue);
 			_configFile.Set(Section, ToChat, ToChatValue);
 			_configFile.Set(Section, Block, BlockValue);
+			_configFile.Set(Section, List, ListValue);
 		}
 
 		{
@@ -390,6 +410,14 @@ void Config::LoadControls()
 			_configFile.Get(Section, Connect);
 		_keyNames[(int)Keys::WorkContact] =
 			_configFile.Get(Section, Contact);
+		_keyNames[(int)Keys::WorkListSelect] =
+			_configFile.Get(Section, ListSelect);
+		_keyNames[(int)Keys::WorkListUp] =
+			_configFile.Get(Section, ListUp);
+		_keyNames[(int)Keys::WorkListDown] =
+			_configFile.Get(Section, ListDown);
+		_keyNames[(int)Keys::WorkChatBack] =
+			_configFile.Get(Section, ChatBack);
 	}
 
 	{
@@ -420,6 +448,8 @@ void Config::LoadControls()
 			_configFile.Get(Section, ToChat);
 		_keyNames[(int)Keys::ContactBlock] =
 			_configFile.Get(Section, Block);
+		_keyNames[(int)Keys::ContactListContacts] =
+			_configFile.Get(Section, List);
 	}
 
 	{
@@ -429,7 +459,11 @@ void Config::LoadControls()
 	}
 
 	for (int i = 0; i <= (int)Keys::NotificationConfirm; i++) {
-		_keys[i] = ParseKey(_keyNames[i]);
+		try {
+			_keys[i] = ParseKey(_keyNames[i]);
+		} catch (Exception &ex) {
+			THROW("Failed to parse key " + ToString(i) + ".");
+		}
 
 		if (_keyNames[i].Length() == 1) {
 			_keyNames[i] = "'" + _keyNames[i] + "'";

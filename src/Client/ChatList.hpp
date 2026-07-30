@@ -2,7 +2,7 @@
 #define _CHAT_LIST_HPP
 
 #include "Root.hpp"
-//#include "Chat.hpp"
+#include "Chat.hpp"
 #include "../Message/ContactStorage.hpp"
 #include "../Common/ObjectStorage.hpp"
 
@@ -14,22 +14,45 @@ public:
 
 	ContactStorage *GetContactStorage();
 
-//	Chat *GetCurrentChat();
+	Chat *GetCurrentChat();
+
+	String GetCurrentChatName() override;
+	String GetNextChatName(String name) override;
+	String GetPreviousChatName(String name) override;
 
 	void SwitchUp();
 	void SwitchDown();
-	void Activate() override;
-	void Deactivate() override;
 
 	ObjectStorage::ID GetKnownID() override;
 	void SetKnownID(const ObjectStorage::ID &id) override;
 
 	void SelectOrCreateChat(String peerName) override;
 
+	bool HasMessage(
+		String peerName,
+		const ObjectStorage::ID &messageID) override;
+	void DeliverMessage(const CowBuffer<uint8_t> message) override;
+	void UpdateMessage(
+		String peerName,
+		const ObjectStorage::ID &messageID,
+		Message::Attribute attr,
+		bool value) override;
+
+	CowBuffer<ObjectStorage::ID> ListThreads() override;
+	ObjectStorage::ID GetRootMessageForThread(
+		const ObjectStorage::ID &threadID) override;
+	ObjectStorage::ID GetNextMessage(
+		const ObjectStorage::ID &identifier) override;
+	ObjectStorage::ID GetPreviousMessage(
+		const ObjectStorage::ID &identifier) override;
+	MessageDescriptorBase *GetMessageDescriptor(
+		const ObjectStorage::ID &identifier) override;
+	bool HasUnread(String chatName) override;
+
 private:
 	Root *_root;
 
-	/*class ChatContainer
+	class ChatContainer
 	{
 	public:
 		ChatContainer();
@@ -41,6 +64,11 @@ private:
 			return _chat;
 		}
 
+		String GetChatName()
+		{
+			return _peerName;
+		}
+
 		bool operator<(const ChatContainer &container) const;
 		bool operator==(const ChatContainer &container) const;
 
@@ -50,16 +78,14 @@ private:
 	};
 
 	Tree<ChatContainer> _chats;
-	Tree<ChatContainer>::Entry *_currentChat;*/
+	Tree<ChatContainer>::Entry *_currentChat;
 
 	ContactStorage _contactStorage;
 
-	bool _currentChatIsActive;
+	void LoadChats();
+	void UnloadChats();
 
-	/*void LoadChats();
-	void UnloadChats();*/
-
-	//void LoadChat(String peerName);
+	void LoadChat(String peerName);
 };
 
 #endif

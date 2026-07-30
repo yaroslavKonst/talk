@@ -4,14 +4,92 @@
 
 #include "UiHelpers.hpp"
 
+static bool IsWhitespace(uint32_t c)
+{
+	return c == ' ' || c == '\t' || c == '\n';
+}
+
 TextEditor::TextEditor()
 {
-	_currentWord = new Word;
+	_currentWord = nullptr;
+	_currentChar = 0;
+
+	_currentLine = nullptr;
+
+	_fromY = 0;
+	_toY = 0;
+	_fromX = 0;
+	_toX = 0;
 }
 
 TextEditor::~TextEditor()
 {
-	delete _currentWord;
+	FreeLines(nullptr);
+	FreeWords();
+}
+
+void TextEditor::FreeLines(Line *line)
+{
+	if (!line) {
+		line = FirstLine();
+	}
+
+	if (!line) {
+		return;
+	}
+
+	if (line->Previous) {
+		line->Previous->Next = nullptr;
+	}
+
+	while (line) {
+		Line *tmp = line;
+		line = line->Next;
+		delete tmp;
+	}
+}
+
+void TextEditor::FreeWords()
+{
+	Word *word = FirstWord();
+
+	while (word) {
+		Word *tmp = word;
+		word = word->Next;
+		delete tmp;
+	}
+
+	_currentWord = nullptr;
+}
+
+TextEditor::Word *TextEditor::FirstWord()
+{
+	if (!_currentWord) {
+		return nullptr;
+	}
+
+	Word *word = _currentWord;
+
+	while (word->Previous) {
+		word = word->Previous;
+	}
+
+	return word;
+}
+
+TextEditor::Line *TextEditor::FirstLine()
+{
+	if (!_currentLine) {
+		return nullptr;
+	}
+
+	Line *line = _currentLine;
+
+	while (line->Previous) {
+		line = line->Previous;
+	}
+
+	return line;
 }
 
 void TextEditor::SetPosition(int fromY, int toY, int fromX, int toX)
@@ -20,424 +98,836 @@ void TextEditor::SetPosition(int fromY, int toY, int fromX, int toX)
 	_toY = toY;
 	_fromX = fromX;
 	_toX = toX;
+
+	RebuildLines(nullptr);
+}
+
+void TextEditor::Normalize()
+{
+	if (!_currentWord) {
+		_currentChar = 0;
+		return;
+	}
+
+	while (_currentWord->Next &&
+		_currentChar == _currentWord->Data.Size())
+	{
+		_currentWord = _currentWord->Next;
+		_currentChar = 0;
+	}
+}
+
+String TextEditor::GetText()
+{
+	String text;
+
+	Word *word = FirstWord();
+
+	while (word) {
+		if (word->Data.Size()) {
+			text += UTF8::Encode(word->Data);
+		}
+
+		word = word->Next;
+	}
+
+	return text;
+}
+
+void TextEditor::RebuildLines(Line *firstLine)
+{
+	Line *currentLine = firstLine;
+
+	if (!currentLine) {
+		currentLine = FirstLine();
+	}
+
+	if (currentLine) {
+		if (currentLine->Previous) {
+			currentLine = currentLine->Previous;
+		} else {
+			currentLine = nullptr;
+		}
+	}
+
+	FreeLines(firstLine);
+
+	Word *currentWord;
+	int currentCharInWord;
+
+	if (!currentLine) {
+		currentWord = FirstWord();
+		currentCharInWord = 0;
+
+		if (!currentWord) {
+			return;
+		}
+
+		currentLine = new Line;
+		currentLine->Data = currentWord;
+	} else {
+		currentWord = currentLine->Data;
+		currentCharInWord = currentLine->Offset;
+	}
+
+	int width = _toX - _fromX + 1;
+
+	if (width <= 0) {
+		_currentLine = currentLine;
+		return;
+	}
+
+	int currentLineLength = 0;
+
+	bool enforceNewLine = false;
+
+	while (currentWord) {
+		bool canPlaceWordOnTheCurrentLine = !enforceNewLine;
+		enforceNewLine = false;
+
+		if (canPlaceWordOnTheCurrentLine) {
+			bool wordFitsToLine =
+				(int)currentWord->Data.Size() -
+				currentCharInWord +
+				currentLineLength < width;
+
+			if (!wordFitsToLine && currentLineLength > 0) {
+				canPlaceWordOnTheCurrentLine = false;
+			}
+		}
+
+		bool cursorIsOnCurrentSegment =
+			currentWord == _currentWord &&
+			(int)_currentChar >= currentCharInWord &&
+			(int)_currentChar <= currentCharInWord + width;
+
+		if (canPlaceWordOnTheCurrentLine) {
+			bool wordFits = (int)currentWord->Data.Size() -
+				currentCharInWord <=
+				width - currentLineLength;
+
+			if (!wordFits) {
+				if (cursorIsOnCurrentSegment) {
+					_currentLine = currentLine;
+				}
+
+				currentLine->Next = new Line;
+				currentLine->Next->Previous =
+					currentLine;
+				currentLine = currentLine->Next;
+
+				currentLine->Data = currentWord;
+				currentLine->Offset = currentCharInWord + width;
+				currentCharInWord += width;
+				currentLineLength = 0;
+			} else {
+				if (cursorIsOnCurrentSegment) {
+					_currentLine = currentLine;
+				}
+
+				uint32_t lastCharInWord = currentWord->Data[
+					currentWord->Data.Size() - 1];
+
+				if (lastCharInWord == '\n') {
+					enforceNewLine = true;
+				}
+
+				currentLineLength += currentWord->Data.Size() -
+					currentCharInWord;
+
+				currentWord = currentWord->Next;
+				currentCharInWord = 0;
+			}
+		} else {
+			currentLine->Next = new Line;
+			currentLine->Next->Previous =
+				currentLine;
+			currentLine = currentLine->Next;
+
+			currentLine->Data = currentWord;
+			currentLine->Offset = 0;
+			currentCharInWord = 0;
+			currentLineLength = 0;
+		}
+	}
+
+	if (enforceNewLine) {
+		currentWord = _currentWord;
+
+		while (currentWord->Next) {
+			currentWord = currentWord->Next;
+		}
+
+		currentLine->Next = new Line;
+		currentLine->Next->Previous =
+			currentLine;
+		currentLine = currentLine->Next;
+
+		currentLine->Data = currentWord;
+		currentLine->Offset = currentWord->Data.Size();
+	}
+}
+
+void TextEditor::LocateCursor(Line *&line, int &column)
+{
+	Line *l = FirstLine();
+
+	while (l) {
+		Word *w = l->Data;
+		uint64_t o = l->Offset;
+
+		bool hasEnd = l->Next != nullptr;
+		Word *endWord = hasEnd ? l->Next->Data : nullptr;
+		uint64_t endOffset = hasEnd ? (uint64_t)l->Next->Offset : 0;
+
+		int col = 0;
+
+		for (;;) {
+			if (hasEnd && w == endWord && o == endOffset) {
+				break;
+			}
+
+			if (w == _currentWord && o == _currentChar) {
+				line = l;
+				column = col;
+				_currentLine = l;
+				return;
+			}
+
+			if (!w) {
+				break;
+			}
+
+			if (o >= w->Data.Size()) {
+				if (!w->Next) {
+					break;
+				}
+
+				w = w->Next;
+				o = 0;
+				continue;
+			}
+
+			if (w->Data[o] != '\n') {
+				++col;
+			}
+
+			++o;
+		}
+
+		if (!hasEnd && w == _currentWord && o == _currentChar) {
+			line = l;
+			column = col;
+			_currentLine = l;
+			return;
+		}
+
+		l = l->Next;
+	}
+
+	line = _currentLine;
+	column = 0;
+}
+
+void TextEditor::MoveCursorToColumn(Line *line, int column)
+{
+	Word *w = line->Data;
+	uint64_t o = line->Offset;
+
+	bool hasEnd = line->Next != nullptr;
+	Word *endWord = hasEnd ? line->Next->Data : nullptr;
+	uint64_t endOffset = hasEnd ? (uint64_t)line->Next->Offset : 0;
+
+	int col = 0;
+
+	for (;;) {
+		if (hasEnd && w == endWord && o == endOffset) {
+			break;
+		}
+
+		if (!w) {
+			break;
+		}
+
+		if (o >= w->Data.Size()) {
+			if (!w->Next) {
+				break;
+			}
+
+			w = w->Next;
+			o = 0;
+			continue;
+		}
+
+		if (col >= column) {
+			break;
+		}
+
+		if (w->Data[o] == '\n') {
+			break;
+		}
+
+		++o;
+		++col;
+	}
+
+	_currentWord = w;
+	_currentChar = o;
+
+	Normalize();
+}
+
+String TextEditor::RenderLine(Line *line)
+{
+	Word *w = line->Data;
+	uint64_t o = line->Offset;
+
+	bool hasEnd = line->Next != nullptr;
+	Word *endWord = hasEnd ? line->Next->Data : nullptr;
+	uint64_t endOffset = hasEnd ? (uint64_t)line->Next->Offset : 0;
+
+	int width = _toX - _fromX + 1;
+
+	if (width < 1) {
+		width = 1;
+	}
+
+	CowBuffer<uint32_t> out;
+	int count = 0;
+
+	while (w) {
+		if (hasEnd && w == endWord && o == endOffset) {
+			break;
+		}
+
+		if (o >= w->Data.Size()) {
+			if (!w->Next) {
+				break;
+			}
+
+			w = w->Next;
+			o = 0;
+			continue;
+		}
+
+		uint32_t c = w->Data[o];
+
+		if (c != '\n') {
+			CowBuffer<uint32_t> one(1);
+			one[0] = (c == '\t') ? ' ' : c;
+			out = out.Concat(one);
+
+			if (++count >= width) {
+				break;
+			}
+		}
+
+		++o;
+	}
+
+	return UTF8::Encode(out);
 }
 
 void TextEditor::Redraw()
 {
 	UiHelpers::ClearScreen(_fromY, _toY, _fromX, _toX);
 
-	String s = UTF8::Encode(_currentWord->Data);
-	move(_fromY, _fromX);
-	addstr(s.CStr());
-}
+	Line *curLine = nullptr;
+	int curColumn = 0;
+	LocateCursor(curLine, curColumn);
 
-String TextEditor::GetText()
-{
-	return UTF8::Encode(_currentWord->Data);
-}
+	int height = _toY - _fromY + 1;
+	int width = _toX - _fromX + 1;
 
-void TextEditor::GoLeft()
-{
-}
-
-void TextEditor::GoRight()
-{
-}
-
-void TextEditor::GoUp()
-{
-}
-
-void TextEditor::GoDown()
-{
-}
-
-void TextEditor::AddChar(int event)
-{
-	_utf8Decoder.AddByte(event);
-
-	if (!_utf8Decoder.HasChar()) {
-		return;
-	}
-
-	int32_t c = _utf8Decoder.GetChar();
-
-	if (c == '\b') {
-		_currentWord->Data = _currentWord.Slice(
-			0,
-			_currentWord->Data.Size() - 1);
-
-		return;
-	}
-
-	CowBuffer<uint32_t> charBuf(1);
-	charBuf[0] = c;
-
-	_currentWord->Data = _currentWord->Data.Concat(charBuf);
-}
-
-
-/*TextEditor::TextEditor()
-{
-	_fromY = 0;
-	_toY = 0;
-	_fromX = 0;
-	_toX = 0;
-
-	_currentWord = nullptr;
-	_currentChar = 0;
-
-	_firstLine = nullptr;
-	_currentLine = nullptr;
-
-	Init();
-}
-
-TextEditor::~TextEditor
-{
-	_currentChar = 0;
-
-	if (!_currentWord) {
-		return;
-	}
-
-	while (_currentWord->Previous) {
-		_currentWord = _currentWord->Previous;
-	}
-
-	_currentLine = nullptr;
-
-	while (_firstLine) {
-		Line *tmp = _firstLine;
-		_firstLine = _firstLine->Next;
-		delete tmp;
-	}
-
-	while (_currentWord) {
-		Word *tmp = _currentWord;
-		_currentWord = _currentWord->Next;
-		delete tmp;
-	}
-}
-
-void TextEditor::SetPosition(int fromY, int toY, int fromX, int toX)
-{
-	_fromY = fromY;
-	_toY = toY;
-	_fromX = fromX;
-	_toX = toX;
-
-	RebuildLines(_firstLine);
-}
-
-TextEditor::Redraw()
-{
-	int heightLimit = toY - fromY + 1;
-	int widthLimit = toX - fromX + 1;
-
-	UiHelpers::ClearScreen(_fromY, _toY, _fromX, _toX);
-
-	if (!_currentWord) {
+	if (height < 1 || width < 1) {
 		move(_fromY, _fromX);
 		return;
 	}
 
-	Line *upLine = _currentLine;
-	Line *downLine = _currentLine;
+	if (!curLine) {
+		move(_fromY, _fromX);
+		return;
+	}
 
-	int lineCount = 1;
+	Line *top = curLine;
+	Line *bottom = curLine;
 
-	bool goUp = true;
+	int size = 1;
 
-	while (lineCount < heightLimit) {
-		bool success = false;
+	while (size < height) {
+		bool grow = false;
 
-		if (goUp || !downLine->Next) {
-			goUp = false;
-
-			if (upLine->Previous) {
-				upLine = upLine->Previous;
-				success = true;
-				++lineCount;
-			}
+		if (top->Previous) {
+			top = top->Previous;
+			++size;
+			grow = true;
 		}
 
-		if (success) {
-			continue;
+		if (size >= height) {
+			break;
 		}
 
-		if (!goUp) {
-			goUp = true;
-
-			if (downLine->Next) {
-				downLine = downLine->Next;
-				success = true;
-				++lineCount;
-			}
+		if (bottom->Next) {
+			bottom = bottom->Next;
+			++size;
+			grow = true;
 		}
 
-		if (!success) {
+		if (!grow) {
 			break;
 		}
 	}
 
-	for (;;) {
-		move(_fromY + lineCount - 1, _fromX);
+	int row = _fromY;
+	int cursorRow = _fromY;
 
-		Word *w = downLine->Data;
+	Line *line = top;
 
-		for (;;) {
-			if (w->Data.Size()) {
-				String s = UTF8::Encode(w->Data);
+	while (line && row <= _toY) {
+		String s = RenderLine(line);
 
-				if (s.CStr()[s.Length() - 1] == '\n') {
-					s = s.Substring(0, s.Length() - 1);
-				}
+		move(row, _fromX);
+		addstr(s.CStr());
 
-				addstr(s.CStr());
-			}
-
-			if (!w->Next) {
-				break;
-			}
-
-			w = w->Next;
-
-			if (downLine->Previous) {
-				if (w == downLine->Previous->Data) {
-					break;
-				}
-			}
+		if (line == curLine) {
+			cursorRow = row;
 		}
 
-		--lineCount;
-
-		if (upLine == downLine) {
-			break;
-		}
-
-		if (!downLine->Previous) {
-			break;
-		}
-
-		downLine = downLine->Previous;
+		line = line->Next;
+		++row;
 	}
+
+	int cursorX = _fromX + curColumn;
+
+	if (cursorX > _toX) {
+		cursorX = _toX;
+	}
+
+	move(cursorRow, cursorX);
 }
 
-String TextEditor::GetText()
+bool TextEditor::GoLeft()
 {
-	if (!_firstLine) {
-		return "";
+	if (!_currentWord) {
+		_currentChar = 0;
+		return false;
 	}
 
-	String result;
-
-	Word *w = _firstLine->Data;
-
-	while (w) {
-		result += UTF8::Encode(w->Data());
-		w = w->Next;
-	}
-
-	return result;
-}
-
-void TextEditor::GoLeft()
-{
 	if (_currentChar > 0) {
 		--_currentChar;
-		return;
+		return true;
 	}
 
-	if (!_currentWord->Previous) {
-		return;
+	Word *previous = _currentWord->Previous;
+
+	while (previous && previous->Data.Size() == 0) {
+		previous = previous->Previous;
 	}
 
-	if (_currentWord == _currentLine->Data) {
-		_currentLine = _currentLine->Previous;
+	if (!previous) {
+		return false;
 	}
 
-	_currentWord = _currentWord->Previous;
+	_currentWord = previous;
+	_currentChar = previous->Data.Size() - 1;
+
+	return true;
 }
 
-void TextEditor::GoRight()
+bool TextEditor::GoRight()
 {
-	if (_currentChar < _currentWord->Data.Size() - 1) {
+	if (!_currentWord) {
+		_currentChar = 0;
+		return false;
+	}
+
+	Word *oldWord = _currentWord;
+	uint32_t oldChar = _currentChar;
+
+	if (_currentChar < _currentWord->Data.Size()) {
 		++_currentChar;
-		return;
 	}
 
-	if (!_currentWord->Next) {
-		return;
-	}
+	Normalize();
 
-	_currentWord = _currentWord->Next;
-
-	if (_currentLine->Next) {
-		if (_currentWord == _currentLine->Next) {
-			_currentLine = _currentLine->Next;
-		}
-	}
+	return _currentWord != oldWord || _currentChar != oldChar;
 }
 
-void TextEditor::GoUp()
+bool TextEditor::GoUp()
 {
-	THROW("Not implemented.");
-
-	if (!_currentLine->Previous) {
-		return;
+	if (!_currentWord) {
+		_currentChar = 0;
+		return false;
 	}
 
-	int fullOffset = _currentChar;
+	Line *line = nullptr;
+	int column = 0;
+	LocateCursor(line, column);
 
-	Word *w = _currentWord;
-
-	do {
-		if (!w->Previous) {
-			break;
-		}
-
-		w = w->Previous;
-
-		fullOffset += w->Data.Size();
-	} while (w != _currentLine->Data)
-
-	_currentLine = _currentLine->Previous;
-
-	_currentWord = _currentLine->Data;
-
-	while (fullOffset > _currentWord->Data.Size()) {
-		if (!_currentWord->Next) {
-			break;
-		}
-
-		if (_currentWord->Next == _currentLine->Next->Data) {
-			break;
-		}
-
-		fullOffset -= _currentWord->Data.Size();
-		_currentWord = _currentWord->Next;
+	if (!line || !line->Previous) {
+		return false;
 	}
 
-	if (fullOffset > _currentWord.Size()) {
-		_currentChar = _currentWord.Size();
-	} else {
-		_currentChar = fullOffset;
-	}
+	MoveCursorToColumn(line->Previous, column);
+	return true;
 }
 
-void TextEditor::GoDown()
+bool TextEditor::GoDown()
 {
-	THROW("Not implemented.");
-
-	if (!_currentLine->Next) {
-		return;
+	if (!_currentWord) {
+		_currentChar = 0;
+		return false;
 	}
 
-	int fullOffset = _currentChar;
+	Line *line = nullptr;
+	int column = 0;
+	LocateCursor(line, column);
 
-	Word *w = _currentWord;
+	if (!line || !line->Next) {
+		return false;
+	}
 
-	do {
-		if (!w->Previous) {
-			break;
-		}
+	MoveCursorToColumn(line->Next, column);
+	return true;
+}
 
-		w = w->Previous;
+void TextEditor::InsertChar(uint32_t c)
+{
+	if (!_currentWord) {
+		_currentWord = new Word();
+		_currentChar = 0;
+	}
 
-		fullOffset += w->Data.Size();
-	} while (w != _currentLine->Data)
+	uint64_t cwLen = _currentWord->Data.Size();
 
-	_currentLine = _currentLine->Next;
+	CowBuffer<uint32_t> one(1);
+	one[0] = c;
 
-	_currentWord = _currentLine->Data;
+	if (!IsWhitespace(c)) {
+		bool newWordIsRequired =
+			_currentWord->Data.Size() &&
+			_currentChar == _currentWord->Data.Size() &&
+			IsWhitespace(_currentWord->Data[_currentChar - 1]);
 
-	while (fullOffset > _currentWord->Data.Size()) {
-		if (!_currentWord->Next) {
-			break;
-		}
+		if (newWordIsRequired) {
+			Word *w = new Word;
+			w->Data = one;
+			w->Previous = _currentWord;
+			w->Next = _currentWord->Next;
 
-		if (_currentLine->Next) {
-			if (_currentWord->Next == _currentLine->Next->Data) {
-				break;
+			if (_currentWord->Next) {
+				_currentWord->Next->Previous = w;
 			}
+
+			_currentWord->Next = w;
+
+			_currentWord = w;
+			_currentChar = 1;
+		} else {
+			_currentWord->Data =
+				_currentWord->Data.Slice(0, _currentChar)
+				.Concat(one)
+				.Concat(_currentWord->Data.Slice(
+					_currentChar,
+					cwLen - _currentChar));
+
+			_currentChar += 1;
 		}
 
-		fullOffset -= _currentWord->Data.Size();
-		_currentWord = _currentWord->Next;
+		Normalize();
+		RebuildLines(_currentLine);
+		return;
 	}
 
-	if (fullOffset > _currentWord.Size()) {
-		_currentChar = _currentWord.Size();
+	// A whitespace character ends the current word. Everything after the
+	// cursor becomes the following word (it is already a valid word: a
+	// sequence of non-whitespace with the original separator at its end).
+
+	CowBuffer<uint32_t> right =
+		_currentWord->Data.Slice(_currentChar, cwLen - _currentChar);
+
+	_currentWord->Data = _currentWord->Data.Slice(0, _currentChar);
+
+	bool canAddCharToWord =
+		!_currentWord->Next &&
+		_currentWord->Data.Size() &&
+		!IsWhitespace(_currentWord->Data[
+			_currentWord->Data.Size() - 1]);
+
+	if (canAddCharToWord) {
+		_currentWord->Data = _currentWord->Data.Concat(one);
+		++_currentChar;
 	} else {
-		_currentChar = fullOffset;
+		Word *w = new Word;
+		w->Data = one;
+		w->Previous = _currentWord;
+		w->Next = _currentWord->Next;
+
+		if (_currentWord->Next) {
+			_currentWord->Next->Previous = w;
+		}
+
+		_currentWord->Next = w;
+		_currentWord = w;
+		_currentChar = 0;
 	}
+
+	if (right.Size()) {
+		Word *w = new Word;
+		w->Data = right;
+		w->Previous = _currentWord;
+		w->Next = _currentWord->Next;
+
+		if (_currentWord->Next) {
+			_currentWord->Next->Previous = w;
+		}
+
+		_currentWord = w;
+		_currentChar = 0;
+	}
+
+	Normalize();
+	RebuildLines(_currentLine);
 }
 
-static bool IsSpace(int c)
+void TextEditor::DeleteChar()
 {
-	return c == ' ' || c == '\n' || c == '\t';
+	if (!_currentWord) {
+		return;
+	}
+
+	if (_currentChar >= _currentWord->Data.Size()) {
+		return;
+	}
+
+	if (_currentChar < _currentWord->Data.Size() - 1) {
+		_currentWord->Data =
+			_currentWord->Data.Slice(0, _currentChar).Concat(
+				_currentWord->Data.Slice(
+					_currentChar + 1,
+					_currentWord->Data.Size() -
+						_currentChar - 1));
+
+		RemoveIfEmpty(_currentWord);
+		Normalize();
+		RebuildLines(_currentLine);
+		return;
+	}
+
+	_currentWord->Data = _currentWord->Data.Slice(0, _currentChar);
+
+	if (_currentWord->Next) {
+		_currentWord->Data = _currentWord->Data.Concat(
+			_currentWord->Next->Data);
+
+		Word *tmp = _currentWord->Next;
+
+		if (tmp->Next) {
+			tmp->Next->Previous = _currentWord;
+		}
+
+		_currentWord->Next = tmp->Next;
+
+		delete tmp;
+	}
+
+	RemoveIfEmpty(_currentWord);
+
+	Normalize();
+	RebuildLines(_currentLine);
+}
+
+void TextEditor::RemoveIfEmpty(Word *word)
+{
+	if (word->Data.Size() != 0) {
+		return;
+	}
+
+	if (!word->Previous && !word->Next) {
+		FreeLines(nullptr);
+		FreeWords();
+		_currentWord = nullptr;
+		_currentLine = nullptr;
+		_currentChar = 0;
+		return;
+	}
+
+	Word *target;
+	uint64_t position;
+
+	if (word->Previous) {
+		target = word->Previous;
+		position = target->Data.Size();
+	} else {
+		target = word->Next;
+		position = 0;
+	}
+
+	if (word->Previous) {
+		word->Previous->Next = word->Next;
+	}
+
+	if (word->Next) {
+		word->Next->Previous = word->Previous;
+	}
+
+	if (_currentWord == word) {
+		_currentWord = target;
+		_currentChar = position;
+	}
+
+	delete word;
 }
 
 void TextEditor::AddChar(int event)
 {
+	if (event < 0 || event > 0xff) {
+		if (event == KEY_DC) {
+			DeleteChar();
+		}
+
+		return;
+	}
+
 	_utf8Decoder.AddByte(event);
 
 	if (!_utf8Decoder.HasChar()) {
 		return;
 	}
 
-	int32_t c = _utf8Decoder.GetChar();
+	uint32_t c = _utf8Decoder.GetChar();
+	_utf8Decoder.Reset();
 
-	if (IsSpace(c)) {
-		Word *w = new Word;
-		w->Next = _currentWord->Next;
-		w->Previous = _currentWord;
-		w->Data = CowBuffer<uint32_t>(1);
-		w->Data[0] = c;
-
-		_currentWord = w;
-		_currentChar = 1;
-	} else if (c == '\b') {
-		if (_currentChar > 0) {
-			CowBuffer<uint32_t> head = _currentWord->Data.Slice(
-				0,
-				_currentChar - 1);
-
-			CowBuffer<uint32_t> tail = _currentWord->Data.Slice(
-				_currentChar + 1,
-				_currentWord->Data.Size() - _currentChar - 1);
-
-			_currentWord->Data = head.Concat(tail);
-
-			if (!_currentWord->Data.Size()) {
-				Word *tmp = _currentWord;
-
-				if (_currentWord->Previous) {
-					_currentWord->Next->Previous =
-						_currentWord->Previous;
-					_currentWord = _currentWord->Previous();
-					_currentChar =
-						_currentWord->Data.Size();
-				}
-
-			GoLeft();
+	if (c == '\b') {
+		if (GoLeft()) {
+			DeleteChar();
 		}
+	} else if (c == KEY_DC) {
+		DeleteChar();
 	} else {
-
+		InsertChar(c);
 	}
 
 	RebuildLines(_currentLine);
 }
 
-void TextEditor::Init()
+void TextEditor::Split(TextEditor &editor)
 {
-	_currentWord = new Word;
-	_firstLine = new Line;
-	_firstLine->Data = _currentWord;
-	_currentLine = _firstLine;
+	// Erase the target editor's current contents.
+	editor.FreeLines(nullptr);
+	editor.FreeWords();
+	editor._currentWord = nullptr;
+	editor._currentLine = nullptr;
+	editor._currentChar = 0;
+
+	if (!_currentWord) {
+		return;
+	}
+
+	Normalize();
+
+	Word *w = _currentWord;
+	uint64_t p = _currentChar;
+	uint64_t n = w->Data.Size();
+
+	CowBuffer<uint32_t> rightData = w->Data.Slice(p, n - p);
+	Word *tail = w->Next;
+
+	w->Data = w->Data.Slice(0, p);
+	w->Next = nullptr;
+
+	_currentWord = w;
+	_currentChar = w->Data.Size();
+
+	if (rightData.Size() || tail) {
+		Word *head = new Word;
+		head->Data = rightData;
+		head->Previous = nullptr;
+		head->Next = tail;
+
+		if (tail) {
+			tail->Previous = head;
+		}
+
+		editor._currentWord = head;
+		editor._currentChar = 0;
+
+		editor.RemoveIfEmpty(head);
+	}
+
+	RemoveIfEmpty(w);
+
+	FreeLines(nullptr);
+	_currentLine = nullptr;
+
+	if (_currentWord) {
+		Normalize();
+	}
+
+	RebuildLines(nullptr);
+
+	editor.FreeLines(nullptr);
+	editor._currentLine = nullptr;
+
+	if (editor._currentWord) {
+		editor.Normalize();
+	}
+
+	editor.RebuildLines(nullptr);
 }
 
-void TextEditor::RebuildLines(Line *firstLine)
+void TextEditor::Merge(TextEditor &editor)
 {
-}*/
+	if (!editor._currentWord) {
+		return;
+	}
+
+	Word *head = editor.FirstWord();
+
+	editor.FreeLines(nullptr);
+	editor._currentWord = nullptr;
+	editor._currentLine = nullptr;
+	editor._currentChar = 0;
+
+	if (!_currentWord) {
+		_currentWord = head;
+		_currentChar = 0;
+	} else {
+		Word *last = _currentWord;
+
+		while (last->Next) {
+			last = last->Next;
+		}
+
+		bool lastHasSeparator =
+			last->Data.Size() &&
+			IsWhitespace(last->Data[last->Data.Size() - 1]);
+
+		if (lastHasSeparator) {
+			last->Next = head;
+			head->Previous = last;
+
+			_currentWord = head;
+			_currentChar = 0;
+		} else {
+			uint64_t mergePos = last->Data.Size();
+
+			last->Data = last->Data.Concat(head->Data);
+			last->Next = head->Next;
+
+			if (head->Next) {
+				head->Next->Previous = last;
+			}
+
+			delete head;
+
+			_currentWord = last;
+			_currentChar = mergePos;
+		}
+	}
+
+	FreeLines(nullptr);
+	_currentLine = nullptr;
+	Normalize();
+	RebuildLines(nullptr);
+}

@@ -23,10 +23,15 @@ public:
 		ID(const uint8_t *value);
 		ID(const ID &id);
 
-		const uint8_t *GetValue() const;
+		const uint8_t *GetValuePointer() const;
+		CowBuffer<uint8_t> GetValue() const;
+		void GetValue(uint8_t *buffer) const;
 		void SetValue(const uint8_t *value);
 
 		bool IsZero() const;
+
+		bool operator==(const ID &id) const;
+		bool operator<(const ID &id) const;
 
 	private:
 		uint8_t _data[(int)Constants::IDSize];
@@ -34,6 +39,8 @@ public:
 
 	ObjectStorage(String rootPath, EventDispatcher *dispatcher);
 	~ObjectStorage();
+
+	String GetPath();
 
 	void SetUser(ObjectStorageUser *user);
 
@@ -46,6 +53,10 @@ public:
 
 	bool HasObject(const ID &id);
 	CowBuffer<uint8_t> ReadObject(const ID &id);
+	CowBuffer<uint8_t> ReadObject(
+		const ID &id,
+		uint64_t offset,
+		uint64_t length);
 	void WriteObject(const ID &id, const CowBuffer<uint8_t> buffer);
 	void UpdateObject(
 		const ID &id,

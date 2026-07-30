@@ -4,6 +4,7 @@
 #include "Config.hpp"
 #include "../Protocol/SessionProtocol.hpp"
 #include "../Message/ContactStorage.hpp"
+#include "../Protocol/SessionParser.hpp"
 #include "../Common/EventDispatcher.hpp"
 #include "../Common/StreamReader.hpp"
 #include "../Common/StreamWriter.hpp"
@@ -65,8 +66,12 @@ private:
 	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer);
 	bool ProcessBlockContact(const CowBuffer<uint8_t> buffer);
+	bool ProcessListContacts();
+	bool ProcessSendMessage(const CowBuffer<uint8_t> buffer);
+	bool ProcessOfferMessage(const CowBuffer<uint8_t> buffer);
 
 	bool _objectTransmissionActive;
+	ObjectStorage::ID _currentObjectID;
 	void InitObjectTransmission();
 	void ObjectTransmissionStep(const ObjectStorage::ID &id);
 	void SendIDRequest();
@@ -77,6 +82,11 @@ private:
 	void SendAddContact(const CowBuffer<uint8_t> object);
 	void SendUpdateContactKey(const CowBuffer<uint8_t> object);
 	void SendBlockContact(const CowBuffer<uint8_t> object);
+	void SendOfferMessage(const CowBuffer<uint8_t> object);
+	String _offeredMessagePeerName;
+	ObjectStorage::ID _offeredMessageID;
+	void SendMessage();
+	void SendMessageUpdate(const CowBuffer<uint8_t> object);
 
 	void SessionLog(String message);
 };
@@ -101,6 +111,13 @@ public:
 	virtual void BlockContact(
 		String name,
 		Contact::BlockStatus block) = 0;
+	virtual CowBuffer<CommandListContacts::Response::UserData>
+		GetContactList() = 0;
+
+	virtual bool SendMessage(const CowBuffer<uint8_t> message) = 0;
+	virtual CowBuffer<uint8_t> GetMessage(
+		String peerName,
+		const ObjectStorage::ID &messageID) = 0;
 };
 
 #endif

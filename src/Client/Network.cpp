@@ -212,6 +212,36 @@ bool Network::BlockContact(String contactName, Contact::BlockStatus block)
 	return true;
 }
 
+bool Network::ListContacts()
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->ListContacts();
+	return true;
+}
+
+bool Network::SetContactListProcessor(ContactListProcessor *processor)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->SetContactListProcessor(processor);
+	return true;
+}
+
+bool Network::SendMessage(const CowBuffer<uint8_t> message)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->SendMessage(message);
+	return true;
+}
+
 void Network::CheckHandshake()
 {
 	if (_handshake->ConnectionSuccessful()) {

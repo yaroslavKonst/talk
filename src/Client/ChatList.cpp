@@ -17,15 +17,23 @@ ChatList::ChatList(Root *root) :
 			Crypto::X25519::KEY_SIZE))
 {
 	_root = root;
-	//_currentChat = nullptr;
-	_currentChatIsActive = false;
 
-	//LoadChats();
+	String storagePath = "storage/" +
+		DataToHex(_root->PublicKey->Key, Crypto::X25519::KEY_SIZE) +
+		"/storage";
+
+	if (!FileExists(storagePath)) {
+		CreateDirectory(storagePath);
+	}
+
+	_currentChat = nullptr;
+
+	LoadChats();
 }
 
 ChatList::~ChatList()
 {
-	//UnloadChats();
+	UnloadChats();
 }
 
 ContactStorage *ChatList::GetContactStorage()
@@ -33,18 +41,61 @@ ContactStorage *ChatList::GetContactStorage()
 	return &_contactStorage;
 }
 
-/*Chat *ChatList::GetCurrentChat()
+Chat *ChatList::GetCurrentChat()
 {
 	if (!_currentChat) {
 		return nullptr;
 	}
 
 	return _currentChat->Key.GetChat();
-}*/
+}
+
+String ChatList::GetCurrentChatName()
+{
+	if (!_currentChat) {
+		return "";
+	}
+
+	return _currentChat->Key.GetChatName();
+}
+
+String ChatList::GetNextChatName(String name)
+{
+	Tree<ChatContainer>::Entry *entry = _chats.FindEntry(name);
+
+	if (!entry) {
+		return "";
+	}
+
+	entry = _chats.Next(entry);
+
+	if (!entry) {
+		return "";
+	}
+
+	return entry->Key.GetChatName();
+}
+
+String ChatList::GetPreviousChatName(String name)
+{
+	Tree<ChatContainer>::Entry *entry = _chats.FindEntry(name);
+
+	if (!entry) {
+		return "";
+	}
+
+	entry = _chats.Previous(entry);
+
+	if (!entry) {
+		return "";
+	}
+
+	return entry->Key.GetChatName();
+}
 
 void ChatList::SwitchUp()
 {
-	/*if (!_currentChat) {
+	if (!_currentChat) {
 		_currentChat = _chats.FindBiggest();
 		return;
 	}
@@ -53,12 +104,12 @@ void ChatList::SwitchUp()
 
 	if (newChat) {
 		_currentChat = newChat;
-	}*/
+	}
 }
 
 void ChatList::SwitchDown()
 {
-	/*if (!_currentChat) {
+	if (!_currentChat) {
 		_currentChat = _chats.FindSmallest();
 		return;
 	}
@@ -67,19 +118,7 @@ void ChatList::SwitchDown()
 
 	if (newChat) {
 		_currentChat = newChat;
-	}*/
-}
-
-void ChatList::Activate()
-{
-	/*if (_currentChat) {
-		_currentChatIsActive = true;
-	}*/
-}
-
-void ChatList::Deactivate()
-{
-	_currentChatIsActive = false;
+	}
 }
 
 ObjectStorage::ID ChatList::GetKnownID()
@@ -111,46 +150,145 @@ void ChatList::SetKnownID(const ObjectStorage::ID &id)
 
 	BinaryFile file(path, true);
 	file.Write<uint8_t>(
-		id.GetValue(),
+		id.GetValuePointer(),
 		(int)ObjectStorage::Constants::IDSize,
 		0);
 }
 
 void ChatList::SelectOrCreateChat(String peerName)
 {
-	/*LoadChat(peerName);
-	_currentChat = _chats.FindEntry(peerName);*/
+	LoadChat(peerName);
+	_currentChat = _chats.FindEntry(peerName);
 }
 
-/*void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
+bool ChatList::HasMessage(String peerName, const ObjectStorage::ID &messageID)
 {
-	Message::Header header;
-	bool res = Message::GetHeader(message, header);
+	Tree<ChatContainer>::Entry *chat = _chats.FindEntry(peerName);
+
+	if (!chat) {
+		return false;
+	}
+
+	return chat->Key.GetChat()->HasMessage(messageID);
+}
+
+void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
+{
+	Message::X25519::HeaderPointToPoint header;
+	bool res = Message::X25519::ParseHeader(message, header);
 
 	if (!res) {
-		THROW("Invalid message header.");
+		return;
 	}
 
-	const uint8_t *peerKey;
+	String peerName;
+	String myFullName =
+		_root->Conf->GetName() + "@" + _root->Conf->GetHostName();
 
-	if (!crypto_verify32(_session->PublicKey, header.Source)) {
-		peerKey = header.Destination;
+	if (myFullName == header.Source) {
+		peerName = header.Destination;
 	} else {
-		peerKey = header.Source;
+		peerName = header.Source;
 	}
 
-	for (int i = 0; i < _chatCount; i++) {
-		if (!crypto_verify32(peerKey, _chatList[i]->GetPeerKey())) {
-			_chatList[i]->DeliverMessage(message);
-			return;
+	Tree<ChatContainer>::Entry *chat = _chats.FindEntry(peerName);
+
+	if (!chat) {
+		LoadChat(peerName);
+		chat = _chats.FindEntry(peerName);
+
+		if (!_currentChat) {
+			_currentChat = chat;
 		}
 	}
 
-	UpdateUserData(peerKey, "");
-	_chatList[_chatCount - 1]->DeliverMessage(message);
-}*/
+	chat->Key.GetChat()->DeliverMessage(message, false);
+}
 
-/*ChatList::ChatContainer::ChatContainer()
+void ChatList::UpdateMessage(
+	String peerName,
+	const ObjectStorage::ID &messageID,
+	Message::Attribute attr,
+	bool value)
+{
+	Tree<ChatContainer>::Entry *chat = _chats.FindEntry(peerName);
+
+	if (!chat) {
+		return;
+	}
+
+	chat->Key.GetChat()->UpdateMessage(messageID, attr, value);
+}
+
+CowBuffer<ObjectStorage::ID> ChatList::ListThreads()
+{
+	if (!_currentChat) {
+		THROW("Current chat is NULL.");
+	}
+
+	return _currentChat->Key.GetChat()->ListThreads();
+}
+
+ObjectStorage::ID ChatList::GetRootMessageForThread(
+	const ObjectStorage::ID &threadID)
+{
+	if (!_currentChat) {
+		THROW("Current chat is NULL.");
+	}
+
+	return _currentChat->Key.GetChat()->GetRootMessageForThread(threadID);
+}
+
+ObjectStorage::ID ChatList::GetNextMessage(
+	const ObjectStorage::ID &identifier)
+{
+	if (!_currentChat) {
+		THROW("Current chat is NULL.");
+	}
+
+	return _currentChat->Key.GetChat()->GetNextMessage(identifier);
+}
+
+ObjectStorage::ID ChatList::GetPreviousMessage(
+	const ObjectStorage::ID &identifier)
+{
+	if (!_currentChat) {
+		THROW("Current chat is NULL.");
+	}
+
+	return _currentChat->Key.GetChat()->GetPreviousMessage(identifier);
+}
+
+MessageEventProcessor::MessageDescriptorBase *ChatList::GetMessageDescriptor(
+	const ObjectStorage::ID &identifier)
+{
+	if (!_currentChat) {
+		THROW("Current chat is NULL.");
+	}
+
+	return _currentChat->Key.GetChat()->GetMessageDescriptor(identifier);
+}
+
+bool ChatList::HasUnread(String chatName)
+{
+	if (!chatName.Length()) {
+		if (!_currentChat) {
+			THROW("Current chat is NULL.");
+		}
+
+		return _currentChat->Key.GetChat()->HasUnread();
+	}
+
+	Tree<ChatContainer>::Entry *chat = _chats.FindEntry(chatName);
+
+	if (!chat) {
+		THROW("Invalid chat is requested.");
+	}
+
+	return chat->Key.GetChat()->HasUnread();
+}
+
+ChatList::ChatContainer::ChatContainer()
 {
 	_chat = nullptr;
 }
@@ -188,11 +326,12 @@ void ChatList::LoadChats()
 	for (uint64_t i = 0; i < peerList.Size(); i++) {
 		LoadChat(peerList[i]);
 	}
+
+	_currentChat = _chats.FindSmallest();
 }
 
 void ChatList::UnloadChats()
 {
-	_currentChatIsActive = false;
 	_currentChat = _chats.FindSmallest();
 
 	while (_currentChat) {
@@ -213,4 +352,4 @@ void ChatList::LoadChat(String peerName)
 
 	Chat *chat = new Chat(_root, peerName);
 	_chats.AddEntry(ChatContainer(peerName, chat));
-}*/
+}

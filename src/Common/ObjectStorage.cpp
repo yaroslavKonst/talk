@@ -26,9 +26,21 @@ ObjectStorage::ID::ID(const ID &id)
 	memcpy(_data, id._data, (int)ObjectStorage::Constants::IDSize);
 }
 
-const uint8_t *ObjectStorage::ID::GetValue() const
+const uint8_t *ObjectStorage::ID::GetValuePointer() const
 {
 	return _data;
+}
+
+CowBuffer<uint8_t> ObjectStorage::ID::GetValue() const
+{
+	CowBuffer<uint8_t> result((int)Constants::IDSize);
+	GetValue(result.Pointer());
+	return result;
+}
+
+void ObjectStorage::ID::GetValue(uint8_t *buffer) const
+{
+	memcpy(buffer, _data, (int)Constants::IDSize);
 }
 
 void ObjectStorage::ID::SetValue(const uint8_t *value)
@@ -45,6 +57,28 @@ bool ObjectStorage::ID::IsZero() const
 	}
 
 	return true;
+}
+
+bool ObjectStorage::ID::operator==(const ID &id) const
+{
+	for (int i = 0; i < (int)Constants::IDSize; i++) {
+		if (_data[i] != id._data[i]) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool ObjectStorage::ID::operator<(const ID &id) const
+{
+	for (int i = 0; i < (int)Constants::IDSize; i++) {
+		if (_data[i] != id._data[i]) {
+			return _data[i] < id._data[i];
+		}
+	}
+
+	return false;
 }
 
 ObjectStorage::ObjectStorage(String rootPath, EventDispatcher *dispatcher)
@@ -79,6 +113,11 @@ ObjectStorage::~ObjectStorage()
 	FinalizeOperations();
 }
 
+String ObjectStorage::GetPath()
+{
+	return _rootPath;
+}
+
 void ObjectStorage::SetUser(ObjectStorageUser *user)
 {
 	_user = user;
@@ -106,7 +145,7 @@ void ObjectStorage::SetRef(String refName, const ID &id)
 	String path = _rootPath + "/" + REFS_PREFIX + "/" + refName;
 
 	BinaryFile file(path, true);
-	file.Write<uint8_t>(id.GetValue(), (int)Constants::IDSize, 0);
+	file.Write<uint8_t>(id.GetValuePointer(), (int)Constants::IDSize, 0);
 }
 
 void ObjectStorage::DelRef(String refName)
@@ -146,7 +185,7 @@ ObjectStorage::ID ObjectStorage::GetFreeID(const CowBuffer<uint8_t> object)
 			pair,
 			(int)Constants::IDSize).Pointer());
 
-		if (!HasObject(id)) {
+		if (!id.IsZero() && !HasObject(id)) {
 			return id;
 		}
 	}
@@ -165,6 +204,19 @@ CowBuffer<uint8_t> ObjectStorage::ReadObject(const ID &id)
 	BinaryFile file(path, false);
 	CowBuffer<uint8_t> result(file.Size());
 	file.Read<uint8_t>(result.Pointer(), result.Size(), 0);
+	return result;
+}
+
+CowBuffer<uint8_t> ObjectStorage::ReadObject(
+	const ID &id,
+	uint64_t offset,
+	uint64_t length)
+{
+	String path = GetPathForID(id, false);
+
+	BinaryFile file(path, false);
+	CowBuffer<uint8_t> result(length);
+	file.Read<uint8_t>(result.Pointer(), length, offset);
 	return result;
 }
 
@@ -432,7 +484,7 @@ void ObjectStorage::FinalizeOperations()
 
 String ObjectStorage::GetPathForID(const ID &id, bool create)
 {
-	String idHex = DataToHex(id.GetValue(), (int)Constants::IDSize);
+	String idHex = DataToHex(id.GetValuePointer(), (int)Constants::IDSize);
 
 	String part1 = idHex.Substring(0, 3);
 	String part2 = idHex.Substring(3, 3);
