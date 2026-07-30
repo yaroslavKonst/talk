@@ -22,6 +22,8 @@ ClientSession::ClientSession(
 	_keepAliveTimestamp = 0;
 	_contactListProcessor = nullptr;
 
+	_messageSizeLimit = 2048;
+
 	_protocol = new SessionProtocol(
 		fd,
 		&_outES,
@@ -30,6 +32,7 @@ ClientSession::ClientSession(
 		inScramblerInit);
 
 	RequestHostName();
+	RequestMessageSizeLimit();
 }
 
 ClientSession::~ClientSession()
@@ -72,6 +75,11 @@ bool ClientSession::ProcessRead()
 bool ClientSession::ProcessWrite()
 {
 	return _protocol->Write();
+}
+
+uint64_t ClientSession::GetMaxMessageSize()
+{
+	return _messageSizeLimit;
 }
 
 bool ClientSession::InitKeepAlive()
@@ -150,6 +158,8 @@ bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessKeepAlive(buffer);
 	case SESSION_COMMAND_GET_HOST_NAME:
 		return ProcessGetHostName(buffer);
+	case SESSION_COMMAND_GET_MAX_MESSAGE_SIZE:
+		return ProcessGetMaxMessageSize(buffer);
 	case SESSION_COMMAND_ADD_CONTACT:
 		return ProcessAddContact(buffer);
 	case SESSION_COMMAND_REQUEST_ID:
@@ -217,6 +227,27 @@ bool ClientSession::ProcessGetHostName(const CowBuffer<uint8_t> buffer)
 	_root->Conf->SetHostName(response.Name);
 	_root->Conf->Save();
 	_root->Ui->Redraw();
+	return true;
+}
+
+void ClientSession::RequestMessageSizeLimit()
+{
+	_protocol->Send(CommandGetMaxMessageSize::BuildCommand(), 0);
+}
+
+bool ClientSession::ProcessGetMaxMessageSize(const CowBuffer<uint8_t> buffer)
+{
+	CommandGetMaxMessageSize::Response response;
+	bool parseResult = CommandGetMaxMessageSize::ParseResponse(
+		buffer,
+		response);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_messageSizeLimit = response.Value;
+	_protocol->SetInputSizeLimit(_messageSizeLimit);
 	return true;
 }
 

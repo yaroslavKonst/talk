@@ -63,6 +63,7 @@ private:
 
 	bool ProcessKeepAlive(const CowBuffer<uint8_t> buffer);
 	bool ProcessGetHostName();
+	bool ProcessGetMaxMessageSize();
 	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer);
 	bool ProcessBlockContact(const CowBuffer<uint8_t> buffer);

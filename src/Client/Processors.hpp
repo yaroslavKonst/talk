@@ -116,6 +116,8 @@ public:
 		int fd,
 		const Crypto::X25519::PublicKeyContainer &serverKey) = 0;
 
+	virtual uint64_t GetMaxMessageSize() = 0;
+
 	virtual bool AddContact(String name) = 0;
 	virtual bool UpdateContactKey(
 		String contactName,

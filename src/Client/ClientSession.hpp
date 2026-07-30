@@ -22,6 +22,8 @@ public:
 	bool ProcessRead();
 	bool ProcessWrite();
 
+	uint64_t GetMaxMessageSize();
+
 	bool InitKeepAlive();
 	void AddContact(String name);
 	void UpdateContactKey(
@@ -56,6 +58,9 @@ private:
 
 	void RequestHostName();
 	bool ProcessGetHostName(const CowBuffer<uint8_t> buffer);
+	uint64_t _messageSizeLimit;
+	void RequestMessageSizeLimit();
+	bool ProcessGetMaxMessageSize(const CowBuffer<uint8_t> buffer);
 	bool ProcessRequestID();
 	bool ProcessUpdateID(const CowBuffer<uint8_t> buffer);
 	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);

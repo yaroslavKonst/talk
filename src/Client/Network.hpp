@@ -33,6 +33,8 @@ public:
 		int fd,
 		const Crypto::X25519::PublicKeyContainer &serverKey) override;
 
+	uint64_t GetMaxMessageSize() override;
+
 	bool AddContact(String name) override;
 	bool UpdateContactKey(
 		String contactName,

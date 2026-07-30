@@ -75,6 +75,7 @@ void ServerSession::ReloadConfig()
 {
 	_protocol->SetInputSizeLimit(_config->GetMessageSizeLimit());
 	ProcessGetHostName();
+	ProcessGetMaxMessageSize();
 }
 
 bool ServerSession::RequestRead()
@@ -146,6 +147,8 @@ bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessKeepAlive(buffer);
 	case SESSION_COMMAND_GET_HOST_NAME:
 		return ProcessGetHostName();
+	case SESSION_COMMAND_GET_MAX_MESSAGE_SIZE:
+		return ProcessGetMaxMessageSize();
 	case SESSION_COMMAND_REQUEST_ID:
 		return ProcessRequestID(buffer);
 	case SESSION_COMMAND_ADD_CONTACT:
@@ -181,13 +184,24 @@ bool ServerSession::ProcessKeepAlive(const CowBuffer<uint8_t> buffer)
 
 bool ServerSession::ProcessGetHostName()
 {
-	SessionLog("Requested host name.");
+	SessionLog("Host name is requested.");
 
 	CommandGetHostName::Response response;
 	response.Name = _config->GetHostName();
 	CowBuffer<uint8_t> buffer = CommandGetHostName::BuildResponse(response);
 
 	_protocol->Send(buffer, 0);
+	return true;
+}
+
+bool ServerSession::ProcessGetMaxMessageSize()
+{
+	SessionLog("Max message size is requested.");
+
+	CommandGetMaxMessageSize::Response response;
+	response.Value = _config->GetMessageSizeLimit();
+
+	_protocol->Send(CommandGetMaxMessageSize::BuildResponse(response), 0);
 	return true;
 }
 

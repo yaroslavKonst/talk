@@ -220,6 +220,19 @@ MessageEncryptor::MessageEncryptor(
 
 	_header = Message::X25519::BuildHeader(header);
 
+	bool messageIsTooBig =
+		sizeof(int32_t) + _header.Size() + header.MessageSize >
+		root->Network->GetMaxMessageSize();
+
+	if (messageIsTooBig) {
+		_failure = true;
+		root->Ui->Notify(
+			"Message is too big. Limit is " +
+			DataSizeToString(root->Network->GetMaxMessageSize()) +
+			".");
+		return;
+	}
+
 	bool keyIsValid = GenerateSymmetricKey(
 		root,
 		peerName,

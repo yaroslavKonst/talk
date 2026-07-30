@@ -172,6 +172,15 @@ void Network::StartConnection(
 	_root->Dispatcher->RegisterTimeProcessor(this);
 }
 
+uint64_t Network::GetMaxMessageSize()
+{
+	if (_session) {
+		return _session->GetMaxMessageSize();
+	}
+
+	return 2048;
+}
+
 bool Network::AddContact(String name)
 {
 	if (!_session) {

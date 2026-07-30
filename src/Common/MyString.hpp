@@ -60,16 +60,16 @@ inline String operator+(const char *str1, const String str2)
 	return String(str1) + str2;
 }
 
-inline String ToString(int value)
+inline String ToString(long value)
 {
 	if (value == 0) {
 		return "0";
 	}
 
 	String res;
-	int digits = 0;
+	long digits = 0;
 
-	int val = value;
+	long val = value;
 
 	if (val < 0) {
 		res += '-';
@@ -88,9 +88,9 @@ inline String ToString(int value)
 	}
 
 	while (digits) {
-		int digit = val;
+		long digit = val;
 
-		for (int i = 1; i < digits; i++) {
+		for (long i = 1; i < digits; i++) {
 			digit /= 10;
 		}
 
@@ -109,5 +109,38 @@ inline bool IsSpace(char c)
 }
 
 String IPToString(int32_t ip);
+
+inline String DataSizeToString(uint64_t dataSize)
+{
+	String units = "B";
+
+	if (dataSize < 1024) {
+		return ToString(dataSize) + " " + units;
+	}
+
+	units = "KB";
+	uint64_t fraction = (dataSize % 1024) * 10 / 1024;
+	dataSize /= 1024;
+
+	if (dataSize < 1024) {
+		return ToString(dataSize) + "." + ToString(fraction) +
+			" " + units;
+	}
+
+	units = "MB";
+	fraction = (dataSize % 1024) * 10 / 1024;
+	dataSize /= 1024;
+
+	if (dataSize < 1024) {
+		return ToString(dataSize) + "." + ToString(fraction) +
+			" " + units;
+	}
+
+	units = "GB";
+	fraction = (dataSize % 1024) * 10 / 1024;
+	dataSize /= 1024;
+
+	return ToString(dataSize) + "." + ToString(fraction) + " " + units;
+}
 
 #endif
