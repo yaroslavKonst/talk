@@ -1,156 +1,22 @@
-#include "GateSession.hpp"
+#include "GateListeningSocket.hpp"
 
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 #include "../Common/Exception.hpp"
-#include "../Common/File.hpp"
 #include "../Common/Log.hpp"
+#include "../Common/File.hpp"
 
-GateSession::GateSession()
-{
-	_fd = -1;
-}
-
-GateSession::~GateSession()
-{
-	if (_fd != -1) {
-		shutdown(_fd, SHUT_RDWR);
-		close(_fd);
-		_fd = -1;
-	}
-}
-
-void GateSession::GateLog(String message)
-{
-	Log("Gate: " + message);
-}
-
-// Inbound.
-GateInboundSession::GateInboundSession(
-	int fd,
-	GateListeningSocket *storage,
-	EventDispatcher *dispatcher)
-{
-	SetInterval(60);
-	SetTimestamp(GetUnixTime());
-
-	_fd = fd;
-	_storage = storage;
-	_dispatcher = dispatcher;
-
-	_dispatcher->RegisterTimeProcessor(this);
-
-	_storage->MarkSessionForRemoval(this);
-	GateLog("Connection attempt occured.");
-}
-
-GateInboundSession::~GateInboundSession()
-{
-	GateLog("End.");
-
-	_dispatcher->UnregisterTimeProcessor(this);
-}
-
-int GateInboundSession::GetDescriptor()
-{
-	return _fd;
-}
-
-bool GateInboundSession::RequestRead()
-{
-	THROW("Not implemented.");
-}
-
-bool GateInboundSession::RequestWrite()
-{
-	THROW("Not implemented.");
-}
-
-void GateInboundSession::ProcessRead()
-{
-	THROW("Not implemented.");
-}
-
-void GateInboundSession::ProcessWrite()
-{
-	THROW("Not implemented.");
-}
-
-void GateInboundSession::ProcessTimeEvent()
-{
-	_storage->MarkSessionForRemoval(this);
-}
-
-// Outbound.
-GateOutboundSession::GateOutboundSession(
-	int fd,
-	GateListeningSocket *storage,
-	EventDispatcher *dispatcher,
-	OutboundStatusProcessor *processor)
-{
-	SetInterval(60);
-	SetTimestamp(GetUnixTime());
-
-	_fd = fd;
-	_storage = storage;
-	_dispatcher = dispatcher;
-	_processor = processor;
-
-	_dispatcher->RegisterTimeProcessor(this);
-
-	_storage->MarkSessionForRemoval(this);
-	GateLog("Outbound connection attempt occured.");
-}
-
-GateOutboundSession::~GateOutboundSession()
-{
-	_dispatcher->UnregisterTimeProcessor(this);
-
-	_processor->ProcessOutboundStatus(
-		this,
-		OutboundStatusProcessor::Status::SessionEnd);
-}
-
-int GateOutboundSession::GetDescriptor()
-{
-	return _fd;
-}
-
-bool GateOutboundSession::RequestRead()
-{
-	THROW("Not implemented.");
-}
-
-bool GateOutboundSession::RequestWrite()
-{
-	THROW("Not implemented.");
-}
-
-void GateOutboundSession::ProcessRead()
-{
-	THROW("Not implemented.");
-}
-
-void GateOutboundSession::ProcessWrite()
-{
-	THROW("Not implemented.");
-}
-
-void GateOutboundSession::ProcessTimeEvent()
-{
-	_storage->MarkSessionForRemoval(this);
-}
-
-// Listening socket.
 GateListeningSocket::GateListeningSocket(
 	EventDispatcher *dispatcher,
-	Config *config)
+	Config *config,
+	RateLimiter *rateLimiter)
 {
 	_socketFd = -1;
 	_dispatcher = dispatcher;
 	_config = config;
+	_rateLimiter = rateLimiter;
 	_sessions = nullptr;
 	_timeQuantRequested = false;
 
@@ -262,18 +128,15 @@ void GateListeningSocket::ProcessRead()
 		return;
 	}
 
-	/*bool allowed = _failBan.IsAllowed(addr.sin_addr.s_addr);
-
-	if (!allowed) {
-		shutdown(fd, SHUT_RDWR);
-		close(fd);
-		return;
-	}*/
-
 	MakeNonblocking(fd);
 
-	GateInboundSession *session =
-		new GateInboundSession(fd, this, _dispatcher);
+	InboundGateSession *session =
+		new InboundGateSession(
+			fd,
+			addr.sin_addr.s_addr,
+			this,
+			_dispatcher,
+			_rateLimiter);
 
 	SessionNode *node = new SessionNode;
 	node->Next = _sessions;
@@ -288,7 +151,7 @@ void GateListeningSocket::ProcessWrite()
 	THROW("This method must not be called.");
 }
 
-void GateListeningSocket::MarkSessionForRemoval(GateSession *session)
+void GateListeningSocket::MarkSessionForRemoval(InboundGateSession *session)
 {
 	SessionNode *node = _sessions;
 

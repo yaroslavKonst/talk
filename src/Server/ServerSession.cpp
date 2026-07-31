@@ -531,6 +531,8 @@ void ServerSession::SessionLog(String message)
 {
 	uint64_t sessionIndex = (uint64_t)this;
 
-	Log("Session " + ToString(sessionIndex) + " of " +
-		_storage->GetName() + ": " + message);
+	Log(
+		"Session " + ToString(sessionIndex) + " of " +
+			_storage->GetName(),
+		message);
 }

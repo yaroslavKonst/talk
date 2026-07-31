@@ -9,7 +9,8 @@ SERVER_MODULES =\
 	Server/Config.o \
 	Server/ServerHandshake.o \
 	Server/ServerSession.o \
-	Server/GateSession.o \
+	Server/GateListeningSocket.o \
+	Server/InboundGateSession.o \
 	Server/SendPlanner.o \
 	Server/ObjectType.o \
 	Server/FailBan.o \
@@ -32,6 +33,7 @@ SERVER_MODULES =\
 	Common/StreamReader.o \
 	Common/StreamWriter.o \
 	Common/ObjectStorage.o \
+	Common/Log.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
@@ -88,6 +90,7 @@ CLIENT_MODULES=\
 	Common/StreamReader.o \
 	Common/StreamWriter.o \
 	Common/ObjectStorage.o \
+	Common/Log.o \
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 

@@ -108,6 +108,7 @@ static void Daemonize()
 
 int main(int argc, char **argv)
 {
+	AllowMultilineLog(true);
 	PrintVersionAndExit(argc, argv);
 
 	try {
@@ -132,7 +133,7 @@ int main(int argc, char **argv)
 		return server.Run();
 	}
 	catch (Exception &ex) {
-		Log("Fatal: " + ex.Message());
+		Log("Fatal", ex.Message());
 	}
 
 	return 100;

@@ -31,7 +31,7 @@ Resolver::~Resolver()
 
 		Clear();
 	} catch (const Exception &ex) {
-		Log("Resolver: " + ex.What());
+		Log("Resolver", ex.What());
 	}
 }
 

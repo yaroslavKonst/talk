@@ -41,6 +41,14 @@ static const char *RateLimiterMaxRequestsPerMinuteValue = "60";
 static const char *RateLimiterSessionTimeoutPenalty = "SessionTimeoutPenalty";
 static const char *RateLimiterSessionTimeoutPenaltyValue = "10m";
 
+static const char *SendPlannerSection = "SendPlanner";
+static const char *SendPlannerRequestLimitDelay = "RequestRateLimitDelay";
+static const char *SendPlannerRequestLimitDelayValue = "20s";
+static const char *SendPlannerConnectionFailureDelay = "ConnectionFailureDelay";
+static const char *SendPlannerConnectionFailureDelayValue = "30m";
+static const char *SendPlannerMaxDeliveryTime = "MaxDeliveryTime";
+static const char *SendPlannerMaxDeliveryTimeValue = "1w";
+
 Config::Config() : _configFile("talkd.conf")
 {
 	_listeningAddress = 0;
@@ -158,6 +166,21 @@ uint64_t Config::GetRateLimiterSessionTimeoutPenalty()
 	return _rateLimiterSessionTimeoutPenalty;
 }
 
+int64_t Config::GetSendPlannerRequestLimitDelay()
+{
+	return _sendPlannerRequestLimitDelay;
+}
+
+int64_t Config::GetSendPlannerConnectionFailureDelay()
+{
+	return _sendPlannerConnectionFailureDelay;
+}
+
+int64_t Config::GetSendPlannerMaxDeliveryTime()
+{
+	return _sendPlannerMaxDeliveryTime;
+}
+
 void Config::Init()
 {
 	if (!FileExists(_configFile.GetPath())) {
@@ -209,6 +232,19 @@ void Config::Init()
 			RateLimiterSection,
 			RateLimiterSessionTimeoutPenalty,
 			RateLimiterSessionTimeoutPenaltyValue);
+
+		_configFile.Set(
+			SendPlannerSection,
+			SendPlannerRequestLimitDelay,
+			SendPlannerRequestLimitDelayValue);
+		_configFile.Set(
+			SendPlannerSection,
+			SendPlannerConnectionFailureDelay,
+			SendPlannerConnectionFailureDelayValue);
+		_configFile.Set(
+			SendPlannerSection,
+			SendPlannerMaxDeliveryTime,
+			SendPlannerMaxDeliveryTimeValue);
 
 		_configFile.Write();
 	}
@@ -482,6 +518,46 @@ void Config::Validate()
 			"s,m,h,d,w,M or Y suffix.");
 	}
 
+	// Send planner.
+	int64_t sendPlannerRequestLimitDelay;
+	parseResult = ParseTime(
+		_configFile.Get(
+			SendPlannerSection,
+			SendPlannerRequestLimitDelay),
+		sendPlannerRequestLimitDelay);
+
+	if (!parseResult || sendPlannerRequestLimitDelay <= 0) {
+		THROW("SendPlanner request rate limit delay must be "
+			"positive integer with optional "
+			"s,m,h,d,w,M or Y suffix.");
+	}
+
+	int64_t sendPlannerConnectionFailureDelay;
+	parseResult = ParseTime(
+		_configFile.Get(
+			SendPlannerSection,
+			SendPlannerConnectionFailureDelay),
+		sendPlannerConnectionFailureDelay);
+
+	if (!parseResult || sendPlannerConnectionFailureDelay <= 0) {
+		THROW("SendPlanner connection failure delay must be "
+			"positive integer with optional "
+			"s,m,h,d,w,M or Y suffix.");
+	}
+
+	int64_t sendPlannerMaxDeliveryTime;
+	parseResult = ParseTime(
+		_configFile.Get(
+			SendPlannerSection,
+			SendPlannerMaxDeliveryTime),
+		sendPlannerMaxDeliveryTime);
+
+	if (!parseResult || sendPlannerMaxDeliveryTime <= 0) {
+		THROW("SendPlanner max delivery time must be "
+			"positive integer with optional "
+			"s,m,h,d,w,M or Y suffix.");
+	}
+
 	// Writing new parameters.
 	_listeningAddress = addr.s_addr;
 	_listeningPort = port;
@@ -523,9 +599,25 @@ void Config::Validate()
 		TimeSpanInSecondsToString(_rateLimiterSessionTimeoutPenalty) +
 		" (" +
 		ToString(_rateLimiterSessionTimeoutPenalty) + " seconds).");
+
+	_sendPlannerRequestLimitDelay = sendPlannerRequestLimitDelay;
+	_sendPlannerConnectionFailureDelay = sendPlannerConnectionFailureDelay;
+	_sendPlannerMaxDeliveryTime = sendPlannerMaxDeliveryTime;
+	ConfigLog("SendPlanner request rate limit delay: " +
+		TimeSpanInSecondsToString(_sendPlannerRequestLimitDelay) +
+		" (" +
+		ToString(_sendPlannerRequestLimitDelay) + " seconds).");
+	ConfigLog("SendPlanner connection failure delay: " +
+		TimeSpanInSecondsToString(_sendPlannerConnectionFailureDelay) +
+		" (" +
+		ToString(_sendPlannerConnectionFailureDelay) + " seconds).");
+	ConfigLog("SendPlanner max delivery time: " +
+		TimeSpanInSecondsToString(_sendPlannerMaxDeliveryTime) +
+		" (" +
+		ToString(_sendPlannerMaxDeliveryTime) + " seconds).");
 }
 
 void Config::ConfigLog(String message)
 {
-	Log("Config: " + message);
+	Log("Config", message);
 }

@@ -261,5 +261,5 @@ void FailBan::CheckSuspicious()
 
 void FailBan::FailBanLog(String message)
 {
-	Log("FailBan: " + message);
+	Log("FailBan", message);
 }

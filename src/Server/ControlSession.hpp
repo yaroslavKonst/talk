@@ -55,6 +55,8 @@ private:
 	void ProcessFailBanListBannedCommand();
 	void ProcessFailBanBanCommand(CowBuffer<uint8_t> buffer);
 	void ProcessFailBanUnbanCommand(CowBuffer<uint8_t> buffer);
+
+	void ControlLog(String message);
 };
 
 class ControlSessionStorage

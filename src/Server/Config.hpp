@@ -41,6 +41,10 @@ public:
 	uint64_t GetRateLimiterMaxRequestsPerMinute();
 	uint64_t GetRateLimiterSessionTimeoutPenalty();
 
+	int64_t GetSendPlannerRequestLimitDelay();
+	int64_t GetSendPlannerConnectionFailureDelay();
+	int64_t GetSendPlannerMaxDeliveryTime();
+
 private:
 	IniFile _configFile;
 
@@ -64,6 +68,10 @@ private:
 
 	uint64_t _rateLimiterMaxRequestsPerMinute;
 	uint64_t _rateLimiterSessionTimeoutPenalty;
+
+	int64_t _sendPlannerRequestLimitDelay;
+	int64_t _sendPlannerConnectionFailureDelay;
+	int64_t _sendPlannerMaxDeliveryTime;
 
 	struct ConfUser
 	{

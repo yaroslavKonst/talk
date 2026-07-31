@@ -227,7 +227,7 @@ void ControlSession::SendResponse(CowBuffer<uint8_t> response)
 
 void ControlSession::ProcessUnknownCommand(int32_t command)
 {
-	Log("Control: Received unknown command with code " +
+	ControlLog("Received unknown command with code " +
 		ToString(command) + ".");
 	int32_t code = ERROR_UNKNOWN_COMMAND;
 
@@ -239,13 +239,13 @@ void ControlSession::ProcessUnknownCommand(int32_t command)
 
 void ControlSession::ProcessShutdownCommand()
 {
-	Log("Control: Shutdown is requested.");
+	ControlLog("Shutdown is requested.");
 	_dispatcher->Stop();
 }
 
 void ControlSession::ProcessGetKeyCommand()
 {
-	Log("Control: Public key is requested.");
+	ControlLog("Public key is requested.");
 
 	CowBuffer<uint8_t> code(sizeof(int32_t));
 	*code.SwitchType<int32_t>() = OK;
@@ -261,17 +261,17 @@ void ControlSession::ProcessGetKeyCommand()
 
 void ControlSession::ProcessReloadConfigCommand()
 {
-	Log("Control: Reloading configuration.");
+	ControlLog("Reloading configuration.");
 
 	CowBuffer<uint8_t> code(sizeof(int32_t));
 
 	try {
 		_storage->ReloadConfig();
 		*code.SwitchType<int32_t>() = OK;
-		Log("Control: Reloaded successfully.");
+		ControlLog("Reloaded successfully.");
 	} catch (Exception &ex) {
 		*code.SwitchType<int32_t>() = ERROR;
-		Log("Control: Reloading error: " + ex.Message());
+		ControlLog("Reloading error: " + ex.Message());
 	}
 
 	SendResponse(code);
@@ -290,12 +290,12 @@ void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> buffer)
 	CommandAddUser::Response response;
 
 	if (_users->HasUser(request.Name)) {
-		Log("Control: Attempt to add existing user " + request.Name +
+		ControlLog("Attempt to add existing user " + request.Name +
 			".");
 		response.Code = ERROR_USER_EXISTS;
 	} else {
 		response.Code = OK;
-		Log("Control: Adding new user " + request.Name +
+		ControlLog("Adding new user " + request.Name +
 			" with key " +
 			DataToHex(request.Key.Key, Crypto::X25519::KEY_SIZE) +
 			".");
@@ -426,4 +426,9 @@ void ControlSession::ProcessFailBanUnbanCommand(CowBuffer<uint8_t> buffer)
 	}
 
 	SendResponse(CommandFailBanUnban::BuildResponse(response));
+}
+
+void ControlSession::ControlLog(String message)
+{
+	Log("Control", message);
 }

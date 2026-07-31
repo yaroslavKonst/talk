@@ -6,7 +6,7 @@
 
 #include "ListeningSocket.hpp"
 #include "ControlSocket.hpp"
-#include "GateSession.hpp"
+#include "GateListeningSocket.hpp"
 #include "SendPlanner.hpp"
 #include "FailBan.hpp"
 #include "RateLimiter.hpp"
@@ -23,12 +23,12 @@ Server::Server()
 
 Server::~Server()
 {
-	Log("Core: Shutdown.");
+	Log("Core", "Shutdown.");
 }
 
 int Server::Run()
 {
-	Log("Core: Startup.");
+	Log("Core", "Startup.");
 
 	DisableSigPipe();
 
@@ -37,7 +37,7 @@ int Server::Run()
 	FailBan failBan(&dispatcher, &config);
 	RateLimiter rateLimiter(&dispatcher, &config);
 	UserDB users(&dispatcher, &config, &failBan, _privateKey, _publicKey);
-	SendPlanner sendPlanner(&dispatcher, &users);
+	SendPlanner sendPlanner(&dispatcher, &config, &users);
 	ListeningSocket listeningSocket(&users, &dispatcher, &config, &failBan);
 	ControlSocket controlSocket(
 		&users,
@@ -45,7 +45,7 @@ int Server::Run()
 		&config,
 		&failBan,
 		_publicKey);
-	GateListeningSocket gateSocket(&dispatcher, &config);
+	GateListeningSocket gateSocket(&dispatcher, &config, &rateLimiter);
 
 	listeningSocket.OpenSocket();
 	controlSocket.OpenSocket();
