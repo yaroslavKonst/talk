@@ -143,4 +143,88 @@ inline String DataSizeToString(uint64_t dataSize)
 	return ToString(dataSize) + "." + ToString(fraction) + " " + units;
 }
 
+inline String TimeSpanInSecondsToString(int64_t timeSpan)
+{
+	const int64_t minute = 60;
+	const int64_t hour = minute * 60;
+	const int64_t day = hour * 24;
+	const int64_t month = day * 31;
+	const int64_t year = day * 365;
+
+	if (timeSpan == 0) {
+		return "0 seconds";
+	}
+
+	String result;
+
+	bool negative = false;
+
+	if (timeSpan < 0) {
+		timeSpan = -timeSpan;
+		negative = true;
+	}
+
+	if (timeSpan >= year) {
+		int64_t years = timeSpan / year;
+		result += ToString(years) + " year" + (years > 1 ? "s" : "");
+		timeSpan = timeSpan % year;
+	}
+
+	if (timeSpan >= month) {
+		if (result.Length()) {
+			result += " ";
+		}
+
+		int64_t months = timeSpan / month;
+		result += ToString(months) + " month" + (months > 1 ? "s" : "");
+		timeSpan = timeSpan % month;
+	}
+
+	if (timeSpan >= day) {
+		if (result.Length()) {
+			result += " ";
+		}
+
+		int64_t days = timeSpan / day;
+		result += ToString(days) + " day" + (days > 1 ? "s" : "");
+		timeSpan = timeSpan % day;
+	}
+
+	if (timeSpan >= hour) {
+		if (result.Length()) {
+			result += " ";
+		}
+
+		int64_t hours = timeSpan / hour;
+		result += ToString(hours) + " hour" + (hours > 1 ? "s" : "");
+		timeSpan = timeSpan % hour;
+	}
+
+	if (timeSpan >= minute) {
+		if (result.Length()) {
+			result += " ";
+		}
+
+		int64_t minutes = timeSpan / minute;
+		result += ToString(minutes) + " minute" +
+			(minutes > 1 ? "s" : "");
+		timeSpan = timeSpan % minute;
+	}
+
+	if (timeSpan > 0) {
+		if (result.Length()) {
+			result += " ";
+		}
+
+		result += ToString(timeSpan) + " second" +
+			(timeSpan > 1 ? "s" : "");
+	}
+
+	if (negative) {
+		result = "-" + result;
+	}
+
+	return result;
+}
+
 #endif

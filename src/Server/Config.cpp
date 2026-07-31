@@ -23,7 +23,7 @@ static const char *GatePortSettingValue = "6525";
 
 static const char *LimitsSection = "Limits";
 static const char *MessageSizeLimitSetting = "MessageSize";
-static const char *MessageSizeLimitSettingValue = "1G";
+static const char *MessageSizeLimitSettingValue = "50M";
 
 static const char *FailBanSection = "FailBan";
 static const char *FailBanEnabledSetting = "Enabled";
@@ -161,6 +161,9 @@ uint64_t Config::GetRateLimiterSessionTimeoutPenalty()
 void Config::Init()
 {
 	if (!FileExists(_configFile.GetPath())) {
+		ConfigLog("Config file is not found. It will be created. "
+			"Loading default configuration.");
+
 		_configFile.Set(
 			NetworkSection,
 			HostNameSetting,
@@ -505,17 +508,21 @@ void Config::Validate()
 	ConfigLog(String("FailBan enabled: ") +
 		(_failBanEnabled ? "Yes" : "No") + ".");
 	ConfigLog("FailBan ban time: " +
-		ToString(_failBanBanTime) + " seconds.");
+		TimeSpanInSecondsToString(_failBanBanTime) + " (" +
+		ToString(_failBanBanTime) + " seconds).");
 	ConfigLog("FailBan max tries: " + ToString(_failBanMaxTries) + ".");
 	ConfigLog("FailBan cooldown interval: " +
-		ToString(_failBanCooldownInterval) + " seconds.");
+		TimeSpanInSecondsToString(_failBanCooldownInterval) + " (" +
+		ToString(_failBanCooldownInterval) + " seconds).");
 
 	_rateLimiterMaxRequestsPerMinute = rateLimiterMaxRequestsPerMinute;
 	_rateLimiterSessionTimeoutPenalty = rateLimiterSessionTimeoutPenalty;
 	ConfigLog("RateLimiter max requests per minute: " +
 		ToString(_rateLimiterMaxRequestsPerMinute) + ".");
 	ConfigLog("RateLimiter timeout penalty: " +
-		ToString(_rateLimiterSessionTimeoutPenalty) + " seconds.");
+		TimeSpanInSecondsToString(_rateLimiterSessionTimeoutPenalty) +
+		" (" +
+		ToString(_rateLimiterSessionTimeoutPenalty) + " seconds).");
 }
 
 void Config::ConfigLog(String message)

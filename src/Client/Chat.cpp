@@ -141,7 +141,7 @@ void Chat::SendMessage()
 		return;
 	}
 
-	_encLock = _root->Ui->BlockNotify("Encrypting message.");
+	_encLock = _root->Ui->BlockNotify("Encrypting message...");
 
 	_root->Dispatcher->RegisterQuantProcessor(this);
 }
