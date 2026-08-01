@@ -289,7 +289,7 @@ bool ServerSession::ProcessSendMessage(const CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
-	bool sendStatus = _storage->SendMessage(command.Message);
+	bool sendStatus = _storage->SendMessage(command.Message, command.Attr);
 
 	return sendStatus;
 }
@@ -504,7 +504,8 @@ void ServerSession::SendMessage()
 	CommandSendMessage::Command command;
 	command.Message = _storage->GetMessage(
 		_offeredMessagePeerName,
-		_offeredMessageID);
+		_offeredMessageID,
+		command.Attr);
 
 	if (command.Message.Size()) {
 		_protocol->Send(CommandSendMessage::BuildCommand(command), 1);

@@ -172,7 +172,9 @@ bool ChatList::HasMessage(String peerName, const ObjectStorage::ID &messageID)
 	return chat->Key.GetChat()->HasMessage(messageID);
 }
 
-void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
+void ChatList::DeliverMessage(
+	const CowBuffer<uint8_t> message,
+	Message::Attribute attr)
 {
 	Message::X25519::HeaderPointToPoint header;
 	bool res = Message::X25519::ParseHeader(message, header);
@@ -201,6 +203,10 @@ void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
 		return;
 	}
 
+	if (header.Source == header.Destination) {
+		return;
+	}
+
 	Tree<ChatContainer>::Entry *chat = _chats.FindEntry(peerName);
 
 	if (!chat) {
@@ -212,7 +218,7 @@ void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
 		}
 	}
 
-	chat->Key.GetChat()->DeliverMessage(message, false);
+	chat->Key.GetChat()->DeliverMessage(message, attr, false);
 }
 
 void ChatList::UpdateMessage(

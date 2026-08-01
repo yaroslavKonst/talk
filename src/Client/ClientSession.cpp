@@ -141,6 +141,7 @@ void ClientSession::SendMessage(const CowBuffer<uint8_t> message)
 {
 	CommandSendMessage::Command command;
 	command.Message = message;
+	command.Attr = (Message::Attribute)0;
 
 	_protocol->Send(CommandSendMessage::BuildCommand(command), 1);
 }
@@ -407,7 +408,7 @@ bool ClientSession::ProcessSendMessage(const CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
-	_root->Messages->DeliverMessage(command.Message);
+	_root->Messages->DeliverMessage(command.Message, command.Attr);
 	return true;
 }
 

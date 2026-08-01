@@ -31,7 +31,9 @@ public:
 	bool HasMessage(
 		String peerName,
 		const ObjectStorage::ID &messageID) override;
-	void DeliverMessage(const CowBuffer<uint8_t> message) override;
+	void DeliverMessage(
+		const CowBuffer<uint8_t> message,
+		Message::Attribute attr) override;
 	void UpdateMessage(
 		String peerName,
 		const ObjectStorage::ID &messageID,

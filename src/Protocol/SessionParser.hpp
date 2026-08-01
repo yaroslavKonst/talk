@@ -185,6 +185,7 @@ namespace CommandSendMessage
 {
 	struct Command
 	{
+		Message::Attribute Attr;
 		CowBuffer<uint8_t> Message;
 	};
 

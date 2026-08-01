@@ -72,10 +72,24 @@ public:
 	CowBuffer<CommandListContacts::Response::UserData>
 		GetContactList() override;
 
-	bool SendMessage(const CowBuffer<uint8_t> message) override;
+	// Must be called for outbound messages.
+	bool SendMessage(
+		const CowBuffer<uint8_t> message,
+		Message::Attribute attr) override;
+
+	// Must be called for inbound messages.
+	int32_t CheckInboundMessage(
+		const Message::X25519::HeaderPointToPoint &header,
+		const ObjectStorage::ID &messageID);
+	void DeliverMessage(
+		const Message::X25519::HeaderPointToPoint &header,
+		const CowBuffer<uint8_t> message);
+
 	CowBuffer<uint8_t> GetMessage(
 		String peerName,
-		const ObjectStorage::ID &messageID) override;
+		const ObjectStorage::ID &messageID,
+		Message::Attribute &attr) override;
+
 	void UpdateMessage(
 		String peerName,
 		const ObjectStorage::ID &messageID,
@@ -115,6 +129,7 @@ private:
 	void RegisterNewMessage(
 		const Message::X25519::HeaderPointToPoint &header,
 		const CowBuffer<uint8_t> message,
+		Message::Attribute attr,
 		bool inbound);
 };
 

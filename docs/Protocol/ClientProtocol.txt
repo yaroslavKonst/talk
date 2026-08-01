@@ -460,8 +460,10 @@ Client response:
 | OFFER_MESSAGE | answer |
 "answer": byte, whether to send message to the client.
 
-| SEND_MESSAGE | message data |
+| SEND_MESSAGE | message attributes | message data |
+"message attributes": current mask of message attributes, 32 bit integer;
 "message data": array with concatenated message header and message body.
+
 This command is sent by the client or the server to send a new message.
 
 | UPDATE_MESSAGE | peer name | message header hash |...

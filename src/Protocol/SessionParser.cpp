@@ -557,18 +557,25 @@ bool CommandSendMessage::ParseCommand(
 		return false;
 	}
 
+	result.Attr = SetProtoEndian(
+		*buffer.SwitchType<Message::Attribute>(sizeof(command)));
+
+	uint64_t offset = sizeof(command) + sizeof(result.Attr);
+
 	result.Message = buffer.Slice(
-		sizeof(command),
-		buffer.Size() - sizeof(command));
+		offset,
+		buffer.Size() - offset);
 
 	return true;
 }
 
 CowBuffer<uint8_t> CommandSendMessage::BuildCommand(const Command &data)
 {
-	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
+	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t) * 2);
 	*commandBuffer.SwitchType<int32_t>() =
 		SetProtoEndian<int32_t>(SESSION_COMMAND_SEND_MESSAGE);
+	*commandBuffer.SwitchType<Message::Attribute>(sizeof(int32_t)) =
+		SetProtoEndian(data.Attr);
 	return commandBuffer.Concat(data.Message);
 }
 

@@ -58,6 +58,9 @@ public:
 		uint64_t offset,
 		uint64_t length);
 	void WriteObject(const ID &id, const CowBuffer<uint8_t> buffer);
+	void WriteObject(
+		const ID &id,
+		const CowBuffer<CowBuffer<uint8_t>> buffers);
 	void UpdateObject(
 		const ID &id,
 		const CowBuffer<uint8_t> buffer,

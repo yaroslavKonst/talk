@@ -20,7 +20,10 @@ public:
 
 	void SendMessage();
 
-	void DeliverMessage(const CowBuffer<uint8_t> message, bool local);
+	void DeliverMessage(
+		const CowBuffer<uint8_t> message,
+		Message::Attribute attr,
+		bool local);
 	void UpdateMessage(
 		const ObjectStorage::ID &messageID,
 		Message::Attribute attr,

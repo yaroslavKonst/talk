@@ -146,7 +146,10 @@ void Chat::SendMessage()
 	_root->Dispatcher->RegisterQuantProcessor(this);
 }
 
-void Chat::DeliverMessage(const CowBuffer<uint8_t> message, bool local)
+void Chat::DeliverMessage(
+	const CowBuffer<uint8_t> message,
+	Message::Attribute attr,
+	bool local)
 {
 	Message::X25519::HeaderPointToPoint header;
 
@@ -169,10 +172,14 @@ void Chat::DeliverMessage(const CowBuffer<uint8_t> message, bool local)
 
 	bool inbound = _peerName == header.Source;
 
-	Message::Attribute attrs = (Message::Attribute)0;
+	Message::Attribute attrs = attr;
 
 	if (inbound) {
 		attrs = Message::AttributeAction::Set(
+			attrs,
+			Message::Attribute::Inbound);
+	} else {
+		attrs = Message::AttributeAction::Clear(
 			attrs,
 			Message::Attribute::Inbound);
 	}
@@ -274,7 +281,7 @@ void Chat::ProcessQuant()
 	delete _enc;
 	_enc = nullptr;
 
-	DeliverMessage(_encMessage, true);
+	DeliverMessage(_encMessage, (Message::Attribute)0, true);
 	success = _root->Network->SendMessage(_encMessage);
 
 	if (!success) {

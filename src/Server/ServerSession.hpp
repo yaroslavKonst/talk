@@ -115,10 +115,13 @@ public:
 	virtual CowBuffer<CommandListContacts::Response::UserData>
 		GetContactList() = 0;
 
-	virtual bool SendMessage(const CowBuffer<uint8_t> message) = 0;
+	virtual bool SendMessage(
+		const CowBuffer<uint8_t> message,
+		Message::Attribute attr) = 0;
 	virtual CowBuffer<uint8_t> GetMessage(
 		String peerName,
-		const ObjectStorage::ID &messageID) = 0;
+		const ObjectStorage::ID &messageID,
+		Message::Attribute &attr) = 0;
 };
 
 #endif

@@ -228,6 +228,25 @@ void ObjectStorage::WriteObject(const ID &id, CowBuffer<uint8_t> buffer)
 	file.Write<uint8_t>(buffer.Pointer(), buffer.Size(), 0);
 }
 
+void ObjectStorage::WriteObject(
+	const ID &id,
+	const CowBuffer<CowBuffer<uint8_t>> buffers)
+{
+	String path = GetPathForID(id, true);
+
+	BinaryFile file(path, true, true);
+
+	uint64_t offset = 0;
+
+	for (uint32_t i = 0; i < buffers.Size(); i++) {
+		file.Write<uint8_t>(
+			buffers[i].Pointer(),
+			buffers[i].Size(),
+			offset);
+		offset += buffers[i].Size();
+	}
+}
+
 void ObjectStorage::UpdateObject(
 	const ID &id,
 	CowBuffer<uint8_t> buffer,

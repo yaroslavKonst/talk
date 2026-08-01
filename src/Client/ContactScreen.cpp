@@ -280,6 +280,14 @@ Screen *ContactScreen::ProcessAddEvent(int event)
 			return this;
 		}
 
+		String myName = _root->Conf->GetName() + "@" +
+			_root->Conf->GetHostName();
+
+		if (_newContactName.Text == myName) {
+			_root->Ui->Notify("Contact name is your account name.");
+			return this;
+		}
+
 		bool requestSuccess = _root->Network->AddContact(
 			_newContactName.Text);
 

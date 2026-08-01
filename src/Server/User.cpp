@@ -8,6 +8,7 @@
 #include "../Common/Exception.hpp"
 #include "../Common/Log.hpp"
 #include "../Protocol/ParserHelpers.hpp"
+#include "../Protocol/GateParser.hpp"
 #include "../ThirdParty/monocypher.h"
 
 void User::CreateUser(
@@ -209,10 +210,11 @@ CowBuffer<CommandListContacts::Response::UserData> User::GetContactList()
 	return result;
 }
 
-bool User::SendMessage(const CowBuffer<uint8_t> message)
+bool User::SendMessage(
+	const CowBuffer<uint8_t> message,
+	Message::Attribute attr)
 {
 	Message::X25519::HeaderPointToPoint header;
-
 	bool parseResult = Message::X25519::ParseHeader(message, header);
 
 	if (!parseResult) {
@@ -224,6 +226,10 @@ bool User::SendMessage(const CowBuffer<uint8_t> message)
 	}
 
 	if (!Message::VerifyFullUserName(header.Destination)) {
+		return false;
+	}
+
+	if (header.Source == header.Destination) {
 		return false;
 	}
 
@@ -247,14 +253,108 @@ bool User::SendMessage(const CowBuffer<uint8_t> message)
 		return false;
 	}
 
-	RegisterNewMessage(header, message, false);
+	if (crypto_verify32(header.SourceKey.Key, _publicKey.Key)) {
+		return false;
+	}
+
+	RegisterNewMessage(header, message, attr, false);
 
 	return true;
 }
 
+int32_t User::CheckInboundMessage(
+	const Message::X25519::HeaderPointToPoint &header,
+	const ObjectStorage::ID &messageID)
+{
+	if (!Message::VerifyFullUserName(header.Source)) {
+		return GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER;
+	}
+
+	if (!Message::VerifyFullUserName(header.Destination)) {
+		return GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER;
+	}
+
+	if (header.Source == header.Destination) {
+		return GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER;
+	}
+
+	String userName;
+	String hostName;
+
+	bool parseResult = Message::SplitFullUserName(
+		header.Destination,
+		userName,
+		hostName);
+
+	if (!parseResult) {
+		return GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER;
+	}
+
+	if (userName != _name) {
+		return GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER;
+	}
+
+	if (hostName != _config->GetHostName()) {
+		return GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER;
+	}
+
+	if (crypto_verify32(_publicKey.Key, header.DestinationKey.Key)) {
+		return GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_KEY;
+	}
+
+	uint64_t maxSize = _config->GetMessageSizeLimit();
+	uint64_t messageSize =
+		header.HeaderSize +
+		header.MessageSize +
+		sizeof(int32_t) * 2;
+
+	if (messageSize > maxSize) {
+		return GATE_MESSAGE_HEADER_REJECT_MESSAGE_TOO_BIG;
+	}
+
+	Contact *contact = _contactStorage.GetContact(header.Source);
+
+	if (contact) {
+		Contact::BlockStatus blockStat = contact->GetBlockStatus();
+
+		if (blockStat == Contact::BlockStatus::Blocked) {
+			return GATE_MESSAGE_HEADER_REJECT_SENDER_BANNED;
+		}
+
+		if (blockStat == Contact::BlockStatus::SilentlyBlocked) {
+			return GATE_MESSAGE_HEADER_REJECT_SILENTBLOCK;
+		}
+
+		if (contact->IsKeyBlocked(header.SourceKey)) {
+			return GATE_MESSAGE_HEADER_REJECT_SENDER_KEY_BANNED;
+		}
+	}
+
+	if (FileExists(_root + "/storage/" + header.Source)) {
+		ObjectStorage objectStorage(
+			_root + "/storage/" + header.Source,
+			_dispatcher);
+
+		if (objectStorage.HasObject(messageID)) {
+			return GATE_MESSAGE_HEADER_REJECT_EXISTS;
+		}
+	}
+
+	return GATE_MESSAGE_HEADER_ACCEPT;
+}
+
+void User::DeliverMessage(
+	const Message::X25519::HeaderPointToPoint &header,
+	const CowBuffer<uint8_t> message)
+{
+	Message::Attribute attr = Message::Attribute::Unread;
+	RegisterNewMessage(header, message, attr, true);
+}
+
 CowBuffer<uint8_t> User::GetMessage(
 	String peerName,
-	const ObjectStorage::ID &messageID)
+	const ObjectStorage::ID &messageID,
+	Message::Attribute &attr)
 {
 	ObjectStorage objectStorage(
 		_root + "/storage/" + peerName,
@@ -264,7 +364,14 @@ CowBuffer<uint8_t> User::GetMessage(
 		return CowBuffer<uint8_t>();
 	}
 
-	return objectStorage.ReadObject(messageID);
+	CowBuffer<uint8_t> buffer = objectStorage.ReadObject(messageID);
+
+	if (buffer.Size() <= sizeof(attr)) {
+		return CowBuffer<uint8_t>();
+	}
+
+	attr = *buffer.SwitchType<Message::Attribute>();
+	return buffer.Slice(sizeof(attr), buffer.Size() - sizeof(attr));
 }
 
 void User::UpdateMessage(
@@ -273,6 +380,33 @@ void User::UpdateMessage(
 	Message::Attribute attr,
 	bool value)
 {
+	// Update message storage.
+	ObjectStorage objectStorage(
+		_root + "/storage/" + peerName,
+		_dispatcher);
+
+	if (!objectStorage.HasObject(messageID)) {
+		return;
+	}
+
+	CowBuffer<uint8_t> buffer =
+		objectStorage.ReadObject(messageID, 0, sizeof(attr));
+
+	Message::Attribute storedAttrs =
+		*buffer.SwitchType<Message::Attribute>();
+
+	if (value) {
+		storedAttrs = Message::AttributeAction::Set(storedAttrs, attr);
+	} else {
+		storedAttrs =
+			Message::AttributeAction::Clear(storedAttrs, attr);
+	}
+
+	*buffer.SwitchType<Message::Attribute>() = storedAttrs;
+
+	objectStorage.UpdateObject(messageID, buffer, 0);
+
+	// Update sequence storage.
 	UpdateMessageObject::Data data;
 
 	data.PeerName = peerName;
@@ -334,6 +468,7 @@ void User::AddNewObject(const CowBuffer<uint8_t> object)
 void User::RegisterNewMessage(
 	const Message::X25519::HeaderPointToPoint &header,
 	const CowBuffer<uint8_t> message,
+	Message::Attribute attr,
 	bool inbound)
 {
 	ObjectStorage::ID messageID = Crypto::GetHash(
@@ -356,7 +491,13 @@ void User::RegisterNewMessage(
 		return;
 	}
 
-	objectStorage.WriteObject(messageID, message);
+	CowBuffer<CowBuffer<uint8_t>> messageAndAttrs(2);
+	messageAndAttrs[0] = CowBuffer<uint8_t>(sizeof(attr));
+	*messageAndAttrs[0].SwitchType<Message::Attribute>() = attr;
+
+	messageAndAttrs[1] = message;
+
+	objectStorage.WriteObject(messageID, messageAndAttrs);
 
 	MessageObject::Data data;
 	data.PeerName = peerName;

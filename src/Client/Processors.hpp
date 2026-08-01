@@ -44,7 +44,9 @@ public:
 	virtual bool HasMessage(
 		String peerName,
 		const ObjectStorage::ID &messageID) = 0;
-	virtual void DeliverMessage(const CowBuffer<uint8_t> message) = 0;
+	virtual void DeliverMessage(
+		const CowBuffer<uint8_t> message,
+		Message::Attribute attr) = 0;
 	virtual void UpdateMessage(
 		String peerName,
 		const ObjectStorage::ID &messageID,
