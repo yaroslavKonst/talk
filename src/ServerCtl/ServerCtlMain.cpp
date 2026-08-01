@@ -11,6 +11,7 @@
 #include "../Common/Exception.hpp"
 #include "../Common/StreamReader.hpp"
 #include "../Common/StreamWriter.hpp"
+#include "../Common/CommandLineParser.hpp"
 
 static int OpenSocket()
 {
@@ -93,22 +94,54 @@ static CowBuffer<uint8_t> SendRequest(const CowBuffer<uint8_t> command)
 	return response;
 }
 
+static const char *HelpKey = "-help";
+static const char *VersionKey = "-version";
+
+static bool ParseCmd(CommandLineParser &cmd, int argc, char **argv)
+{
+	CowBuffer<String>keys(2);
+	keys[0] = HelpKey;
+	keys[1] = VersionKey;
+
+	cmd = CommandLineParser(keys, CowBuffer<String>(), CowBuffer<String>());
+	bool parseResult = cmd.Parse(argc, argv);
+
+	if (!parseResult) {
+		printf("%s\n", cmd.GetErrorString().CStr());
+		return false;
+	}
+
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	try {
-		PrintVersionAndExit(argc, argv);
+		CommandLineParser cmd;
+		bool parseResult = ParseCmd(cmd, argc, argv);
 
-		if (argc < 2) {
+		if (!parseResult) {
 			PrintShortHelp();
 			return 1;
 		}
 
-		if (!strcmp(argv[1], "--help")) {
+		if (cmd.GetKeyValue(HelpKey)) {
 			PrintHelp();
 			return 0;
 		}
 
-		CowBuffer<uint8_t> request = CreateRequest(argc, argv);
+		if (cmd.GetKeyValue(VersionKey)) {
+			PrintVersion();
+			return 0;
+		}
+
+		if (cmd.GetPositionalArguments().Size() < 2) {
+			PrintShortHelp();
+			return 1;
+		}
+
+		CowBuffer<uint8_t> request =
+			CreateRequest(cmd.GetPositionalArguments());
 
 		if (request.Size() == 0) {
 			printf("Failed to create request.\n");

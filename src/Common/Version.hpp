@@ -2,6 +2,5 @@
 #define _VERSION_HPP
 
 void PrintVersion();
-void PrintVersionAndExit(int argc, char **argv);
 
 #endif

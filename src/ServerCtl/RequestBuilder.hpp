@@ -2,10 +2,11 @@
 #define _REQUEST_BUILDER_HPP
 
 #include "../Common/CowBuffer.hpp"
+#include "../Common/MyString.hpp"
 
 void PrintHelp();
 void PrintShortHelp();
 
-CowBuffer<uint8_t> CreateRequest(int argc, char **argv);
+CowBuffer<uint8_t> CreateRequest(const CowBuffer<String> args);
 
 #endif

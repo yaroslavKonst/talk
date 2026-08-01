@@ -24,6 +24,12 @@ static const char *UnbanIPCommand = "unban";
 
 void PrintHelp()
 {
+	printf("Keys:\n");
+	printf("  -help      Print help and exit.\n");
+	printf("  -version   Print version and exit.\n");
+	printf("  --         Treat all subsequent words as positional\n");
+	printf("             arguments, stop key parsing beyond this key.\n");
+	printf("\n");
 	printf("Commands:\n");
 	printf("  %s\n", ShutdownCommand);
 	printf("  %s\n", GetKeyCommand);
@@ -42,7 +48,7 @@ void PrintHelp()
 
 void PrintShortHelp()
 {
-	printf("Use --help to get command list.\n");
+	printf("Use '-help' to get command list.\n");
 }
 
 static CowBuffer<uint8_t> RequestShutdown()
@@ -61,9 +67,9 @@ static CowBuffer<uint8_t> RequestGetKey()
 	return result;
 }
 
-static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
+static CowBuffer<uint8_t> RequestAddUser(const CowBuffer<String> args)
 {
-	if (argc != 5) {
+	if (args.Size() != 5) {
 		printf(
 			"Usage: %s %s NAME KEY\n",
 			UserSection,
@@ -71,8 +77,8 @@ static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
 		THROW("Invalid number of arguments.");
 	}
 
-	String name(argv[3]);
-	String keyHex(argv[4]);
+	String name = args[3];
+	String keyHex = args[4];
 
 	if (name.Length() == 0) {
 		THROW("Name is empty.\n");
@@ -95,14 +101,14 @@ static CowBuffer<uint8_t> RequestAddUser(int argc, char **argv)
 	return resultBuffer;
 }
 
-static CowBuffer<uint8_t> RequestRemoveUser(int argc, char **argv)
+static CowBuffer<uint8_t> RequestRemoveUser(const CowBuffer<String> args)
 {
-	if (argc != 4) {
+	if (args.Size() != 4) {
 		printf("Usage: %s %s NAME\n", UserSection, RemoveUserCommand);
 		THROW("Invalid number of arguments.");
 	}
 
-	String name(argv[3]);
+	String name = args[3];
 
 	if (name.Length() == 0) {
 		THROW("Name is empty.");
@@ -116,16 +122,16 @@ static CowBuffer<uint8_t> RequestRemoveUser(int argc, char **argv)
 	return resultBuffer;
 }
 
-static CowBuffer<uint8_t> RequestListUsers(int argc, char **argv)
+static CowBuffer<uint8_t> RequestListUsers(const CowBuffer<String> args)
 {
 	CommandListUsers::Request request;
 	request.Flags = 0;
 
-	for (int i = 3; i < argc; i++) {
-		if (String(argv[i]) == "key") {
+	for (unsigned int i = 3; i < args.Size(); i++) {
+		if (args[i] == "key") {
 			request.Flags |= CommandListUsers::ShowKeys;
 		} else {
-			THROW(String("Unknown option: ") + argv[i] + ".");
+			THROW("Unknown option: " + args[i] + ".");
 		}
 	}
 
@@ -141,15 +147,15 @@ static CowBuffer<uint8_t> RequestListBannedIP()
 	return result;
 }
 
-static CowBuffer<uint8_t> RequestBanIP(int argc, char **argv)
+static CowBuffer<uint8_t> RequestBanIP(const CowBuffer<String> args)
 {
-	if (argc != 4) {
+	if (args.Size() != 4) {
 		printf("Usage: %s %s IP\n", IPSection, BanIPCommand);
 		THROW("Invalid number of arguments.");
 	}
 
 	struct in_addr addr;
-	int res = inet_aton(argv[3], &addr);
+	int res = inet_aton(args[3].CStr(), &addr);
 
 	if (!res) {
 		THROW("Invalid IP address format.");
@@ -161,15 +167,15 @@ static CowBuffer<uint8_t> RequestBanIP(int argc, char **argv)
 	return CommandFailBanBan::BuildRequest(request);
 }
 
-static CowBuffer<uint8_t> RequestUnbanIP(int argc, char **argv)
+static CowBuffer<uint8_t> RequestUnbanIP(const CowBuffer<String> args)
 {
-	if (argc != 4) {
+	if (args.Size() != 4) {
 		printf("Usage: %s %s IP\n", IPSection, UnbanIPCommand);
 		THROW("Invalid number of arguments.");
 	}
 
 	struct in_addr addr;
-	int res = inet_aton(argv[3], &addr);
+	int res = inet_aton(args[3].CStr(), &addr);
 
 	if (!res) {
 		THROW("Invalid IP address format.");
@@ -189,60 +195,60 @@ static CowBuffer<uint8_t> RequestReload()
 	return result;
 }
 
-CowBuffer<uint8_t> CreateRequestUser(int argc, char **argv)
+CowBuffer<uint8_t> CreateRequestUser(const CowBuffer<String> args)
 {
-	if (argc < 3) {
+	if (args.Size() < 3) {
 		PrintShortHelp();
 		THROW("Not enough arguments.");
 	}
 
-	if (!strcmp(argv[2], AddUserCommand)) {
-		return RequestAddUser(argc, argv);
-	} else if (!strcmp(argv[2], RemoveUserCommand)) {
-		return RequestRemoveUser(argc, argv);
-	} else if (!strcmp(argv[2], ListUsersCommand)) {
-		return RequestListUsers(argc, argv);
+	if (args[2] == AddUserCommand) {
+		return RequestAddUser(args);
+	} else if (args[2] == RemoveUserCommand) {
+		return RequestRemoveUser(args);
+	} else if (args[2] == ListUsersCommand) {
+		return RequestListUsers(args);
 	}
 
-	THROW(String(argv[2]) + ": unknown command.");
+	THROW(args[2] + ": unknown command.");
 }
 
-CowBuffer<uint8_t> CreateRequestIp(int argc, char **argv)
+CowBuffer<uint8_t> CreateRequestIp(const CowBuffer<String> args)
 {
-	if (argc < 3) {
+	if (args.Size() < 3) {
 		PrintShortHelp();
 		THROW("Not enough arguments.");
 	}
 
-	if (!strcmp(argv[2], ListBannedIPCommand)) {
+	if (args[2] == ListBannedIPCommand) {
 		return RequestListBannedIP();
-	} else if (!strcmp(argv[2], BanIPCommand)) {
-		return RequestBanIP(argc, argv);
-	} else if (!strcmp(argv[2], UnbanIPCommand)) {
-		return RequestUnbanIP(argc, argv);
+	} else if (args[2] == BanIPCommand) {
+		return RequestBanIP(args);
+	} else if (args[2] == UnbanIPCommand) {
+		return RequestUnbanIP(args);
 	}
 
-	THROW(String(argv[2]) + ": unknown command.");
+	THROW(args[2] + ": unknown command.");
 }
 
-CowBuffer<uint8_t> CreateRequest(int argc, char **argv)
+CowBuffer<uint8_t> CreateRequest(const CowBuffer<String> args)
 {
-	if (argc < 2) {
+	if (args.Size() < 2) {
 		PrintShortHelp();
 		THROW("Not enough arguments.");
 	}
 
-	if (!strcmp(argv[1], ShutdownCommand)) {
+	if (args[1] == ShutdownCommand) {
 		return RequestShutdown();
-	} else if (!strcmp(argv[1], GetKeyCommand)) {
+	} else if (args[1] == GetKeyCommand) {
 		return RequestGetKey();
-	} else if (!strcmp(argv[1], ReloadCommand)) {
+	} else if (args[1] == ReloadCommand) {
 		return RequestReload();
-	} else if (!strcmp(argv[1], UserSection)) {
-		return CreateRequestUser(argc, argv);
-	} else if (!strcmp(argv[1], IPSection)) {
-		return CreateRequestIp(argc, argv);
+	} else if (args[1] == UserSection) {
+		return CreateRequestUser(args);
+	} else if (args[1] == IPSection) {
+		return CreateRequestIp(args);
 	}
 
-	THROW(String(argv[1]) + ": unknown command.");
+	THROW(args[1] + ": unknown command.");
 }

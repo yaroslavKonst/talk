@@ -13,17 +13,3 @@ void PrintVersion()
 {
 	printf("Version: %s.\n", TO_STRING(VERSION));
 }
-
-void PrintVersionAndExit(int argc, char **argv)
-{
-	if (argc != 2) {
-		return;
-	}
-
-	if (strcmp(argv[1], "--version")) {
-		return;
-	}
-
-	PrintVersion();
-	exit(0);
-}

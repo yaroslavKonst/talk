@@ -29,6 +29,7 @@ SERVER_MODULES =\
 	Common/IniFile.o \
 	Common/BinaryFile.o \
 	Common/SignalHandling.o \
+	Common/CommandLineParser.o \
 	Common/Version.o \
 	Common/StreamReader.o \
 	Common/StreamWriter.o \
@@ -48,6 +49,7 @@ SERVERCTL_MODULES=\
 	Common/Version.o \
 	Common/StreamReader.o \
 	Common/StreamWriter.o \
+	Common/CommandLineParser.o \
 	ThirdParty/monocypher.o
 
 CLIENT_MODULES=\
@@ -82,6 +84,7 @@ CLIENT_MODULES=\
 	Common/Version.o \
 	Common/Resolver.o \
 	Common/SignalHandling.o \
+	Common/CommandLineParser.o \
 	Common/IniFile.o \
 	Common/BinaryFile.o \
 	Common/File.o \
