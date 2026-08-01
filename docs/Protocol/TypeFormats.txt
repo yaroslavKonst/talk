@@ -29,3 +29,26 @@ Full group names look similar to user names but have different syntax
 in order to put user names and group names to different namespaces.
 So, group names are strings that consist of two parts: group name and
 host name, separated by "@@": group@@host.
+
+Short user and group names
+##########################
+
+This section describes characters that are allowed in user and group names
+before '@' character.
+
+All characters are allowed except the following list:
+any character with ASCII number less than 0x20;
+space (0x20);
+forward slash (0x2f);
+@ (0x40);
+delete (0xff).
+
+Host name
+#########
+
+Host name is a string with DNS name or IP address. IPv4 must be in
+string representation with dots.
+
+DNS based host name may optionally include and IP based name must include
+port number. If present, port number nust be separated from host name
+with a colon.

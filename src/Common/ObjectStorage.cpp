@@ -125,13 +125,13 @@ void ObjectStorage::SetUser(ObjectStorageUser *user)
 
 bool ObjectStorage::HasRef(String refName)
 {
-	String path = _rootPath + "/" + REFS_PREFIX + "/" + refName;
+	String path = GetPathForRef(refName);
 	return FileExists(path);
 }
 
 ObjectStorage::ID ObjectStorage::GetRef(String refName)
 {
-	String path = _rootPath + "/" + REFS_PREFIX + "/" + refName;
+	String path = GetPathForRef(refName);
 
 	BinaryFile file(path, false);
 	uint8_t value[(int)Constants::IDSize];
@@ -142,7 +142,7 @@ ObjectStorage::ID ObjectStorage::GetRef(String refName)
 
 void ObjectStorage::SetRef(String refName, const ID &id)
 {
-	String path = _rootPath + "/" + REFS_PREFIX + "/" + refName;
+	String path = GetPathForRef(refName);
 
 	BinaryFile file(path, true);
 	file.Write<uint8_t>(id.GetValuePointer(), (int)Constants::IDSize, 0);
@@ -150,7 +150,7 @@ void ObjectStorage::SetRef(String refName, const ID &id)
 
 void ObjectStorage::DelRef(String refName)
 {
-	String path = _rootPath + "/" + REFS_PREFIX + "/" + refName;
+	String path = GetPathForRef(refName);
 
 	if (!FileExists(path)) {
 		return;
@@ -480,6 +480,17 @@ void ObjectStorage::FinalizeOperations()
 			ProcessWrite();
 		}
 	}
+}
+
+String ObjectStorage::GetPathForRef(String refName)
+{
+	for (int i = 0; i < refName.Length(); i++) {
+		if (refName.CStr()[i] == '/') {
+			THROW("Path separator in reference name.");
+		}
+	}
+
+	return _rootPath + "/" + REFS_PREFIX + "/" + refName;
 }
 
 String ObjectStorage::GetPathForID(const ID &id, bool create)

@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 
 #include "../Protocol/ControlParser.hpp"
+#include "../Message/Message.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/Log.hpp"
@@ -289,7 +290,13 @@ void ControlSession::ProcessAddUserCommand(CowBuffer<uint8_t> buffer)
 
 	CommandAddUser::Response response;
 
-	if (_users->HasUser(request.Name)) {
+	String fullNewUserName = request.Name + "@" + _storage->GetHostName();
+
+	if (!Message::VerifyFullUserName(fullNewUserName)) {
+		ControlLog("Attempt to add invalid user name " + request.Name +
+			".");
+		response.Code = ERROR_INVALID_USER;
+	} else if (_users->HasUser(request.Name)) {
 		ControlLog("Attempt to add existing user " + request.Name +
 			".");
 		response.Code = ERROR_USER_EXISTS;

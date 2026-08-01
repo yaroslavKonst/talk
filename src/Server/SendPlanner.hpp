@@ -3,10 +3,12 @@
 
 #include "UserDB.hpp"
 #include "Config.hpp"
+#include "OutboundGateSession.hpp"
 #include "../Common/ObjectStorage.hpp"
 
 class SendPlanner :
 	public SendPlannerBase,
+	public OutboundGateSessionStorage,
 	public TimeEventProcessor,
 	public QuantEventProcessor,
 	public ConfigUser
@@ -26,6 +28,8 @@ public:
 	void ProcessQuant() override;
 
 	void ReloadConfig() override;
+
+	void MarkSessionForRemoval(OutboundGateSession *session) override;
 
 private:
 	EventDispatcher *_dispatcher;
@@ -61,14 +65,21 @@ private:
 	Tree<OutboundChannelTreeEntry> _outboundChannels;
 	Tree<OutboundChannelTreeEntry>::Entry *_traverseChannelEntry;
 
-	void LoadChannels();
-};
+	void ProcessChannel(OutboundChannelTreeEntry &entry);
+	void StartTransmission(OutboundChannelTreeEntry &entry);
 
-class OutboundGateSessionBase
-{
-public:
-	virtual ~OutboundGateSessionBase()
-	{ }
+	void LoadChannels();
+
+	struct SessionNode
+	{
+		SessionNode *Next;
+		OutboundGateSession *Session;
+		bool Remove;
+	};
+
+	SessionNode *_sessions;
+	bool _hasSessionsForRemoval;
+	void RemoveSessions();
 };
 
 #endif

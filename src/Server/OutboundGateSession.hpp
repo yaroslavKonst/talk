@@ -3,19 +3,44 @@
 
 #include "Config.hpp"
 #include "../Common/EventDispatcher.hpp"
+#include "../Common/Resolver.hpp"
 
-class GateOutboundSession :
-	public GateSession,
+class OutboundGateSessionStorage;
+
+class OutboundGateSession :
 	public DescriptorEventProcessor,
-	public TimeEventProcessor
+	public TimeEventProcessor,
+	public ResolverUser
 {
 public:
-	GateOutboundSession(
-		int fd,
-		GateListeningSocket *storage,
+	enum class TaskType
+	{
+		ProcessChannel
+	};
+
+	struct TaskBase
+	{
+		TaskType Type;
+
+		virtual ~TaskBase()
+		{ }
+
+		virtual String GetConnectionDestination() = 0;
+	};
+
+	struct TaskProcessChannel : public TaskBase
+	{
+		String Source;
+		String Destination;
+
+		String GetConnectionDestination() override;
+	};
+
+	OutboundGateSession(
 		EventDispatcher *dispatcher,
-		OutboundStatusProcessor *processor);
-	~GateOutboundSession();
+		OutboundGateSessionStorage *storage,
+		TaskBase *task);
+	~OutboundGateSession();
 
 	int GetDescriptor() override;
 	bool RequestRead() override;
@@ -25,10 +50,37 @@ public:
 
 	void ProcessTimeEvent() override;
 
+	void ResolveCompleted() override;
+
 private:
-	GateListeningSocket *_storage;
 	EventDispatcher *_dispatcher;
-	OutboundStatusProcessor *_processor;
+	OutboundGateSessionStorage *_storage;
+
+	int _fd;
+	uint32_t _ipv4;
+
+	TaskBase *_task;
+
+	enum class State
+	{
+		WaitingForDestinationNameResolve
+	};
+
+	State _state;
+	Resolver _resolver;
+
+	void StartConnection();
+
+	void OutboundGateLog(String message);
+};
+
+class OutboundGateSessionStorage
+{
+public:
+	virtual ~OutboundGateSessionStorage()
+	{ }
+
+	virtual void MarkSessionForRemoval(OutboundGateSession *session) = 0;
 };
 
 #endif

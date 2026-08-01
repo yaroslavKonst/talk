@@ -68,6 +68,7 @@ public:
 	virtual void MarkSessionForRemoval(ControlSession *session) = 0;
 	virtual const Crypto::X25519::PublicKeyContainer &GetPublicKey() = 0;
 	virtual void ReloadConfig() = 0;
+	virtual String GetHostName() = 0;
 };
 
 #endif

@@ -282,6 +282,10 @@ bool ClientSession::ProcessAddContact(const CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
+	if (!Message::VerifyFullUserName(command.ContactName)) {
+		return false;
+	}
+
 	_root->Messages->GetContactStorage()->AddNewContact(
 		command.ContactName);
 	_root->Ui->Redraw();
@@ -296,6 +300,10 @@ bool ClientSession::ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer)
 		command);
 
 	if (!parseResult) {
+		return false;
+	}
+
+	if (!Message::VerifyFullUserName(command.ContactName)) {
 		return false;
 	}
 
@@ -328,6 +336,10 @@ bool ClientSession::ProcessBlockContact(const CowBuffer<uint8_t> buffer)
 		command);
 
 	if (!parseResult) {
+		return false;
+	}
+
+	if (!Message::VerifyFullUserName(command.ContactName)) {
 		return false;
 	}
 
@@ -371,6 +383,10 @@ bool ClientSession::ProcessOfferMessage(const CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
+	if (!Message::VerifyFullUserName(command.PeerName)) {
+		return false;
+	}
+
 	bool messageExists = _root->Messages->HasMessage(
 		command.PeerName,
 		command.HeaderHash.Pointer());
@@ -401,6 +417,10 @@ bool ClientSession::ProcessUpdateMessage(const CowBuffer<uint8_t> buffer)
 	bool parseResult = CommandUpdateMessage::ParseCommand(buffer, command);
 
 	if (!parseResult) {
+		return false;
+	}
+
+	if (!Message::VerifyFullUserName(command.PeerName)) {
 		return false;
 	}
 

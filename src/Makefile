@@ -11,6 +11,7 @@ SERVER_MODULES =\
 	Server/ServerSession.o \
 	Server/GateListeningSocket.o \
 	Server/InboundGateSession.o \
+	Server/OutboundGateSession.o \
 	Server/SendPlanner.o \
 	Server/ObjectType.o \
 	Server/FailBan.o \
@@ -30,6 +31,7 @@ SERVER_MODULES =\
 	Common/BinaryFile.o \
 	Common/SignalHandling.o \
 	Common/CommandLineParser.o \
+	Common/Resolver.o \
 	Common/Version.o \
 	Common/StreamReader.o \
 	Common/StreamWriter.o \

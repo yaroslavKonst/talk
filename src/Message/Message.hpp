@@ -97,10 +97,20 @@ namespace Message
 		const Contents &contents,
 		uint64_t emptySize);
 
+	bool VerifyFullUserName(String name);
+	bool VerifyFullGroupName(String name);
+
 	bool SplitFullUserName(
 		String fullName,
 		String &userName,
 		String &hostName);
+
+	// Accepts user and group names. Does less strict checks than
+	// VerifyFull*Name functions.
+	bool ExtractServerDataFromFullName(
+		String fullName,
+		String &hostName,
+		String &serviceName);
 
 	namespace X25519
 	{

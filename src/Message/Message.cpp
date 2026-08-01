@@ -368,6 +368,118 @@ CowBuffer<uint8_t> Message::BuildContents(
 	return buffer;
 }
 
+bool Message::VerifyFullUserName(String name)
+{
+	CowBuffer<String> parts = name.Split('@', false);
+
+	if (parts.Size() != 2) {
+		return false;
+	}
+
+	if (!parts[0].Length() || !parts[1].Length()) {
+		return false;
+	}
+
+	String userName = parts[0];
+
+	for (int i = 0; i < userName.Length(); i++) {
+		uint8_t c = userName.CStr()[i];
+
+		bool validChar =
+			c > 0x20 &&
+			c != 0x2f &&
+			c != 0x40 &&
+			c != 0xff;
+
+		if (!validChar) {
+			return false;
+		}
+	}
+
+	String hostName = parts[1];
+	int colonCount = 0;
+
+	for (int i = 0; i < hostName.Length(); i++) {
+		uint8_t c = hostName.CStr()[i];
+
+		bool validChar =
+			c > 0x20 &&
+			c != 0x2f &&
+			c != 0x40 &&
+			c < 0xff;
+
+		if (!validChar) {
+			return false;
+		}
+
+		if (c == ':') {
+			++colonCount;
+		}
+	}
+
+	if (colonCount > 1) {
+		return false;
+	}
+
+	return true;
+}
+
+bool Message::VerifyFullGroupName(String name)
+{
+	CowBuffer<String> parts = name.Split('@', false);
+
+	if (parts.Size() != 3) {
+		return false;
+	}
+
+	if (!parts[0].Length() || parts[1].Length() || !parts[2].Length()) {
+		return false;
+	}
+
+	String groupName = parts[0];
+
+	for (int i = 0; i < groupName.Length(); i++) {
+		uint8_t c = groupName.CStr()[i];
+
+		bool validChar =
+			c > 0x20 &&
+			c != 0x2f &&
+			c != 0x40 &&
+			c != 0xff;
+
+		if (!validChar) {
+			return false;
+		}
+	}
+
+	String hostName = parts[2];
+	int colonCount = 0;
+
+	for (int i = 0; i < hostName.Length(); i++) {
+		uint8_t c = hostName.CStr()[i];
+
+		bool validChar =
+			c > 0x20 &&
+			c != 0x2f &&
+			c != 0x40 &&
+			c < 0xff;
+
+		if (!validChar) {
+			return false;
+		}
+
+		if (c == ':') {
+			++colonCount;
+		}
+	}
+
+	if (colonCount > 1) {
+		return false;
+	}
+
+	return true;
+}
+
 bool Message::SplitFullUserName(
 	String fullName,
 	String &userName,
@@ -385,6 +497,40 @@ bool Message::SplitFullUserName(
 
 	userName = parts[0];
 	hostName = parts[1];
+
+	return true;
+}
+
+bool Message::ExtractServerDataFromFullName(
+	String fullName,
+	String &hostName,
+	String &serviceName)
+{
+	CowBuffer<String> parts = fullName.Split('@', false);
+
+	if (parts.Size() < 2) {
+		return false;
+	}
+
+	hostName = parts[parts.Size() - 1];
+
+	if (!hostName.Length()) {
+		return false;
+	}
+
+	serviceName = "talkdgate";
+	parts = hostName.Split(':', false);
+
+	if (parts.Size() == 2) {
+		hostName = parts[0];
+		serviceName = parts[1];
+	} else if (parts.Size() > 2) {
+		return false;
+	}
+
+	if (!hostName.Length() || !serviceName.Length()) {
+		return false;
+	}
 
 	return true;
 }

@@ -214,6 +214,10 @@ bool ServerSession::ProcessAddContact(const CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
+	if (!Message::VerifyFullUserName(command.ContactName)) {
+		return false;
+	}
+
 	SessionLog("Requested add contact " + command.ContactName + ".");
 
 	_storage->AddContact(command.ContactName);
@@ -228,6 +232,10 @@ bool ServerSession::ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer)
 		command);
 
 	if (!parseResult) {
+		return false;
+	}
+
+	if (!Message::VerifyFullUserName(command.ContactName)) {
 		return false;
 	}
 
@@ -248,6 +256,10 @@ bool ServerSession::ProcessBlockContact(const CowBuffer<uint8_t> buffer)
 	bool parseResult = CommandBlockContact::ParseCommand(buffer, command);
 
 	if (!parseResult) {
+		return false;
+	}
+
+	if (!Message::VerifyFullUserName(command.ContactName)) {
 		return false;
 	}
 

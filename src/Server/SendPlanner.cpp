@@ -13,6 +13,9 @@ SendPlanner::SendPlanner(
 	_config = config;
 	_users = users;
 
+	_sessions = nullptr;
+	_hasSessionsForRemoval = false;
+
 	_traverseChannelEntry = nullptr;
 
 	_users->SetSendPlanner(this);
@@ -33,6 +36,13 @@ SendPlanner::~SendPlanner()
 	_config->UnregisterConfigUser(this);
 	_dispatcher->UnregisterQuantProcessor(this);
 	_dispatcher->UnregisterTimeProcessor(this);
+
+	while (_sessions) {
+		SessionNode *tmp = _sessions;
+		_sessions = tmp->Next;
+		delete tmp->Session;
+		delete tmp;
+	}
 
 	_users->SetSendPlanner(nullptr);
 }
@@ -59,11 +69,15 @@ void SendPlanner::ProcessTimeEvent()
 
 void SendPlanner::ProcessQuant()
 {
+	if (_hasSessionsForRemoval) {
+		RemoveSessions();
+	}
+
 	if (!_traverseChannelEntry) {
 		return;
 	}
 
-#warning TODO: entry processing.
+	ProcessChannel(_traverseChannelEntry->Key);
 
 	_traverseChannelEntry = _outboundChannels.Next(_traverseChannelEntry);
 
@@ -80,6 +94,26 @@ void SendPlanner::ReloadConfig()
 	_maxDeliveryTime = _config->GetSendPlannerMaxDeliveryTime();
 }
 
+void SendPlanner::MarkSessionForRemoval(OutboundGateSession *session)
+{
+	SessionNode *sessionNode = _sessions;
+
+	bool needNewQuant = !_hasSessionsForRemoval;
+
+	while (sessionNode) {
+		if (sessionNode->Session == session) {
+			sessionNode->Remove = true;
+			_hasSessionsForRemoval = true;
+		}
+
+		sessionNode = sessionNode->Next;
+	}
+
+	if (needNewQuant && _hasSessionsForRemoval && !_traverseChannelEntry) {
+		_dispatcher->RegisterQuantProcessor(this);
+	}
+}
+
 bool SendPlanner::OutboundChannelTreeEntry::operator==(
 	const OutboundChannelTreeEntry &e) const
 {
@@ -94,6 +128,59 @@ bool SendPlanner::OutboundChannelTreeEntry::operator<(
 	}
 
 	return Destination < e.Destination;
+}
+
+void SendPlanner::ProcessChannel(OutboundChannelTreeEntry &entry)
+{
+	if (entry.Stat == OutboundChannelTreeEntry::Status::HasActiveSession) {
+		return;
+	}
+
+	if (entry.Stat == OutboundChannelTreeEntry::Status::Init) {
+		StartTransmission(entry);
+		return;
+	}
+
+	int64_t procTime = entry.ActionTime;
+
+	if (entry.Stat ==
+		OutboundChannelTreeEntry::Status::ReportedRequestLimitOverflow)
+	{
+		procTime += _requestLimitTimeSkip;
+	} else if (entry.Stat ==
+		OutboundChannelTreeEntry::Status::ReportedConnectionFailure)
+	{
+		procTime += _connectionFailureTimeSkip;
+	}
+
+	if (procTime > GetUnixTime()) {
+		return;
+	}
+
+	StartTransmission(entry);
+}
+
+void SendPlanner::StartTransmission(OutboundChannelTreeEntry &entry)
+{
+	entry.ActionTime = GetUnixTime();
+	entry.Stat = OutboundChannelTreeEntry::Status::HasActiveSession;
+
+	OutboundGateSession::TaskProcessChannel *task =
+		new OutboundGateSession::TaskProcessChannel;
+	task->Type = OutboundGateSession::TaskType::ProcessChannel;
+
+	task->Source = entry.Source;
+	task->Destination = entry.Destination;
+
+	SessionNode *node = new SessionNode;
+	node->Remove = false;
+	node->Session = new OutboundGateSession(
+		_dispatcher,
+		this,
+		task);
+	node->Next = _sessions;
+
+	_sessions = node;
 }
 
 void SendPlanner::LoadChannels()
@@ -121,4 +208,22 @@ void SendPlanner::LoadChannels()
 
 		_outboundChannels.AddEntry(e);
 	}
+}
+
+void SendPlanner::RemoveSessions()
+{
+	SessionNode **session = &_sessions;
+
+	while (*session) {
+		if ((*session)->Remove) {
+			SessionNode *tmp = *session;
+			*session = (*session)->Next;
+			delete tmp->Session;
+			delete tmp;
+		} else {
+			session = &(*session)->Next;
+		}
+	}
+
+	_hasSessionsForRemoval = false;
 }

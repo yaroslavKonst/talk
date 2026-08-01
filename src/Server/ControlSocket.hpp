@@ -52,6 +52,8 @@ public:
 		return _publicKey;
 	}
 
+	String GetHostName() override;
+
 private:
 	int _socketFd;
 	UserDB *_users;

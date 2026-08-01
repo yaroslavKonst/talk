@@ -113,6 +113,7 @@ private:
 	void StartOperation();
 	void FinalizeOperations();
 
+	String GetPathForRef(String refName);
 	String GetPathForID(const ID &id, bool create);
 };
 

@@ -181,14 +181,24 @@ void ChatList::DeliverMessage(const CowBuffer<uint8_t> message)
 		return;
 	}
 
+	if (!Message::VerifyFullUserName(header.Source)) {
+		return;
+	}
+
+	if (!Message::VerifyFullUserName(header.Destination)) {
+		return;
+	}
+
 	String peerName;
 	String myFullName =
 		_root->Conf->GetName() + "@" + _root->Conf->GetHostName();
 
 	if (myFullName == header.Source) {
 		peerName = header.Destination;
-	} else {
+	} else if (myFullName == header.Destination) {
 		peerName = header.Source;
+	} else {
+		return;
 	}
 
 	Tree<ChatContainer>::Entry *chat = _chats.FindEntry(peerName);

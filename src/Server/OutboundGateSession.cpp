@@ -4,65 +4,122 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+#include "../Message/Message.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/File.hpp"
 #include "../Common/Log.hpp"
 
-GateOutboundSession::GateOutboundSession(
-	int fd,
-	GateListeningSocket *storage,
+String OutboundGateSession::TaskProcessChannel::GetConnectionDestination()
+{
+	return Destination;
+}
+
+OutboundGateSession::OutboundGateSession(
 	EventDispatcher *dispatcher,
-	OutboundStatusProcessor *processor)
+	OutboundGateSessionStorage *storage,
+	TaskBase *task) :
+	_resolver(dispatcher)
 {
 	SetInterval(60);
 	SetTimestamp(GetUnixTime());
 
-	_fd = fd;
-	_storage = storage;
+	_fd = -1;
+	_ipv4 = 0xffffffff;
 	_dispatcher = dispatcher;
-	_processor = processor;
+	_storage = storage;
+	_task = task;
+
+	if (!_task) {
+		THROW("Task can not be NULL.");
+	}
+
+	_resolver.SetResolverUser(this);
 
 	_dispatcher->RegisterTimeProcessor(this);
 
-	_storage->MarkSessionForRemoval(this);
-	GateLog("Outbound connection attempt occured.");
+	StartConnection();
+
+	OutboundGateLog("Session opened.");
 }
 
-GateOutboundSession::~GateOutboundSession()
+OutboundGateSession::~OutboundGateSession()
 {
+	OutboundGateLog("Session closed.");
+
 	_dispatcher->UnregisterTimeProcessor(this);
 
-	_processor->ProcessOutboundStatus(
-		this,
-		OutboundStatusProcessor::Status::SessionEnd);
+	_resolver.SetResolverUser(nullptr);
+
+	if (_fd != -1) {
+		shutdown(_fd, SHUT_RDWR);
+		close(_fd);
+		_fd = -1;
+	}
+
+	if (_task) {
+		delete _task;
+		_task = nullptr;
+	}
 }
 
-int GateOutboundSession::GetDescriptor()
+int OutboundGateSession::GetDescriptor()
 {
 	return _fd;
 }
 
-bool GateOutboundSession::RequestRead()
+bool OutboundGateSession::RequestRead()
 {
 	THROW("Not implemented.");
 }
 
-bool GateOutboundSession::RequestWrite()
+bool OutboundGateSession::RequestWrite()
 {
 	THROW("Not implemented.");
 }
 
-void GateOutboundSession::ProcessRead()
+void OutboundGateSession::ProcessRead()
 {
 	THROW("Not implemented.");
 }
 
-void GateOutboundSession::ProcessWrite()
+void OutboundGateSession::ProcessWrite()
 {
 	THROW("Not implemented.");
 }
 
-void GateOutboundSession::ProcessTimeEvent()
+void OutboundGateSession::ProcessTimeEvent()
 {
+	OutboundGateLog("Timeout.");
 	_storage->MarkSessionForRemoval(this);
+}
+
+void OutboundGateSession::ResolveCompleted()
+{
+#warning TODO: run connection.
+}
+
+void OutboundGateSession::StartConnection()
+{
+	String fullName = _task->GetConnectionDestination();
+
+	String hostName;
+	String serviceName;
+
+	bool parseResult = Message::ExtractServerDataFromFullName(
+		fullName,
+		hostName,
+		serviceName);
+
+	if (!parseResult) {
+		THROW("Invalid name in server database: " + fullName + ".");
+	}
+
+	_resolver.RequestResolve(hostName, serviceName, SOCK_STREAM);
+
+	_state = State::WaitingForDestinationNameResolve;
+}
+
+void OutboundGateSession::OutboundGateLog(String message)
+{
+	Log("Outbound gate to " + _task->GetConnectionDestination(), message);
 }

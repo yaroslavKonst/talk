@@ -275,6 +275,11 @@ Screen *ContactScreen::ProcessAddEvent(int event)
 			return this;
 		}
 
+		if (!Message::VerifyFullUserName(_newContactName.Text)) {
+			_root->Ui->Notify("Contact name has invalid format.");
+			return this;
+		}
+
 		bool requestSuccess = _root->Network->AddContact(
 			_newContactName.Text);
 

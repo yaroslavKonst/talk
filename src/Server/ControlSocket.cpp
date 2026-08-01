@@ -155,3 +155,8 @@ void ControlSocket::MarkSessionForRemoval(ControlSession *session)
 		_dispatcher->RegisterQuantProcessor(this);
 	}
 }
+
+String ControlSocket::GetHostName()
+{
+	return _config->GetHostName();
+}

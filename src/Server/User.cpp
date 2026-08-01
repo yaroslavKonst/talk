@@ -219,6 +219,14 @@ bool User::SendMessage(const CowBuffer<uint8_t> message)
 		return false;
 	}
 
+	if (!Message::VerifyFullUserName(header.Source)) {
+		return false;
+	}
+
+	if (!Message::VerifyFullUserName(header.Destination)) {
+		return false;
+	}
+
 	String userName;
 	String hostName;
 
@@ -226,6 +234,10 @@ bool User::SendMessage(const CowBuffer<uint8_t> message)
 		header.Source,
 		userName,
 		hostName);
+
+	if (!parseResult) {
+		return false;
+	}
 
 	if (userName != _name) {
 		return false;
