@@ -130,6 +130,18 @@ bool SendPlanner::OutboundChannelTreeEntry::operator<(
 	return Destination < e.Destination;
 }
 
+void SendPlanner::OutboundChannelTreeEntry::ReportConnectionFailure()
+{
+	Stat = Status::ReportedConnectionFailure;
+	ActionTime = GetUnixTime();
+}
+
+void SendPlanner::OutboundChannelTreeEntry::ReportRequestRateLimit()
+{
+	Stat = Status::ReportedRequestLimitOverflow;
+	ActionTime = GetUnixTime();
+}
+
 void SendPlanner::ProcessChannel(OutboundChannelTreeEntry &entry)
 {
 	if (entry.Stat == OutboundChannelTreeEntry::Status::HasActiveSession) {
@@ -165,9 +177,8 @@ void SendPlanner::StartTransmission(OutboundChannelTreeEntry &entry)
 	entry.ActionTime = GetUnixTime();
 	entry.Stat = OutboundChannelTreeEntry::Status::HasActiveSession;
 
-	OutboundGateSession::TaskProcessChannel *task =
-		new OutboundGateSession::TaskProcessChannel;
-	task->Type = OutboundGateSession::TaskType::ProcessChannel;
+	TaskProcessChannel *task = new TaskProcessChannel;
+	task->ReportTarget = &entry;
 
 	task->Source = entry.Source;
 	task->Destination = entry.Destination;
@@ -176,6 +187,7 @@ void SendPlanner::StartTransmission(OutboundChannelTreeEntry &entry)
 	node->Remove = false;
 	node->Session = new OutboundGateSession(
 		_dispatcher,
+		_config,
 		this,
 		task);
 	node->Next = _sessions;

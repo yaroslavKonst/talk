@@ -1,6 +1,59 @@
 #ifndef _GATE_PARSER_HPP
 #define _GATE_PARSER_HPP
 
+#include "../Common/CowBuffer.hpp"
+#include "../Crypto/Crypto.hpp"
+
+#define GATE_HANDSHAKE_INIT_PROCEED 0
+#define GATE_HANDSHAKE_INIT_REQUEST_RATE_LIMIT_REACHED 1
+
+#define GATE_HANDSHAKE_VERIFICATION_SUCCESS 0
+#define GATE_HANDSHAKE_VERIFICATION_FAILURE 1
+#define GATE_HANDSHAKE_UNSUPPORTED_PROTOCOL_VERSION 2
+#define GATE_HANDSHAKE_UNSUPPORTED_ENCRYPTION_SCHEME 3
+
+namespace GateHandshakeStatus
+{
+	struct Data
+	{
+		int32_t Status;
+	};
+
+	bool ParseData(const CowBuffer<uint8_t> buffer, Data &result);
+	CowBuffer<uint8_t> BuildData(const Data &data);
+}
+
+namespace GateHandshakeSyn
+{
+	struct Data
+	{
+		enum class Status
+		{
+			// Full message is received. ErrorCode field
+			// must be ignored.
+			Syn,
+
+			// Error code is received. Other fields must be
+			// ignored.
+			ErrorCode
+		};
+
+		Status Stat;
+
+		int32_t ErrorCode;
+
+		int32_t ProtocolVersion;
+		int32_t EncryptionScheme;
+		String ServerName;
+		Crypto::X25519::PublicKeyContainer Key;
+		CowBuffer<uint8_t> Salt;
+		CowBuffer<uint8_t> Signature; // Has zero length if not present.
+	};
+
+	bool ParseData(const CowBuffer<uint8_t> buffer, Data &result);
+	CowBuffer<uint8_t> BuildData(const Data &data);
+}
+
 #define GATE_MESSAGE_HEADER_ACCEPT 0
 #define GATE_MESSAGE_HEADER_REJECT 1
 #define GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER 2

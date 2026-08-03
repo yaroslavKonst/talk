@@ -42,7 +42,7 @@ private:
 
 	ObjectStorage _objectStorage;
 
-	struct OutboundChannelTreeEntry
+	struct OutboundChannelTreeEntry : public TaskProcessChannelReportTarget
 	{
 		String Source;
 		String Destination;
@@ -60,6 +60,9 @@ private:
 
 		bool operator==(const OutboundChannelTreeEntry &e) const;
 		bool operator<(const OutboundChannelTreeEntry &e) const;
+
+		void ReportConnectionFailure() override;
+		void ReportRequestRateLimit() override;
 	};
 
 	Tree<OutboundChannelTreeEntry> _outboundChannels;

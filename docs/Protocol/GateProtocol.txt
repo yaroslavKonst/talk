@@ -40,7 +40,7 @@ Handshake scheme
 
 requesting server                                    responding server
 | <----------------------------------------------------------------- |
-|                         | initial status |                         |
+|                | scrambler init | initial status |                 |
 |                                                                    |
 | -----------------------------------------------------------------> |
 |                                                                    |
@@ -48,11 +48,11 @@ requesting server                                    responding server
 |                         | Signed variant |                         |
 |                         +----------------+                         |
 |                                                                    |
-| | message size | protocol version | encryption scheme |...         |
+|  | scrambler init | message size | protocol version |...           |
 |                                                                    |
-|      ...| requesting server name | session public key |...         |
+|       ...| encryption scheme | requesting server name |...         |
 |                                                                    |
-|                                         ...| salt 1 | signature |  |
+|                    ...| session public key | salt 1 | signature |  |
 |                                                                    |
 |                                 OR                                 |
 |                                                                    |
@@ -60,9 +60,11 @@ requesting server                                    responding server
 |                        | Unsigned variant |                        |
 |                        +------------------+                        |
 |                                                                    |
-| | message size | protocol version | encryption scheme |...         |
+|  | scrambler init | message size | protocol version |...           |
 |                                                                    |
-|        ...| requesting server name | session public key | salt 1 | |
+|       ...| encryption scheme | requesting server name |...         |
+|                                                                    |
+|                                ...| session public key | salt 1 |  |
 |                                                                    |
 |                                                     +--------------|
 |                                                     | verification |
@@ -105,6 +107,7 @@ requesting server                                    responding server
 | if verification was successful |  | if verification was successful |
 |--------------------------------+  +--------------------------------|
 
+"scrambler init": byte;
 "initial status": 32 bit integer;
 "message size": 32 bit unsigned integer;
 "protocol version": 32 bit integer;
@@ -114,13 +117,16 @@ all server names are strings with length prefix (see TypeFormats);
                       encryption scheme;
 salts are 32 byte arrays.
 
-Signatures sign the whole message if present.
+If signature is present it signs the whole message except message size and
+scrambler init fields.
 
 Session public keys are public parts of one-time key pairs that are used only
 in this session.
 
 Session keys are derived from key pairs by key exchange and use salt 1 and
-salt 2 concatenation during hashing.
+salt 2 concatenation during hashing. The first key is used for direction
+from requesting to responding server. The second key is used for the opposite
+direction.
 
 Initial status notifies connection initiator whether the responding server
 is ready for communication.

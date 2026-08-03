@@ -23,6 +23,7 @@ SERVER_MODULES =\
 	Protocol/SessionProtocol.o \
 	Protocol/SessionParser.o \
 	Protocol/ControlParser.o \
+	Protocol/GateParser.o \
 	Common/EventDispatcher.o \
 	Common/MyString.o \
 	Common/UnixTime.o \
