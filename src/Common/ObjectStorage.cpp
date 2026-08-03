@@ -239,11 +239,13 @@ void ObjectStorage::WriteObject(
 	uint64_t offset = 0;
 
 	for (uint32_t i = 0; i < buffers.Size(); i++) {
+		const CowBuffer<uint8_t> buffer = buffers[i];
+
 		file.Write<uint8_t>(
-			buffers[i].Pointer(),
-			buffers[i].Size(),
+			buffer.Pointer(),
+			buffer.Size(),
 			offset);
-		offset += buffers[i].Size();
+		offset += buffer.Size();
 	}
 }
 

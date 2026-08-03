@@ -152,11 +152,6 @@ private:
 	void LoadMessages();
 	void UnloadMessages();
 
-	void AddMessageToMain(
-		ObjectStorage::ID messageID,
-		const Message::X25519::HeaderPointToPoint &header,
-		const CowBuffer<uint8_t> message,
-		Message::Attribute attrs);
 	void AddMessageToThread(
 		ObjectStorage::ID messageID,
 		const Message::X25519::HeaderPointToPoint &header,

@@ -190,11 +190,7 @@ void Chat::DeliverMessage(
 			Message::Attribute::Local);
 	}
 
-	if (header.ThreadID.IsZero()) {
-		AddMessageToMain(messageID, header, message, attrs);
-	} else {
-		AddMessageToThread(messageID, header, message, attrs);
-	}
+	AddMessageToThread(messageID, header, message, attrs);
 
 	_root->Ui->Redraw();
 }
@@ -507,83 +503,25 @@ void Chat::UnloadMessages()
 	_currentMessageLine = 0;
 }
 
-void Chat::AddMessageToMain(
-	ObjectStorage::ID messageID,
-	const Message::X25519::HeaderPointToPoint &header,
-	const CowBuffer<uint8_t> message,
-	Message::Attribute attrs)
-{
-	ObjectStorage::ID prevMessageID;
-
-	if (_objectStorage.HasRef("Head")) {
-		prevMessageID = _objectStorage.GetRef("Head");
-	}
-
-	CowBuffer<uint8_t> object =
-		(int)ObjectStorage::Constants::IDSize +
-		sizeof(Message::Attribute) +
-		sizeof(uint64_t);
-
-	int offset = 0;
-	prevMessageID.GetValue(object.Pointer());
-	offset += (int)ObjectStorage::Constants::IDSize;
-
-	*object.SwitchType<Message::Attribute>(offset) = attrs;
-	offset += sizeof(attrs);
-
-	*object.SwitchType<uint64_t>(offset) = header.HeaderSize;
-
-	_objectStorage.WriteObject(messageID, object.Concat(message));
-	_objectStorage.SetRef("Head", messageID);
-
-	MessageDescriptor *md = new MessageDescriptor(
-		_root,
-		&_objectStorage,
-		_peerName,
-		messageID);
-
-	MessageNode *node = new MessageNode(md);
-
-	MessageNode *previousNode = nullptr;
-
-	if (_messagesByID.FindEntry(prevMessageID)) {
-		previousNode = _messagesByID.FindEntry(prevMessageID)->Key.Node;
-	}
-
-	node->Previous = previousNode;
-
-	if (previousNode) {
-		previousNode->Next = node;
-	}
-
-	if (previousNode == _currentMessage && !_currentMessageLine)
-	{
-		_currentMessage = node;
-	}
-
-	_messagesByID.AddEntry(node);
-
-	bool messageIsUnreadInbound =
-		md->HasAttribute(Message::Attribute::Unread) &&
-		md->HasAttribute(Message::Attribute::Inbound);
-
-	if (messageIsUnreadInbound) {
-		_unreadMessages.AddEntry(node);
-	}
-}
-
 void Chat::AddMessageToThread(
 	ObjectStorage::ID messageID,
 	const Message::X25519::HeaderPointToPoint &header,
 	const CowBuffer<uint8_t> message,
 	Message::Attribute attrs)
 {
+	String referenceName;
+
+	if (header.ThreadID.IsZero()) {
+		referenceName = "Head";
+	} else {
+		CowBuffer<uint8_t> threadIdBuffer = header.ThreadID.GetValue();
+		referenceName = "Head_" +
+			DataToHex(
+				threadIdBuffer.Pointer(),
+				threadIdBuffer.Size());
+	}
+
 	ObjectStorage::ID prevMessageID;
-
-	CowBuffer<uint8_t> threadIdBuffer = header.ThreadID.GetValue();
-
-	String referenceName = "Head_" +
-		DataToHex(threadIdBuffer.Pointer(), threadIdBuffer.Size());
 
 	if (_objectStorage.HasRef(referenceName)) {
 		prevMessageID = _objectStorage.GetRef(referenceName);
@@ -603,7 +541,11 @@ void Chat::AddMessageToThread(
 
 	*object.SwitchType<uint64_t>(offset) = header.HeaderSize;
 
-	_objectStorage.WriteObject(messageID, object.Concat(message));
+	CowBuffer<CowBuffer<uint8_t>> fullObject(2);
+	fullObject[0] = object;
+	fullObject[1] = message;
+
+	_objectStorage.WriteObject(messageID, fullObject);
 	_objectStorage.SetRef(referenceName, messageID);
 
 	MessageDescriptor *md = new MessageDescriptor(
