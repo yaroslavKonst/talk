@@ -49,19 +49,27 @@ static const char *SendPlannerConnectionFailureDelayValue = "30m";
 static const char *SendPlannerMaxDeliveryTime = "MaxDeliveryTime";
 static const char *SendPlannerMaxDeliveryTimeValue = "1w";
 
-Config::Config() : _configFile("talkd.conf")
+Config::Config(EventDispatcher *dispatcher) : _configFile("talkd.conf")
 {
+	_dispatcher = dispatcher;
+
 	_listeningAddress = 0;
 	_listeningPort = 0;
+	_gateAddress = 0;
+	_gatePort = 0;
 	_messageSizeLimit = 0;
 
 	_confUsers = nullptr;
 
 	Init();
+
+	_dispatcher->RegisterSignalProcessor(this, SIGHUP);
 }
 
 Config::~Config()
 {
+	_dispatcher->UnregisterSignalProcessor(this, SIGHUP);
+
 	while (_confUsers) {
 		ConfUser *tmp = _confUsers;
 		_confUsers = _confUsers->Next;
@@ -79,6 +87,14 @@ void Config::Reload()
 	while (node) {
 		node->User->ReloadConfig();
 		node = node->Next;
+	}
+}
+
+void Config::ProcessSignal(int signum)
+{
+	if (signum == SIGHUP) {
+		ConfigLog("SIGHUP signal is received. Reloading.");
+		Reload();
 	}
 }
 

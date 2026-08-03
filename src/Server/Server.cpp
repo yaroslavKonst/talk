@@ -10,6 +10,7 @@
 #include "SendPlanner.hpp"
 #include "FailBan.hpp"
 #include "RateLimiter.hpp"
+#include "ShutdownSignalController.hpp"
 #include "../Common/SignalHandling.hpp"
 #include "../Common/Log.hpp"
 #include "../Common/EventDispatcher.hpp"
@@ -28,12 +29,20 @@ Server::~Server()
 
 int Server::Run()
 {
-	Log("Core", "Startup.");
+	Log("Core", "Startup. PID: " + ToString(getpid()) + ".");
 
 	DisableSigPipe();
 
-	EventDispatcher dispatcher(10000);
-	Config config;
+	sigset_t processedSignals;
+	sigemptyset(&processedSignals);
+	sigaddset(&processedSignals, SIGHUP);
+	sigaddset(&processedSignals, SIGINT);
+	sigaddset(&processedSignals, SIGTERM);
+	sigaddset(&processedSignals, SIGQUIT);
+
+	EventDispatcher dispatcher(10000, &processedSignals);
+	ShutdownSignalController shutdownController(&dispatcher);
+	Config config(&dispatcher);
 	FailBan failBan(&dispatcher, &config);
 	RateLimiter rateLimiter(&dispatcher, &config);
 	UserDB users(&dispatcher, &config, &failBan, _privateKey, _publicKey);

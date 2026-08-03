@@ -2,6 +2,7 @@
 #define _CONFIG_HPP
 
 #include "../Common/IniFile.hpp"
+#include "../Common/EventDispatcher.hpp"
 
 class ConfigUser
 {
@@ -12,13 +13,15 @@ public:
 	virtual void ReloadConfig() = 0;
 };
 
-class Config
+class Config : public SignalEventProcessor
 {
 public:
-	Config();
+	Config(EventDispatcher *dispatcher);
 	~Config();
 
 	void Reload();
+
+	void ProcessSignal(int signum) override;
 
 	void RegisterConfigUser(ConfigUser *user);
 	void UnregisterConfigUser(ConfigUser *user);
@@ -46,6 +49,8 @@ public:
 	int64_t GetSendPlannerMaxDeliveryTime();
 
 private:
+	EventDispatcher *_dispatcher;
+
 	IniFile _configFile;
 
 	void Init();

@@ -16,6 +16,7 @@ SERVER_MODULES =\
 	Server/ObjectType.o \
 	Server/FailBan.o \
 	Server/RateLimiter.o \
+	Server/ShutdownSignalController.o \
 	Message/Message.o \
 	Message/ContactStorage.o \
 	Protocol/ParserHelpers.o \
