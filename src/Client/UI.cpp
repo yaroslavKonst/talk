@@ -1,7 +1,9 @@
 #include "UI.hpp"
 
+#include <unistd.h>
 #include <locale.h>
 #include <curses.h>
+#include <sys/ioctl.h>
 
 #include "TextColor.hpp"
 #include "WorkScreen.hpp"
@@ -20,6 +22,7 @@ UI::UI(Root *root) :
 	initscr();
 	raw();
 	noecho();
+	wtimeout(stdscr, 100);
 	keypad(stdscr, 1);
 	start_color();
 
@@ -33,10 +36,12 @@ UI::UI(Root *root) :
 	ProcessResize();
 
 	_root->Dispatcher->RegisterDescriptorProcessor(this);
+	_root->Dispatcher->RegisterSignalProcessor(this, SIGWINCH);
 }
 
 UI::~UI()
 {
+	_root->Dispatcher->UnregisterSignalProcessor(this, SIGWINCH);
 	_root->Dispatcher->UnregisterDescriptorProcessor(this);
 	endwin();
 }
@@ -50,12 +55,22 @@ void UI::ProcessRead()
 	}
 }
 
+void UI::ProcessSignal(int signum)
+{
+	if (signum == SIGWINCH) {
+		ProcessResize();
+	}
+}
+
 bool UI::ProcessEvent()
 {
 	int event = getch();
 
+	if (event == ERR) {
+		return true;
+	}
+
 	if (event == KEY_RESIZE) {
-		ProcessResize();
 		return true;
 	}
 
@@ -99,10 +114,22 @@ bool UI::ProcessEvent()
 
 void UI::ProcessResize()
 {
+	struct winsize size;
+
+	int res = ioctl(0, TIOCGWINSZ, &size);
+
+	if (res == -1) {
+		THROW("Failed to get new window size.");
+	}
+
+	resizeterm(size.ws_row, size.ws_col);
 	getmaxyx(stdscr, _rows, _columns);
 
-	if (_screenStack) {
-		_screenStack->screen->ProcessResize();
+	ScreenStackEntry *e = _screenStack;
+
+	while (e) {
+		e->screen->ProcessResize();
+		e = e->previous;
 	}
 
 	Redraw();

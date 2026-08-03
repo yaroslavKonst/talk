@@ -8,7 +8,8 @@
 
 class UI :
 	public UIEventProcessor,
-	public DescriptorEventProcessor
+	public DescriptorEventProcessor,
+	public SignalEventProcessor
 {
 public:
 	UI(Root *root);
@@ -35,6 +36,8 @@ public:
 	{
 		THROW("This method must never be called.");
 	}
+
+	void ProcessSignal(int signum) override;
 
 	bool ProcessEvent();
 	void ProcessResize();

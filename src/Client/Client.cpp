@@ -29,12 +29,16 @@ Client::~Client()
 
 int Client::Run()
 {
+	sigset_t processedSignals;
+	sigemptyset(&processedSignals);
+	sigaddset(&processedSignals, SIGWINCH);
+
 	Root root;
 
 	root.PrivateKey = &_privateKey;
 	root.PublicKey = &_publicKey;
 
-	EventDispatcher dispatcher(2000);
+	EventDispatcher dispatcher(2000, &processedSignals);
 	root.Dispatcher = &dispatcher;
 
 	Config config(_publicKey);

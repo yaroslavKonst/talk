@@ -6,7 +6,12 @@
 #include "UnixTime.hpp"
 #include "Exception.hpp"
 
-EventDispatcher::EventDispatcher(int64_t idleInterval)
+sigset_t EventDispatcher::_signalsToProcess;
+volatile sig_atomic_t EventDispatcher::_hasSignals = false;
+
+EventDispatcher::EventDispatcher(
+	int64_t idleInterval,
+	const sigset_t *processedSignals)
 {
 	_idleInterval = idleInterval;
 	_work = true;
@@ -20,10 +25,21 @@ EventDispatcher::EventDispatcher(int64_t idleInterval)
 	_quantProcessorLast = 0;
 
 	_timeProcessors = nullptr;
+
+	sigemptyset(&_signalsToProcess);
+	sigemptyset(&_origSigMask);
+
+	int res = sigprocmask(SIG_BLOCK, processedSignals, &_origSigMask);
+
+	if (res == -1) {
+		THROW("Failed to set signal mask.");
+	}
 }
 
 EventDispatcher::~EventDispatcher()
 {
+	sigprocmask(SIG_SETMASK, &_origSigMask, nullptr);
+
 	if (_reservedFds) {
 		delete[] _pollProcessors;
 		delete[] _pollFds;
@@ -40,6 +56,22 @@ EventDispatcher::~EventDispatcher()
 		_timeProcessors = _timeProcessors->Next;
 		delete tmp;
 	}
+
+	Tree<SignalProcessorNodeTreeEntry>::Entry *entry =
+		_signalProcessors.FindSmallest();
+
+	while (entry) {
+		while (entry->Key.Processors) {
+			SignalProcessorNode *tmp = entry->Key.Processors;
+			entry->Key.Processors = entry->Key.Processors->Next;
+			delete tmp;
+		}
+
+		Tree<SignalProcessorNodeTreeEntry>::Entry *tmp = entry;
+		entry = _signalProcessors.Next(entry);
+		RemoveHandler(tmp->Key.SignalNumber);
+		_signalProcessors.RemoveEntry(tmp);
+	}
 }
 
 void EventDispatcher::Run()
@@ -49,20 +81,28 @@ void EventDispatcher::Run()
 	while (_work) {
 		PreparePollFds();
 
-		int64_t interval;
+		struct timespec interval;
+		bool needInterval = true;
 
 		if (_quantProcessorFirst) {
-			interval = 0;
+			interval.tv_sec = 0;
+			interval.tv_nsec = 0;
 		} else if (_timeProcessors) {
-			interval = _idleInterval;
+			interval.tv_sec = _idleInterval / 1000;
+			interval.tv_nsec = _idleInterval % 1000 * 1000000;
 		} else {
-			interval = -1;
+			needInterval = false;
 		}
 
-		int pollRes = poll(_pollFds, _maxFds, interval);
+		int pollRes = ppoll(
+			_pollFds,
+			_maxFds,
+			needInterval ? &interval : nullptr,
+			&_origSigMask);
 
 		if (pollRes == -1) {
 			if (errno == EINTR) {
+				ProcessSignals();
 				continue;
 			}
 
@@ -70,6 +110,7 @@ void EventDispatcher::Run()
 				strerror(errno) + ".");
 		}
 
+		ProcessSignals();
 		ProcessPollFds();
 		ProcessTime();
 		ProcessQuants();
@@ -208,6 +249,55 @@ void EventDispatcher::UnregisterTimeProcessor(
 	}
 }
 
+void EventDispatcher::RegisterSignalProcessor(
+	SignalEventProcessor *processor,
+	int signum)
+{
+	Tree<SignalProcessorNodeTreeEntry>::Entry *entry =
+		_signalProcessors.FindEntry(signum);
+
+	if (!entry) {
+		_signalProcessors.AddEntry(signum);
+		entry = _signalProcessors.FindEntry(signum);
+		SetHandler(signum);
+	}
+
+	SignalProcessorNode *node = new SignalProcessorNode;
+	node->Processor = processor;
+	node->Next = entry->Key.Processors;
+
+	entry->Key.Processors = node;
+}
+
+void EventDispatcher::UnregisterSignalProcessor(
+	SignalEventProcessor *processor,
+	int signum)
+{
+	Tree<SignalProcessorNodeTreeEntry>::Entry *entry =
+		_signalProcessors.FindEntry(signum);
+
+	if (!entry) {
+		return;
+	}
+
+	SignalProcessorNode **node = &entry->Key.Processors;
+
+	while (*node) {
+		if ((*node)->Processor == processor) {
+			SignalProcessorNode *tmp = *node;
+			*node = (*node)->Next;
+			delete tmp;
+		} else {
+			node = &(*node)->Next;
+		}
+	}
+
+	if (!entry->Key.Processors) {
+		RemoveHandler(entry->Key.SignalNumber);
+		_signalProcessors.RemoveEntry(entry);
+	}
+}
+
 void EventDispatcher::PreparePollFds()
 {
 	for (int i = 0; i < _maxFds; i++) {
@@ -298,5 +388,104 @@ void EventDispatcher::ProcessTime()
 		}
 
 		node = nextNode;
+	}
+}
+
+EventDispatcher::SignalProcessorNodeTreeEntry::SignalProcessorNodeTreeEntry()
+{
+	SignalNumber = 0;
+	Processors = nullptr;
+}
+
+EventDispatcher::SignalProcessorNodeTreeEntry::SignalProcessorNodeTreeEntry(
+	int signum)
+{
+	SignalNumber = signum;
+	Processors = nullptr;
+}
+
+bool EventDispatcher::SignalProcessorNodeTreeEntry::operator==(
+	SignalProcessorNodeTreeEntry &e) const
+{
+	return SignalNumber == e.SignalNumber;
+}
+
+bool EventDispatcher::SignalProcessorNodeTreeEntry::operator<(
+	SignalProcessorNodeTreeEntry &e) const
+{
+	return SignalNumber < e.SignalNumber;
+}
+
+void EventDispatcher::SignalHandler(int signum)
+{
+	sigaddset(&_signalsToProcess, signum);
+	_hasSignals = true;
+}
+
+void EventDispatcher::SetHandler(int signum)
+{
+	struct sigaction action;
+	memset(&action, 0, sizeof(action));
+
+	action.sa_handler = SignalHandler;
+
+	int res = sigaction(signum, &action, nullptr);
+
+	if (res == -1) {
+		THROW("Failed to set signal handler.");
+	}
+}
+
+void EventDispatcher::RemoveHandler(int signum)
+{
+	struct sigaction action;
+	memset(&action, 0, sizeof(action));
+
+	action.sa_handler = SIG_DFL;
+
+	int res = sigaction(signum, &action, nullptr);
+
+	if (res == -1) {
+		THROW("Failed to set default signal action.");
+	}
+}
+
+void EventDispatcher::ProcessSignals()
+{
+	if (!_hasSignals) {
+		return;
+	}
+
+	_hasSignals = false;
+
+	Tree<SignalProcessorNodeTreeEntry>::Entry *entry =
+		_signalProcessors.FindSmallest();
+
+	while (entry) {
+		int hasSignal = sigismember(
+			&_signalsToProcess,
+			entry->Key.SignalNumber);
+
+		if (hasSignal == -1) {
+			THROW("Signal set check error.");
+		}
+
+		if (hasSignal != 1) {
+			entry = _signalProcessors.Next(entry);
+			continue;
+		}
+
+		sigdelset(&_signalsToProcess, entry->Key.SignalNumber);
+		SignalProcessorNode *node = entry->Key.Processors;
+		int signum = entry->Key.SignalNumber;
+
+		entry = _signalProcessors.Next(entry);
+
+		while (node) {
+			SignalProcessorNode *n = node;
+			node = node->Next;
+			n->Processor->ProcessSignal(signum);
+		}
+
 	}
 }
