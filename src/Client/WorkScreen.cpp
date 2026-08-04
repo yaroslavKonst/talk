@@ -460,4 +460,8 @@ void WorkScreen::PopChat()
 	ChatState *tmp = _chatStack;
 	_chatStack = _chatStack->Next;
 	delete tmp;
+
+	if (_chatStack) {
+		_root->Messages->SelectOrCreateChat(_chatStack->PeerName);
+	}
 }

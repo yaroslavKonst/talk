@@ -3,6 +3,7 @@
 
 #include "Screen.hpp"
 #include "Root.hpp"
+#include "MessageDraft.hpp"
 
 class WorkScreen : public Screen
 {
@@ -58,6 +59,8 @@ private:
 		ObjectStorage::ID CurrentMessageID;
 		int LineOffset;
 		bool AutoScroll;
+
+		MessageDraft Draft;
 	};
 
 	ChatState *_chatStack;

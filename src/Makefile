@@ -76,6 +76,7 @@ CLIENT_MODULES=\
 	Client/ContactManageScreen.o \
 	Client/ContactListScreen.o \
 	Client/MessageDescriptor.o \
+	Client/MessageDraft.o \
 	Client/NotificationSystem.o \
 	Message/ContactStorage.o \
 	Message/Message.o \

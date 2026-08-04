@@ -1,6 +1,7 @@
 #ifndef _PROCESSORS_HPP
 #define _PROCESSORS_HPP
 
+#include "MessageDraft.hpp"
 #include "../Message/ContactStorage.hpp"
 #include "../Protocol/SessionParser.hpp"
 #include "../Common/CowBuffer.hpp"
@@ -67,6 +68,8 @@ public:
 	virtual MessageDescriptorBase *GetMessageDescriptor(
 		const ObjectStorage::ID &identifier) = 0;
 	virtual bool HasUnread(String chatName = String()) = 0;
+
+	virtual void SendMessage(MessageDraft *draft) = 0;
 };
 
 // Voice chat.

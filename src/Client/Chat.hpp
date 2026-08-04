@@ -18,7 +18,7 @@ public:
 	bool HasMessage(const ObjectStorage::ID &messageID);
 	bool HasUnread();
 
-	void SendMessage();
+	void SendMessage(MessageDraft *draft);
 
 	void DeliverMessage(
 		const CowBuffer<uint8_t> message,
@@ -158,34 +158,11 @@ private:
 		const CowBuffer<uint8_t> message,
 		Message::Attribute attrs);
 
-	struct DraftEntry
-	{
-		Message::ContentsEntryType Type;
-		DraftEntry *Next;
-
-		virtual ~DraftEntry()
-		{ }
-	};
-
-	struct DraftEntryText : public DraftEntry
-	{
-		TextEditor Editor;
-	};
-
-	struct DraftEntryAttachment : public DraftEntry
-	{
-		String Name;
-		CowBuffer<uint8_t> Data;
-	};
-
-	DraftEntry *_draft;
-
 	MessageEncryptor *_enc;
 	CowBuffer<uint8_t> _encMessage;
 	void *_encLock;
 
-	bool IsDraftEmpty();
-	void FreeDraft();
+	MessageDraft *_draftPtr;
 };
 
 #endif

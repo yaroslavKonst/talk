@@ -20,9 +20,10 @@ Chat::Chat(
 
 	_currentMessage = nullptr;
 	_currentMessageLine = 0;
-	_draft = nullptr;
 	_enc = nullptr;
 	_encLock = nullptr;
+
+	_draftPtr = nullptr;
 
 	LoadMessages();
 }
@@ -41,7 +42,6 @@ Chat::~Chat()
 		_enc = nullptr;
 	}
 
-	FreeDraft();
 	UnloadMessages();
 }
 
@@ -55,9 +55,9 @@ bool Chat::HasUnread()
 	return _unreadMessages.FindSmallest();
 }
 
-void Chat::SendMessage()
+void Chat::SendMessage(MessageDraft *draft)
 {
-	if (IsDraftEmpty()) {
+	if (draft->IsEmpty()) {
 		_root->Ui->Notify("Can't send empty message.");
 		return;
 	}
@@ -67,9 +67,13 @@ void Chat::SendMessage()
 		return;
 	}
 
-	uint64_t count = 0;
+	draft->PushState();
 
-	for (DraftEntry *node = _draft; node; node = node->Next) {
+	while (draft->SwitchToNextEntry()) { }
+
+	uint64_t count = 1;
+
+	while (draft->SwitchToPreviousEntry()) {
 		count += 1;
 	}
 
@@ -78,10 +82,12 @@ void Chat::SendMessage()
 
 	uint64_t index = 0;
 
-	for (DraftEntry *node = _draft; node; node = node->Next) {
-		if (node->Type == Message::ContentsEntryType::Text) {
-			DraftEntryText *draftText =
-				static_cast<DraftEntryText*>(node);
+	do {
+		MessageDraft::DraftEntryBase *node = draft->GetCurrentEntry();
+
+		if (node->Type == MessageDraft::EntryType::Text) {
+			MessageDraft::DraftText *draftText =
+				static_cast<MessageDraft::DraftText*>(node);
 
 			Message::ContentsEntryText *entry =
 				new Message::ContentsEntryText();
@@ -89,9 +95,10 @@ void Chat::SendMessage()
 			entry->Text = draftText->Editor.GetText();
 
 			contents.Entries[index] = entry;
-		} else {
-			DraftEntryAttachment *draftAttachment =
-				static_cast<DraftEntryAttachment*>(node);
+		} else if (node->Type == MessageDraft::EntryType::Attachment) {
+			MessageDraft::DraftAttachment *draftAttachment =
+				static_cast<MessageDraft::DraftAttachment*>(
+					node);
 
 			Message::ContentsEntryAttachment *entry =
 				new Message::ContentsEntryAttachment();
@@ -103,7 +110,9 @@ void Chat::SendMessage()
 		}
 
 		index += 1;
-	}
+	} while (draft->SwitchToNextEntry());
+
+	draft->PopState();
 
 	ContactStorage *contactStorage = _root->Messages->GetContactStorage();
 
@@ -142,6 +151,7 @@ void Chat::SendMessage()
 	}
 
 	_encLock = _root->Ui->BlockNotify("Encrypting message...");
+	_draftPtr = draft;
 
 	_root->Dispatcher->RegisterQuantProcessor(this);
 }
@@ -249,6 +259,7 @@ void Chat::ProcessQuant()
 		}
 
 		_encLock = nullptr;
+		_draftPtr = nullptr;
 		return;
 	}
 
@@ -260,6 +271,7 @@ void Chat::ProcessQuant()
 		}
 
 		_encLock = nullptr;
+		_draftPtr = nullptr;
 		return;
 	}
 
@@ -287,8 +299,10 @@ void Chat::ProcessQuant()
 	_encMessage = CowBuffer<uint8_t>();
 
 	if (success) {
-		FreeDraft();
+		_draftPtr->Clear();
 	}
+
+	_draftPtr = nullptr;
 
 	_root->Ui->Redraw();
 }
@@ -581,53 +595,5 @@ void Chat::AddMessageToThread(
 
 	if (messageIsUnreadInbound) {
 		_unreadMessages.AddEntry(node);
-	}
-}
-
-bool Chat::IsDraftEmpty()
-{
-	DraftEntry *entry = _draft;
-
-	while (entry) {
-		switch (entry->Type) {
-		case Message::ContentsEntryType::Text:
-			{
-				DraftEntryText *e =
-					static_cast<DraftEntryText*>(entry);
-
-				if (e->Editor.GetText().Length()) {
-					return false;
-				}
-			}
-
-			break;
-		case Message::ContentsEntryType::Attachment:
-			{
-				DraftEntryAttachment *e =
-					static_cast<DraftEntryAttachment*>(
-						entry);
-
-				if (e->Data.Size()) {
-					return false;
-				}
-			}
-
-			break;
-		default:
-			break;
-		}
-
-		entry = entry->Next;
-	}
-
-	return true;
-}
-
-void Chat::FreeDraft()
-{
-	while (_draft) {
-		DraftEntry *tmp = _draft;
-		_draft = _draft->Next;
-		delete tmp;
 	}
 }

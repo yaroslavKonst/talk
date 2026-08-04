@@ -51,6 +51,8 @@ public:
 		const ObjectStorage::ID &identifier) override;
 	bool HasUnread(String chatName) override;
 
+	void SendMessage(MessageDraft *draft) override;
+
 private:
 	Root *_root;
 
