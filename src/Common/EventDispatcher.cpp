@@ -329,8 +329,12 @@ void EventDispatcher::ProcessPollFds()
 			(_pollFds[i].revents & POLLERR) ||
 			(_pollFds[i].revents & POLLHUP);
 
+		if (!proc->RequestRead()) {
+			canRead = false;
+		}
+
 		if (canRead) {
-			_pollProcessors[i]->ProcessRead();
+			proc->ProcessRead();
 
 			if (_pollProcessors[i] != proc) {
 				--i;
@@ -340,8 +344,12 @@ void EventDispatcher::ProcessPollFds()
 
 		bool canWrite = _pollFds[i].revents & POLLOUT;
 
+		if (!proc->RequestWrite()) {
+			canWrite = false;
+		}
+
 		if (canWrite) {
-			_pollProcessors[i]->ProcessWrite();
+			proc->ProcessWrite();
 
 			if (_pollProcessors[i] != proc) {
 				--i;

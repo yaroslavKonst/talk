@@ -136,6 +136,7 @@ void GateListeningSocket::ProcessRead()
 			addr.sin_addr.s_addr,
 			this,
 			_dispatcher,
+			_config,
 			_rateLimiter);
 
 	SessionNode *node = new SessionNode;

@@ -491,6 +491,11 @@ bool OutboundGateSession::ProcessSyn(CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
+	if (syn.Stat == GateHandshakeSyn::Data::Status::ErrorCode) {
+		OutboundGateLog("Peer rejected syn.");
+		return false;
+	}
+
 	if (syn.ProtocolVersion) {
 		return false;
 	}
@@ -507,7 +512,6 @@ bool OutboundGateSession::ProcessSyn(CowBuffer<uint8_t> buffer)
 		_state = State::SendAllAndShutdown;
 		return true;
 	}
-
 
 	bool keyExchangeSuccess = Crypto::X25519::GenerateSessionKeys(
 		_ephemeralPrivateKey,
