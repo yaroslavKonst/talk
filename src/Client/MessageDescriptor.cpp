@@ -331,6 +331,11 @@ MessageDescriptor::~MessageDescriptor()
 	_root->Dispatcher->UnregisterQuantProcessor(this);
 }
 
+const Message::X25519::HeaderPointToPoint &MessageDescriptor::GetHeader()
+{
+	return Header;
+}
+
 bool MessageDescriptor::HasAttribute(Message::Attribute attr)
 {
 	return Message::AttributeAction::Has(Attrs, attr);

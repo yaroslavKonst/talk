@@ -1,6 +1,5 @@
 #include "Log.hpp"
 
-#include <ctime>
 #include <cstdio>
 
 static bool AllowMultilineLogValue = false;
@@ -94,9 +93,7 @@ static CowBuffer<String> MakeMultiline(String text, int limit)
 
 void Log(String section, String message)
 {
-	int64_t timestamp = GetUnixTime();
-	String timeStr = ctime(&timestamp);
-	timeStr = "[" + timeStr.Substring(0, timeStr.Length() - 1) + "]: " +
+	String timeStr = "[" + TimeInSecondsToString(GetUnixTime()) + "]: " +
 		section + ": ";
 
 	if (AllowMultilineLogValue) {

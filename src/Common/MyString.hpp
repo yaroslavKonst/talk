@@ -1,6 +1,8 @@
 #ifndef _MY_STRING_HPP
 #define _MY_STRING_HPP
 
+#include <time.h>
+
 #include "CowBuffer.hpp"
 
 class String
@@ -225,6 +227,17 @@ inline String TimeSpanInSecondsToString(int64_t timeSpan)
 	}
 
 	return result;
+}
+
+inline String TimeInSecondsToString(int64_t timePoint)
+{
+	String timeStr = ctime(&timePoint);
+
+	if (!timeStr.Length()) {
+		return "Unparsable time point value";
+	}
+
+	return timeStr.Substring(0, timeStr.Length() - 1);
 }
 
 #endif

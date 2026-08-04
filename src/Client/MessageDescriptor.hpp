@@ -81,10 +81,11 @@ public:
 
 	ObjectStorage::ID Identifier;
 
+	const Message::X25519::HeaderPointToPoint &GetHeader() override;
 	Message::X25519::HeaderPointToPoint Header;
 	Message::Attribute Attrs;
 
-	bool HasAttribute(Message::Attribute attr);
+	bool HasAttribute(Message::Attribute attr) override;
 	void SetAttribute(Message::Attribute attr);
 	void ClearAttribute(Message::Attribute attr);
 	void SaveAttributes();

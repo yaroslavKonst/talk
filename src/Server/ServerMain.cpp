@@ -1,7 +1,6 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
-#include <ctime>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
@@ -19,10 +18,7 @@ static int OpenLog()
 {
 	CreateDirectory("logs");
 
-	int64_t timestamp = GetUnixTime();
-
-	String timeString = ctime(&timestamp);
-	timeString = timeString.Substring(0, timeString.Length() - 1);
+	String timeString = TimeInSecondsToString(GetUnixTime());
 
 	String logName = "logs/Log_" +
 		timeString.Replace(' ', '_').Replace(':', '-') + ".txt";

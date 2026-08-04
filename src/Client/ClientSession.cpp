@@ -141,7 +141,7 @@ void ClientSession::SendMessage(const CowBuffer<uint8_t> message)
 {
 	CommandSendMessage::Command command;
 	command.Message = message;
-	command.Attr = (Message::Attribute)0;
+	command.Attr = Message::Attribute::Unread;
 
 	_protocol->Send(CommandSendMessage::BuildCommand(command), 1);
 }

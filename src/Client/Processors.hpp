@@ -21,8 +21,8 @@ public:
 		virtual ~MessageDescriptorBase()
 		{ }
 
-#warning TODO: implementation.
-		//virtual const Message::HeaderPointToPoint &GetHeader() = 0;
+		virtual const Message::X25519::HeaderPointToPoint &GetHeader() =
+			0;
 
 		virtual bool HasContents() = 0;
 		virtual const Message::Contents &GetContents() = 0;
@@ -32,6 +32,8 @@ public:
 		virtual bool DecryptionFailure() = 0;
 
 		virtual void Clear() = 0;
+
+		virtual bool HasAttribute(Message::Attribute attr) = 0;
 	};
 
 	virtual ~MessageEventProcessor()

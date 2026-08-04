@@ -345,16 +345,129 @@ bool WorkScreen::RedrawMessageBody(
 		"Message body placeholder.");
 }
 
+static void AddFlagToString(String &flags, String flag)
+{
+	if (!flags.Length()) {
+		flags = flag;
+	} else {
+		flags += ", " + flag.ToLowerCase();
+	}
+}
+
 bool WorkScreen::RedrawMessageHeader(
 	int &currentLinePosition,
 	int &skipLines,
 	MessageEventProcessor::MessageDescriptorBase *md)
 {
-#warning TODO: replace this stub.
-	return AddLineToChatScreen(
+	const Message::X25519::HeaderPointToPoint &header = md->GetHeader();
+	bool inbound = md->HasAttribute(Message::Attribute::Inbound);
+
+	String flagString;
+
+	if (inbound) {
+		if (md->HasAttribute(Message::Attribute::Unread)) {
+			flagString = "Unread";
+		}
+	} else {
+		if (!md->HasAttribute(Message::Attribute::Unread)) {
+			flagString = "Read";
+		}
+
+		if (md->HasAttribute(Message::Attribute::Local)) {
+			AddFlagToString(flagString, "Local");
+		}
+
+		if (md->HasAttribute(Message::Attribute::InProgress)) {
+			AddFlagToString(flagString, "In progress");
+		}
+
+		if (md->HasAttribute(Message::Attribute::ConnectionFailure)) {
+			AddFlagToString(flagString, "Connection failure");
+		}
+
+		if (md->HasAttribute(Message::Attribute::MessageTooBig)) {
+			AddFlagToString(flagString, "Message is too big");
+		}
+
+		if (md->HasAttribute(Message::Attribute::BannedUser)) {
+			AddFlagToString(flagString, "You are banned");
+		}
+
+		if (md->HasAttribute(Message::Attribute::BannedKey)) {
+			AddFlagToString(flagString, "Your key is banned");
+		}
+	}
+
+	if (flagString.Length()) {
+		bool success = AddLineToChatScreen(
+			currentLinePosition,
+			skipLines,
+			flagString + ".");
+
+		if (!success) {
+			return false;
+		}
+	}
+
+	if (inbound) {
+		String warningString;
+
+		ContactStorage *contactStorage =
+			_root->Messages->GetContactStorage();
+
+		if (!contactStorage->HasContact(header.Source)) {
+			warningString = "Not in contact list.";
+		} else {
+			Contact *contact = contactStorage->GetContact(
+				header.Source);
+
+			if (!contact->IsKeyVerified(header.SourceKey)) {
+				warningString = "Key is not verified.";
+			}
+		}
+
+		if (warningString.Length()) {
+			attrset(COLOR_PAIR(RED_TEXT));
+			bool success = AddLineToChatScreen(
+				currentLinePosition,
+				skipLines,
+				warningString);
+			attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+			if (!success) {
+				return false;
+			}
+		}
+	}
+
+	bool success = AddLineToChatScreen(
 		currentLinePosition,
 		skipLines,
-		"Message header placeholder.");
+		TimeInSecondsToString(header.Timestamp));
+
+	if (!success) {
+		return false;
+	}
+
+	if (inbound) {
+		String senderName = header.Source;
+
+		attrset(COLOR_PAIR(YELLOW_TEXT));
+		success = AddLineToChatScreen(
+			currentLinePosition,
+			skipLines,
+			senderName);
+		attrset(COLOR_PAIR(DEFAULT_TEXT));
+	} else {
+		attrset(COLOR_PAIR(GREEN_TEXT));
+		success = AddLineToChatScreen(
+			currentLinePosition,
+			skipLines,
+			"You");
+		attrset(COLOR_PAIR(DEFAULT_TEXT));
+	}
+
+	return success;
 }
 
 bool WorkScreen::RedrawMessageDelimiter(
