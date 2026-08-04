@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "Server.hpp"
 #include "../Common/UnixTime.hpp"
@@ -107,10 +108,21 @@ static void Daemonize()
 	exit(0);
 }
 
+static void SetWorkingDirectory(String path)
+{
+	int res = chdir(path.CStr());
+
+	if (res == -1) {
+		THROW("Failed to set working directory " + path + ": " +
+			strerror(errno) + ".");
+	}
+}
+
 static const char *HelpKey = "-help";
 static const char *VersionKey = "-version";
 static const char *NoDaemonizeKey = "-no-D";
 static const char *NoMultilineLogKey = "-no-multiline-log";
+static const char *WorkingDirectoryArg = "-work-dir";
 
 static void PrintHelp()
 {
@@ -120,6 +132,8 @@ static void PrintHelp()
 	printf(
 		"%-19s do not print log entries in multiline format.\n",
 		NoMultilineLogKey);
+	printf("%-19s set working directory.\n",
+		(String(WorkingDirectoryArg) + " PATH").CStr());
 }
 
 static bool ParseCmd(CommandLineParser &cmd, int argc, char **argv)
@@ -130,7 +144,10 @@ static bool ParseCmd(CommandLineParser &cmd, int argc, char **argv)
 	keys[2] = NoDaemonizeKey;
 	keys[3] = NoMultilineLogKey;
 
-	cmd = CommandLineParser(keys, CowBuffer<String>(), CowBuffer<String>());
+	CowBuffer<String> args(1);
+	args[0] = WorkingDirectoryArg;
+
+	cmd = CommandLineParser(keys, CowBuffer<String>(), args);
 	bool parseResult = cmd.Parse(argc, argv);
 
 	if (!parseResult) {
@@ -171,6 +188,12 @@ int main(int argc, char **argv)
 
 		if (!cmd.GetKeyValue(NoMultilineLogKey)) {
 			AllowMultilineLog(true);
+		}
+
+		String workDir = cmd.GetArgumentValue(WorkingDirectoryArg);
+
+		if (workDir.Length()) {
+			SetWorkingDirectory(workDir);
 		}
 
 		Server server;
