@@ -66,6 +66,7 @@ namespace GateHandshakeSyn
 
 // Not from protocol specification, only for implementation internal usage.
 #define GATE_MESSAGE_HEADER_REJECT_SILENTBLOCK 100
+#define GATE_MESSAGE_HEADER_REJECT_CONNECTION_FAILURE 101
 
 #define GATE_MESSAGE_BODY_ACCEPT 0
 #define GATE_MESSAGE_BODY_REJECT 1

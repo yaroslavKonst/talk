@@ -28,9 +28,14 @@ namespace Message
 		Local = 0x4,
 		InProgress = 0x8,
 		ConnectionFailure = 0x10,
-		MessageTooBig = 0x20,
-		BannedUser = 0x40,
-		BannedKey = 0x80
+		Rejected = 0x20,
+		WrongDestinationUser = 0x40,
+		WrongDestinationKey = 0x80,
+		InvalidHeader = 0x100,
+		MessageTooBig = 0x200,
+		BannedSender = 0x400,
+		BannedSenderKey = 0x800,
+		Duplicate = 0x1000
 	};
 
 	namespace AttributeAction

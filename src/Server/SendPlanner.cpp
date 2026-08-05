@@ -1,5 +1,6 @@
 #include "SendPlanner.hpp"
 
+#include "../Protocol/GateParser.hpp"
 #include "../Common/File.hpp"
 #include "../Common/UnixTime.hpp"
 
@@ -51,7 +52,51 @@ void SendPlanner::RegisterMessageForDelivery(
 	const Message::X25519::HeaderPointToPoint &header,
 	const ObjectStorage::ID &messageID)
 {
-	//THROW("Not implemented.");
+	ChannelObjectData data;
+	data.MessageID = messageID;
+
+	CowBuffer<uint8_t> object = BuildChannelObject(data);
+
+	ObjectStorage::ID newObjectId = _objectStorage.GetFreeID(object);
+	_objectStorage.WriteObject(newObjectId, object);
+
+	String refBase = header.Source + " " + header.Destination;
+	String headRef = "Head " + refBase;
+	String tailRef = "Tail " + refBase;
+
+	if (!_objectStorage.HasRef(tailRef)) {
+		_objectStorage.SetRef(headRef, newObjectId);
+		_objectStorage.SetRef(tailRef, newObjectId);
+
+		OutboundChannelTreeEntry e;
+		e.Source = header.Source;
+		e.Destination = header.Destination;
+
+		Tree<OutboundChannelTreeEntry>::Entry *entry =
+			_outboundChannels.FindEntry(e);
+
+		if (!entry) {
+			e.Planner = this;
+			e.Stat = OutboundChannelTreeEntry::Status::Init;
+
+			_outboundChannels.AddEntry(e);
+			entry = _outboundChannels.FindEntry(e);
+		}
+
+		entry->Key.DeliveryStartTime = GetUnixTime();
+		entry->Key.Stat = OutboundChannelTreeEntry::Status::Init;
+
+		ProcessChannel(entry->Key);
+	} else {
+		ObjectStorage::ID prevTailId = _objectStorage.GetRef(tailRef);
+
+		_objectStorage.UpdateObject(
+			prevTailId,
+			newObjectId.GetValue(),
+			0);
+
+		_objectStorage.SetRef(tailRef, newObjectId);
+	}
 }
 
 void SendPlanner::ProcessTimeEvent()
@@ -77,9 +122,17 @@ void SendPlanner::ProcessQuant()
 		return;
 	}
 
-	ProcessChannel(_traverseChannelEntry->Key);
+	bool removeEntry = _traverseChannelEntry->Key.Stat ==
+		OutboundChannelTreeEntry::Status::Remove;
 
+	Tree<OutboundChannelTreeEntry>::Entry *tmp = _traverseChannelEntry;
 	_traverseChannelEntry = _outboundChannels.Next(_traverseChannelEntry);
+
+	if (!removeEntry) {
+		ProcessChannel(tmp->Key);
+	} else {
+		_outboundChannels.RemoveEntry(tmp);
+	}
 
 	if (_traverseChannelEntry) {
 		_dispatcher->RegisterQuantProcessor(this);
@@ -142,6 +195,127 @@ void SendPlanner::OutboundChannelTreeEntry::ReportRequestRateLimit()
 	ActionTime = GetUnixTime();
 }
 
+bool SendPlanner::OutboundChannelTreeEntry::ReportDeliverySuccess()
+{
+	bool continueWork = Planner->ReportChannelActionStatus(
+		Source,
+		Destination,
+		true,
+		0);
+
+	DeliveryStartTime = GetUnixTime();
+
+	if (!continueWork) {
+		Stat = Status::Remove;
+	}
+
+	return continueWork;
+}
+
+bool SendPlanner::OutboundChannelTreeEntry::ReportDeliveryFailure(
+	int32_t reason)
+{
+	bool continueWork = Planner->ReportChannelActionStatus(
+		Source,
+		Destination,
+		false,
+		reason);
+
+	DeliveryStartTime = GetUnixTime();
+
+	if (!continueWork) {
+		Stat = Status::Remove;
+	}
+
+	return continueWork;
+}
+
+bool SendPlanner::ReportChannelActionStatus(
+	String source,
+	String destination,
+	bool success,
+	int32_t errorCode)
+{
+	String refBase = source + " " + destination;
+	String headRef = "Head " + refBase;
+	String tailRef = "Tail " + refBase;
+
+	ObjectStorage::ID headId = _objectStorage.GetRef(headRef);
+
+	CowBuffer<uint8_t> object = _objectStorage.ReadObject(headId);
+
+	ChannelObjectData data;
+	bool parseResult = ParseChannelObject(object, data);
+
+	if (!parseResult) {
+		THROW("Server database contains corrupt outbound queue entry.");
+	}
+
+	User *user = _users->GetUser(source);
+
+	if (user) {
+		user->UpdateMessage(
+			destination,
+			data.MessageID,
+			Message::Attribute::InProgress,
+			false);
+	}
+
+	if (user && !success) {
+		Message::Attribute failReason;
+
+		switch (errorCode) {
+		case GATE_MESSAGE_HEADER_REJECT:
+			failReason = Message::Attribute::Rejected;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER:
+			failReason = Message::Attribute::WrongDestinationUser;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_KEY:
+			failReason = Message::Attribute::WrongDestinationKey;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER:
+			failReason = Message::Attribute::InvalidHeader;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_MESSAGE_TOO_BIG:
+			failReason = Message::Attribute::MessageTooBig;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_SENDER_BANNED:
+			failReason = Message::Attribute::BannedSender;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_SENDER_KEY_BANNED:
+			failReason = Message::Attribute::BannedSenderKey;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_EXISTS:
+			failReason = Message::Attribute::Duplicate;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_CONNECTION_FAILURE:
+			failReason = Message::Attribute::ConnectionFailure;
+			break;
+		default:
+			failReason = Message::Attribute::Rejected;
+			break;
+		}
+
+		user->UpdateMessage(
+			destination,
+			data.MessageID,
+			failReason,
+			true);
+	}
+
+	if (data.NextObject.IsZero()) {
+		_objectStorage.DelRef(headRef);
+		_objectStorage.DelRef(tailRef);
+		_objectStorage.DeleteObject(headId);
+		return false;
+	}
+
+	_objectStorage.SetRef(headRef, data.NextObject);
+	_objectStorage.DeleteObject(headId);
+	return true;
+}
+
 void SendPlanner::ProcessChannel(OutboundChannelTreeEntry &entry)
 {
 	if (entry.Stat == OutboundChannelTreeEntry::Status::HasActiveSession) {
@@ -175,6 +349,25 @@ void SendPlanner::ProcessChannel(OutboundChannelTreeEntry &entry)
 void SendPlanner::StartTransmission(OutboundChannelTreeEntry &entry)
 {
 	entry.ActionTime = GetUnixTime();
+
+	if (entry.ActionTime > entry.DeliveryStartTime + _maxDeliveryTime) {
+		bool continueWork = ReportChannelActionStatus(
+			entry.Source,
+			entry.Destination,
+			false,
+			GATE_MESSAGE_HEADER_REJECT_CONNECTION_FAILURE);
+
+		entry.DeliveryStartTime = GetUnixTime();
+
+		if (!continueWork) {
+			entry.Stat = OutboundChannelTreeEntry::Status::Remove;
+		} else {
+			entry.Stat = OutboundChannelTreeEntry::Status::Init;
+		}
+
+		return;
+	}
+
 	entry.Stat = OutboundChannelTreeEntry::Status::HasActiveSession;
 
 	TaskProcessChannel *task = new TaskProcessChannel;
@@ -216,6 +409,8 @@ void SendPlanner::LoadChannels()
 		OutboundChannelTreeEntry e;
 		e.Source = parts[1];
 		e.Destination = parts[2];
+		e.Planner = this;
+		e.DeliveryStartTime = GetUnixTime();
 		e.Stat = OutboundChannelTreeEntry::Status::Init;
 
 		_outboundChannels.AddEntry(e);
@@ -238,4 +433,28 @@ void SendPlanner::RemoveSessions()
 	}
 
 	_hasSessionsForRemoval = false;
+}
+
+bool SendPlanner::ParseChannelObject(
+	const CowBuffer<uint8_t> object,
+	ChannelObjectData &data)
+{
+	if (object.Size() != (int)ObjectStorage::Constants::IDSize * 2) {
+		return false;
+	}
+
+	data.NextObject = object.Pointer();
+	data.MessageID = object.Pointer((int)ObjectStorage::Constants::IDSize);
+	return true;
+}
+
+CowBuffer<uint8_t> SendPlanner::BuildChannelObject(
+	const ChannelObjectData &data)
+{
+	CowBuffer<uint8_t> object((int)ObjectStorage::Constants::IDSize * 2);
+
+	data.NextObject.GetValue(object.Pointer());
+	uint64_t offset = (int)ObjectStorage::Constants::IDSize;
+	data.MessageID.GetValue(object.Pointer(offset));
+	return object;
 }

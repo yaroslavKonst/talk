@@ -443,7 +443,7 @@ bool WorkScreen::RedrawTextContentsEntry(
 
 	CowBuffer<String> lines = UiHelpers::MakeMultiline(
 		entry->Text,
-		_columns * 3 / 4 - 3);
+		_columns * 3 / 4 - 4);
 
 	for (int i = lines.Size() - 1; i >= 0; i--) {
 		bool success = AddLineToChatScreen(
@@ -539,16 +539,37 @@ bool WorkScreen::RedrawMessageHeader(
 			AddFlagToString(flagString, "Connection failure");
 		}
 
+		if (md->HasAttribute(Message::Attribute::Rejected)) {
+			AddFlagToString(flagString, "Rejected");
+		}
+
+		if (md->HasAttribute(Message::Attribute::WrongDestinationUser))
+		{
+			AddFlagToString(flagString, "Invalid destination user");
+		}
+
+		if (md->HasAttribute(Message::Attribute::WrongDestinationKey)) {
+			AddFlagToString(flagString, "Invalid destination key");
+		}
+
+		if (md->HasAttribute(Message::Attribute::InvalidHeader)) {
+			AddFlagToString(flagString, "Invalid header");
+		}
+
 		if (md->HasAttribute(Message::Attribute::MessageTooBig)) {
 			AddFlagToString(flagString, "Message is too big");
 		}
 
-		if (md->HasAttribute(Message::Attribute::BannedUser)) {
+		if (md->HasAttribute(Message::Attribute::BannedSender)) {
 			AddFlagToString(flagString, "You are banned");
 		}
 
-		if (md->HasAttribute(Message::Attribute::BannedKey)) {
+		if (md->HasAttribute(Message::Attribute::BannedSenderKey)) {
 			AddFlagToString(flagString, "Your key is banned");
+		}
+
+		if (md->HasAttribute(Message::Attribute::Duplicate)) {
+			AddFlagToString(flagString, "Duplicate");
 		}
 	}
 

@@ -65,6 +65,7 @@ public:
 		const ID &id,
 		const CowBuffer<uint8_t> buffer,
 		uint64_t offset);
+	void DeleteObject(const ID &id);
 
 	void RequestObjectRead(const ID &id);
 	void RequestObjectWrite(const ID &id, const CowBuffer<uint8_t> buffer);

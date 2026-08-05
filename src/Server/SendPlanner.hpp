@@ -47,9 +47,12 @@ private:
 		String Source;
 		String Destination;
 
+		SendPlanner *Planner;
+
 		enum class Status
 		{
 			Init,
+			Remove,
 			HasActiveSession,
 			ReportedRequestLimitOverflow,
 			ReportedConnectionFailure
@@ -57,16 +60,26 @@ private:
 
 		Status Stat;
 		int64_t ActionTime;
+		int64_t DeliveryStartTime;
 
 		bool operator==(const OutboundChannelTreeEntry &e) const;
 		bool operator<(const OutboundChannelTreeEntry &e) const;
 
 		void ReportConnectionFailure() override;
 		void ReportRequestRateLimit() override;
+
+		bool ReportDeliverySuccess();
+		bool ReportDeliveryFailure(int32_t reason);
 	};
 
 	Tree<OutboundChannelTreeEntry> _outboundChannels;
 	Tree<OutboundChannelTreeEntry>::Entry *_traverseChannelEntry;
+
+	bool ReportChannelActionStatus(
+		String source,
+		String destination,
+		bool success,
+		int32_t errorCode);
 
 	void ProcessChannel(OutboundChannelTreeEntry &entry);
 	void StartTransmission(OutboundChannelTreeEntry &entry);
@@ -83,6 +96,17 @@ private:
 	SessionNode *_sessions;
 	bool _hasSessionsForRemoval;
 	void RemoveSessions();
+
+	struct ChannelObjectData
+	{
+		ObjectStorage::ID NextObject;
+		ObjectStorage::ID MessageID;
+	};
+
+	bool ParseChannelObject(
+		const CowBuffer<uint8_t> object,
+		ChannelObjectData &data);
+	CowBuffer<uint8_t> BuildChannelObject(const ChannelObjectData &data);
 };
 
 #endif

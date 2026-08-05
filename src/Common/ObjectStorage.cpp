@@ -260,6 +260,16 @@ void ObjectStorage::UpdateObject(
 	file.Write<uint8_t>(buffer.Pointer(), buffer.Size(), offset);
 }
 
+void ObjectStorage::DeleteObject(const ID &id)
+{
+	if (!HasObject(id)) {
+		return;
+	}
+
+	String path = GetPathForID(id, false);
+	DeleteFile(path);
+}
+
 void ObjectStorage::RequestObjectRead(const ID &id)
 {
 	OperationNode *node = new OperationNode(id);
