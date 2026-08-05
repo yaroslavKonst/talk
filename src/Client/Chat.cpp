@@ -18,8 +18,6 @@ Chat::Chat(
 	_root = root;
 	_peerName = peerName;
 
-	_currentMessage = nullptr;
-	_currentMessageLine = 0;
 	_enc = nullptr;
 	_encLock = nullptr;
 
@@ -55,7 +53,9 @@ bool Chat::HasUnread()
 	return _unreadMessages.FindSmallest();
 }
 
-void Chat::SendMessage(MessageDraft *draft)
+void Chat::SendMessage(
+	MessageDraft *draft,
+	const ObjectStorage::ID &threadID)
 {
 	if (draft->IsEmpty()) {
 		_root->Ui->Notify("Can't send empty message.");
@@ -134,7 +134,7 @@ void Chat::SendMessage(MessageDraft *draft)
 	header.SourceKey = *_root->PublicKey;
 	header.Destination = _peerName;
 	header.DestinationKey = contact->GetDefaultKey();
-	header.ThreadID = _currentThreadID;
+	header.ThreadID = threadID;
 	header.Timestamp = GetUnixTime();
 
 	_enc = new MessageEncryptor(
@@ -494,16 +494,21 @@ void Chat::LoadMessages()
 
 			ObjectStorage::ID prevID(object.Pointer());
 			id = prevID;
-
-			if (!_currentMessage && headName == "Head") {
-				_currentMessage = node;
-			}
 		}
 	}
 }
 
 void Chat::UnloadMessages()
 {
+	Tree<UnreadMessageTreeEntry>::Entry *unreadEntry =
+		_unreadMessages.FindSmallest();
+
+	while (unreadEntry) {
+		Tree<UnreadMessageTreeEntry>::Entry *tmp = unreadEntry;
+		unreadEntry = _unreadMessages.Next(unreadEntry);
+		_unreadMessages.RemoveEntry(tmp);
+	}
+
 	Tree<MessageTreeEntry>::Entry *entry = _messagesByID.FindSmallest();
 
 	while (entry) {
@@ -515,9 +520,6 @@ void Chat::UnloadMessages()
 
 		_messagesByID.RemoveEntry(tmp);
 	}
-
-	_currentMessage = nullptr;
-	_currentMessageLine = 0;
 }
 
 void Chat::AddMessageToThread(
@@ -583,11 +585,6 @@ void Chat::AddMessageToThread(
 
 	if (previousNode) {
 		previousNode->Next = node;
-	}
-
-	if (previousNode == _currentMessage && !_currentMessageLine)
-	{
-		_currentMessage = node;
 	}
 
 	_messagesByID.AddEntry(node);

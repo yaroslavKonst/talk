@@ -107,6 +107,26 @@ public:
 		return _keyNames[(int)Keys::WorkChatType];
 	}
 
+	int WorkChatUpKey()
+	{
+		return _keys[(int)Keys::WorkChatUp];
+	}
+
+	String WorkChatUpName()
+	{
+		return _keyNames[(int)Keys::WorkChatUp];
+	}
+
+	int WorkChatDownKey()
+	{
+		return _keys[(int)Keys::WorkChatDown];
+	}
+
+	String WorkChatDownName()
+	{
+		return _keyNames[(int)Keys::WorkChatDown];
+	}
+
 	int WorkChatBackKey()
 	{
 		return _keys[(int)Keys::WorkChatBack];

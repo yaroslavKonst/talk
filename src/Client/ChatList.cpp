@@ -304,14 +304,16 @@ bool ChatList::HasUnread(String chatName)
 	return chat->Key.GetChat()->HasUnread();
 }
 
-void ChatList::SendMessage(MessageDraft *draft)
+void ChatList::SendMessage(
+	MessageDraft *draft,
+	const ObjectStorage::ID &threadID)
 {
 	if (!_currentChat) {
 		_root->Ui->Notify("No chat is selected.");
 		return;
 	}
 
-	_currentChat->Key.GetChat()->SendMessage(draft);
+	_currentChat->Key.GetChat()->SendMessage(draft, threadID);
 }
 
 ChatList::ChatContainer::ChatContainer()

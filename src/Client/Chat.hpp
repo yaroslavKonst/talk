@@ -18,7 +18,9 @@ public:
 	bool HasMessage(const ObjectStorage::ID &messageID);
 	bool HasUnread();
 
-	void SendMessage(MessageDraft *draft);
+	void SendMessage(
+		MessageDraft *draft,
+		const ObjectStorage::ID &threadID);
 
 	void DeliverMessage(
 		const CowBuffer<uint8_t> message,
@@ -140,11 +142,6 @@ private:
 	Root *_root;
 	ObjectStorage _objectStorage;
 	String _peerName;
-
-#warning May be unused.
-	ObjectStorage::ID _currentThreadID;
-	MessageNode *_currentMessage;
-	int64_t _currentMessageLine;
 
 	Tree<MessageTreeEntry> _messagesByID;
 	Tree<UnreadMessageTreeEntry> _unreadMessages;

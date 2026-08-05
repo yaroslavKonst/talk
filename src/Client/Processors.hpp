@@ -71,7 +71,9 @@ public:
 		const ObjectStorage::ID &identifier) = 0;
 	virtual bool HasUnread(String chatName = String()) = 0;
 
-	virtual void SendMessage(MessageDraft *draft) = 0;
+	virtual void SendMessage(
+		MessageDraft *draft,
+		const ObjectStorage::ID &threadID) = 0;
 };
 
 // Voice chat.

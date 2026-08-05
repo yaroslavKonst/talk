@@ -30,6 +30,7 @@ private:
 	bool AddLineToChatScreen(
 		int &currentLinePosition,
 		int &skipLines,
+		int prefix,
 		String text,
 		bool centering = false);
 	bool RedrawConversationStart(int &currentLinePosition, int &skipLines);
@@ -37,6 +38,17 @@ private:
 		int &currentLinePosition,
 		int &skipLines,
 		MessageEventProcessor::MessageDescriptorBase *md);
+	bool RedrawTextContentsEntry(
+		Message::ContentsEntry *e,
+		int &currentLinePosition,
+		int &skipLines);
+	bool RedrawAttachmentContentsEntry(
+		Message::ContentsEntry *e,
+		int &currentLinePosition,
+		int &skipLines);
+	bool RedrawUnknownContentsEntry(
+		int &currentLinePosition,
+		int &skipLines);
 	bool RedrawMessageHeader(
 		int &currentLinePosition,
 		int &skipLines,

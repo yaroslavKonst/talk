@@ -153,7 +153,7 @@ void WorkScreen::RedrawFrames()
 void WorkScreen::RedrawChatList()
 {
 	int fromY = 7;
-	int toY = _columns - 4;
+	int toY = _rows - 4;
 
 	String currentName = _root->Messages->GetCurrentChatName();
 
@@ -229,11 +229,35 @@ void WorkScreen::RedrawCurrentChat()
 		return;
 	}
 
+	_root->Messages->SelectOrCreateChat(_chatStack->PeerName);
+
 	move(5, 0);
 
 	addstr(_chatStack->PeerName.CStr());
 
-	_root->Messages->SelectOrCreateChat(_chatStack->PeerName);
+	if (_chatStack->ThreadID.IsZero()) {
+		addstr(", main thread.");
+	} else {
+		MessageEventProcessor::MessageDescriptorBase *md =
+			_root->Messages->GetMessageDescriptor(
+				_chatStack->ThreadID);
+
+		if (!md) {
+			String line = ", thread " + DataToHex(
+				_chatStack->ThreadID.GetValuePointer(),
+				(int)ObjectStorage::Constants::IDSize);
+
+			addstr(line.CStr());
+		} else {
+			String line =
+				", thread " +
+				md->GetHeader().Source + ", " +
+				TimeInSecondsToString(
+					md->GetHeader().Timestamp);
+
+			addstr(line.CStr());
+		}
+	}
 
 	int currentLinePosition = _rows - 10;
 	int skipLines = _chatStack->LineOffset;
@@ -241,17 +265,10 @@ void WorkScreen::RedrawCurrentChat()
 	ObjectStorage::ID currentMessageID = _chatStack->CurrentMessageID;
 
 	if (_chatStack->AutoScroll) {
-		for (;;) {
-			ObjectStorage::ID nextID =
-				_root->Messages->GetNextMessage(
-					currentMessageID);
+		currentMessageID = _root->Messages->GetRootMessageForThread(
+			_chatStack->ThreadID);
 
-			if (nextID.IsZero()) {
-				break;
-			}
-
-			currentMessageID = nextID;
-		}
+		_chatStack->CurrentMessageID = currentMessageID;
 	}
 
 	while (currentLinePosition >= 7) {
@@ -299,6 +316,7 @@ void WorkScreen::RedrawCurrentChat()
 bool WorkScreen::AddLineToChatScreen(
 	int &currentLinePosition,
 	int &skipLines,
+	int prefix,
 	String text,
 	bool centering)
 {
@@ -318,6 +336,11 @@ bool WorkScreen::AddLineToChatScreen(
 		move(currentLinePosition, _columns / 4 + 2);
 	}
 
+	if (prefix) {
+		addch(prefix);
+		addch(' ');
+	}
+
 	addstr(text.CStr());
 	--currentLinePosition;
 
@@ -328,7 +351,11 @@ bool WorkScreen::RedrawConversationStart(
 	int &currentLinePosition,
 	int &skipLines)
 {
-	bool success = AddLineToChatScreen(currentLinePosition, skipLines, "");
+	bool success = AddLineToChatScreen(
+		currentLinePosition,
+		skipLines,
+		0,
+		"");
 
 	if (!success) {
 		return false;
@@ -337,6 +364,7 @@ bool WorkScreen::RedrawConversationStart(
 	return AddLineToChatScreen(
 		currentLinePosition,
 		skipLines,
+		0,
 		"Conversation start",
 		true);
 }
@@ -351,6 +379,7 @@ bool WorkScreen::RedrawMessageBody(
 		bool success = AddLineToChatScreen(
 			currentLinePosition,
 			skipLines,
+			0,
 			"Corrupt");
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 		return success;
@@ -365,16 +394,109 @@ bool WorkScreen::RedrawMessageBody(
 		bool success = AddLineToChatScreen(
 			currentLinePosition,
 			skipLines,
+			0,
 			"Decryption in progress...");
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 		return success;
 	}
 
-#warning TODO: replace this stub.
-	return AddLineToChatScreen(
+	const Message::Contents &contents = md->GetContents();
+
+	for (int i = contents.Entries.Size() - 1; i >= 0; i--) {
+		bool success;
+
+		switch (contents.Entries[i]->Type) {
+		case Message::ContentsEntryType::Text:
+			success = RedrawTextContentsEntry(
+				contents.Entries[i],
+				currentLinePosition,
+				skipLines);
+			break;
+		case Message::ContentsEntryType::Attachment:
+			success = RedrawAttachmentContentsEntry(
+				contents.Entries[i],
+				currentLinePosition,
+				skipLines);
+			break;
+		default:
+			success = RedrawUnknownContentsEntry(
+				currentLinePosition,
+				skipLines);
+			break;
+		}
+
+		if (!success) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool WorkScreen::RedrawTextContentsEntry(
+	Message::ContentsEntry *e,
+	int &currentLinePosition,
+	int &skipLines)
+{
+	Message::ContentsEntryText *entry =
+		static_cast<Message::ContentsEntryText*>(e);
+
+	CowBuffer<String> lines = UiHelpers::MakeMultiline(
+		entry->Text,
+		_columns * 3 / 4 - 3);
+
+	for (int i = lines.Size() - 1; i >= 0; i--) {
+		bool success = AddLineToChatScreen(
+			currentLinePosition,
+			skipLines,
+			ACS_VLINE,
+			lines[i]);
+
+		if (!success) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool WorkScreen::RedrawAttachmentContentsEntry(
+	Message::ContentsEntry *e,
+	int &currentLinePosition,
+	int &skipLines)
+{
+	Message::ContentsEntryAttachment *entry =
+		static_cast<Message::ContentsEntryAttachment*>(e);
+
+	String line = entry->AttachmentName +
+		" [" + DataSizeToString(entry->Attachment.Size()) + "]";
+
+	attrset(COLOR_PAIR(YELLOW_TEXT));
+	bool success = AddLineToChatScreen(
 		currentLinePosition,
 		skipLines,
-		"Message body placeholder.");
+		ACS_VLINE,
+		line);
+	attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+	return success;
+}
+
+bool WorkScreen::RedrawUnknownContentsEntry(
+	int &currentLinePosition,
+	int &skipLines)
+{
+	String line = "Unknown entry type.";
+
+	attrset(COLOR_PAIR(RED_TEXT));
+	bool success = AddLineToChatScreen(
+		currentLinePosition,
+		skipLines,
+		ACS_VLINE,
+		line);
+	attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+	return success;
 }
 
 static void AddFlagToString(String &flags, String flag)
@@ -410,7 +532,7 @@ bool WorkScreen::RedrawMessageHeader(
 		}
 
 		if (md->HasAttribute(Message::Attribute::InProgress)) {
-			AddFlagToString(flagString, "In progress");
+			AddFlagToString(flagString, "Delivery in progress");
 		}
 
 		if (md->HasAttribute(Message::Attribute::ConnectionFailure)) {
@@ -434,6 +556,7 @@ bool WorkScreen::RedrawMessageHeader(
 		bool success = AddLineToChatScreen(
 			currentLinePosition,
 			skipLines,
+			0,
 			flagString + ".");
 
 		if (!success) {
@@ -463,6 +586,7 @@ bool WorkScreen::RedrawMessageHeader(
 			bool success = AddLineToChatScreen(
 				currentLinePosition,
 				skipLines,
+				0,
 				warningString);
 			attrset(COLOR_PAIR(DEFAULT_TEXT));
 
@@ -475,6 +599,7 @@ bool WorkScreen::RedrawMessageHeader(
 	bool success = AddLineToChatScreen(
 		currentLinePosition,
 		skipLines,
+		0,
 		TimeInSecondsToString(header.Timestamp));
 
 	if (!success) {
@@ -488,6 +613,7 @@ bool WorkScreen::RedrawMessageHeader(
 		success = AddLineToChatScreen(
 			currentLinePosition,
 			skipLines,
+			0,
 			senderName);
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 	} else {
@@ -495,6 +621,7 @@ bool WorkScreen::RedrawMessageHeader(
 		success = AddLineToChatScreen(
 			currentLinePosition,
 			skipLines,
+			0,
 			"You");
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 	}
@@ -506,7 +633,11 @@ bool WorkScreen::RedrawMessageDelimiter(
 	int &currentLinePosition,
 	int &skipLines)
 {
-	bool success = AddLineToChatScreen(currentLinePosition, skipLines, "");
+	bool success = AddLineToChatScreen(
+		currentLinePosition,
+		skipLines,
+		0,
+		"");
 
 	if (!success) {
 		return false;
@@ -522,8 +653,15 @@ bool WorkScreen::RedrawMessageDelimiter(
 	success =  AddLineToChatScreen(
 		currentLinePosition,
 		skipLines,
+		0,
 		text);
 	attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+	if (!success) {
+		return false;
+	}
+
+	success = AddLineToChatScreen(currentLinePosition, skipLines, 0, "");
 
 	return success;
 }
@@ -599,6 +737,26 @@ Screen *WorkScreen::ProcessChatScreenEvent(int event)
 		return this;
 	}
 
+	if (event == _root->Conf->WorkChatUpKey()) {
+		_chatStack->LineOffset += 1;
+		_chatStack->AutoScroll = false;
+		return this;
+	}
+
+	if (event == _root->Conf->WorkChatDownKey()) {
+		_chatStack->LineOffset -= 1;
+
+		if (_chatStack->LineOffset == 0) {
+			_chatStack->AutoScroll = true;
+		}
+
+		if (_chatStack->LineOffset < 0) {
+			_chatStack->LineOffset = 0;
+		}
+
+		return this;
+	}
+
 	return this;
 }
 
@@ -614,7 +772,7 @@ Screen *WorkScreen::ProcessChatTypeEvent(int event)
 	MessageDraft &draft = _chatStack->Draft;
 
 	if (event == _root->Conf->WorkTypeSendKey()) {
-		_root->Messages->SendMessage(&draft);
+		_root->Messages->SendMessage(&draft, _chatStack->ThreadID);
 		return this;
 	}
 

@@ -59,6 +59,12 @@ namespace WorkScreenControls
 	static const char *ChatType = "Type New Message";
 	static const char *ChatTypeValue = "Enter";
 
+	static const char *ChatUp = "Scroll Messages Up";
+	static const char *ChatUpValue = "Up";
+
+	static const char *ChatDown = "Scroll Messages Down";
+	static const char *ChatDownValue = "Down";
+
 	static const char *ChatBack = "Exit Chat";
 	static const char *ChatBackValue = "q";
 
@@ -405,6 +411,8 @@ void Config::Init()
 			_configFile.Set(Section, ListUp, ListUpValue);
 			_configFile.Set(Section, ListDown, ListDownValue);
 			_configFile.Set(Section, ChatType, ChatTypeValue);
+			_configFile.Set(Section, ChatUp, ChatUpValue);
+			_configFile.Set(Section, ChatDown, ChatDownValue);
 			_configFile.Set(Section, ChatBack, ChatBackValue);
 			_configFile.Set(Section, TypeSend, TypeSendValue);
 			_configFile.Set(Section, TypeBack, TypeBackValue);
@@ -477,6 +485,10 @@ void Config::LoadControls()
 			_configFile.Get(Section, ListDown);
 		_keyNames[(int)Keys::WorkChatType] =
 			_configFile.Get(Section, ChatType);
+		_keyNames[(int)Keys::WorkChatUp] =
+			_configFile.Get(Section, ChatUp);
+		_keyNames[(int)Keys::WorkChatDown] =
+			_configFile.Get(Section, ChatDown);
 		_keyNames[(int)Keys::WorkChatBack] =
 			_configFile.Get(Section, ChatBack);
 		_keyNames[(int)Keys::WorkTypeSend] =

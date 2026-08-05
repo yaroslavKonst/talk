@@ -51,7 +51,7 @@ void SendPlanner::RegisterMessageForDelivery(
 	const Message::X25519::HeaderPointToPoint &header,
 	const ObjectStorage::ID &messageID)
 {
-	THROW("Not implemented.");
+	//THROW("Not implemented.");
 }
 
 void SendPlanner::ProcessTimeEvent()
