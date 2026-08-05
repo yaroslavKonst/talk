@@ -53,6 +53,10 @@ public:
 		const CowBuffer<uint8_t> buffer) override;
 	void NotifyWriteCompleted(const ObjectStorage::ID &id) override;
 
+	// True means that action is allowed only for users in contact list.
+	void GetAccountSettings(bool &messages, bool &calls) override;
+	void SetAccountSettings(bool messages, bool calls) override;
+
 	void AddContact(String name) override;
 	void UpdateContactKey(
 		String name,

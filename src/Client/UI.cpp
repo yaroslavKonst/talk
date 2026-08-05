@@ -98,9 +98,9 @@ bool UI::ProcessEvent()
 			_screenStack = new ScreenStackEntry(_screenStack);
 			_screenStack->screen = newScreen;
 		} else {
-			delete _screenStack->screen;
 			ScreenStackEntry *tmp = _screenStack;
 			_screenStack = _screenStack->previous;
+			delete tmp->screen;
 			delete tmp;
 		}
 	}

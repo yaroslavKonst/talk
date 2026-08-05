@@ -11,14 +11,16 @@
 #define SESSION_COMMAND_GET_MAX_MESSAGE_SIZE 3
 #define SESSION_COMMAND_REQUEST_ID 4
 #define SESSION_COMMAND_UPDATE_ID 5
-#define SESSION_COMMAND_ADD_CONTACT 6
-#define SESSION_COMMAND_UPDATE_CONTACT_KEY 7
-#define SESSION_COMMAND_BLOCK_CONTACT 8
-#define SESSION_COMMAND_LIST_CONTACTS 9
-#define SESSION_COMMAND_OFFER_MESSAGE 10
-#define SESSION_COMMAND_SEND_MESSAGE 11
-#define SESSION_COMMAND_UPDATE_MESSAGE 12
-#define SESSION_COMMAND_DELETE_MESSAGE 13
+#define SESSION_COMMAND_GET_ACCOUNT_SETTINGS 6
+#define SESSION_COMMAND_SET_ACCOUNT_SETTINGS 7
+#define SESSION_COMMAND_ADD_CONTACT 8
+#define SESSION_COMMAND_UPDATE_CONTACT_KEY 9
+#define SESSION_COMMAND_BLOCK_CONTACT 10
+#define SESSION_COMMAND_LIST_CONTACTS 11
+#define SESSION_COMMAND_OFFER_MESSAGE 12
+#define SESSION_COMMAND_SEND_MESSAGE 13
+#define SESSION_COMMAND_UPDATE_MESSAGE 14
+#define SESSION_COMMAND_DELETE_MESSAGE 15
 
 #define SESSION_RESPONSE_OK 200
 #define SESSION_RESPONSE_ERROR 100
@@ -98,6 +100,32 @@ namespace CommandUpdateID
 	struct Command
 	{
 		ObjectStorage::ID Id;
+	};
+
+	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
+	CowBuffer<uint8_t> BuildCommand(const Command &command);
+}
+
+namespace CommandGetAccountSettings
+{
+	struct Response
+	{
+		bool AllowMessagesOnlyFromContactList;
+		bool AllowCallsOnlyFromContactList;
+	};
+
+	CowBuffer<uint8_t> BuildCommand();
+
+	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
+	CowBuffer<uint8_t> BuildResponse(const Response &data);
+}
+
+namespace CommandSetAccountSettings
+{
+	struct Command
+	{
+		bool AllowMessagesOnlyFromContactList;
+		bool AllowCallsOnlyFromContactList;
 	};
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);

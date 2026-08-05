@@ -47,6 +47,16 @@ public:
 		return _keyNames[(int)Keys::WorkConnect];
 	}
 
+	int WorkAccountKey()
+	{
+		return _keys[(int)Keys::WorkAccount];
+	}
+
+	String WorkAccountName()
+	{
+		return _keyNames[(int)Keys::WorkAccount];
+	}
+
 	int WorkContactKey()
 	{
 		return _keys[(int)Keys::WorkContact];
@@ -165,6 +175,46 @@ public:
 	String WorkCursorDownName()
 	{
 		return _keyNames[(int)Keys::WorkCursorDown];
+	}
+
+	int AccountBackKey()
+	{
+		return _keys[(int)Keys::AccountBack];
+	}
+
+	String AccountBackName()
+	{
+		return _keyNames[(int)Keys::AccountBack];
+	}
+
+	int AccountEnterKey()
+	{
+		return _keys[(int)Keys::AccountEnter];
+	}
+
+	String AccountEnterName()
+	{
+		return _keyNames[(int)Keys::AccountEnter];
+	}
+
+	int AccountUpKey()
+	{
+		return _keys[(int)Keys::AccountUp];
+	}
+
+	String AccountUpName()
+	{
+		return _keyNames[(int)Keys::AccountUp];
+	}
+
+	int AccountDownKey()
+	{
+		return _keys[(int)Keys::AccountDown];
+	}
+
+	String AccountDownName()
+	{
+		return _keyNames[(int)Keys::AccountDown];
 	}
 
 	int LoginBackKey()
@@ -308,6 +358,7 @@ private:
 	{
 		WorkExit,
 		WorkConnect,
+		WorkAccount,
 		WorkContact,
 
 		WorkListSelect,
@@ -327,6 +378,11 @@ private:
 		WorkCursorRight,
 		WorkCursorUp,
 		WorkCursorDown,
+
+		AccountBack,
+		AccountEnter,
+		AccountUp,
+		AccountDown,
 
 		LoginBack,
 		LoginUp,

@@ -32,6 +32,7 @@ public:
 	void StartConnection(
 		int fd,
 		const Crypto::X25519::PublicKeyContainer &serverKey) override;
+	void Disconnect() override;
 
 	uint64_t GetMaxMessageSize() override;
 
@@ -50,6 +51,13 @@ public:
 	bool SetContactListProcessor(ContactListProcessor *processor);
 
 	bool SendMessage(const CowBuffer<uint8_t> message);
+
+	bool RequestAccountSettings() override;
+	bool SetAccountSettings(
+		bool allowMessages,
+		bool allowCalls) override;
+	bool SetAccountSettingsProcessor(
+		AccountSettingsProcessor *processor) override;
 
 private:
 	int _fd;

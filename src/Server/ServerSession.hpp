@@ -64,6 +64,8 @@ private:
 	bool ProcessKeepAlive(const CowBuffer<uint8_t> buffer);
 	bool ProcessGetHostName();
 	bool ProcessGetMaxMessageSize();
+	bool ProcessGetAccountSettings();
+	bool ProcessSetAccountSettings(const CowBuffer<uint8_t> buffer);
 	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer);
 	bool ProcessBlockContact(const CowBuffer<uint8_t> buffer);
@@ -102,6 +104,8 @@ public:
 
 	virtual String GetName() = 0;
 	virtual ObjectStorage *GetObjectStorage() = 0;
+	virtual void GetAccountSettings(bool &messages, bool &calls) = 0;
+	virtual void SetAccountSettings(bool messages, bool calls) = 0;
 	virtual void AddContact(String name) = 0;
 	virtual void UpdateContactKey(
 		String name,

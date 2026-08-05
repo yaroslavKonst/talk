@@ -41,6 +41,9 @@ namespace WorkScreenControls
 	static const char *Connect = "Connect To Server";
 	static const char *ConnectValue = "Home";
 
+	static const char *Account = "Manage Account";
+	static const char *AccountValue = "Ctrl-A";
+
 	static const char *Contact = "Manage Contacts";
 	static const char *ContactValue = "Ctrl-C";
 
@@ -76,6 +79,23 @@ namespace WorkScreenControls
 
 	static const char *CursorDown = "Move Cursor Down";
 	static const char *CursorDownValue = "Down";
+}
+
+namespace AccountScreenControls
+{
+	static const char *Section = "Account Screen Controls";
+
+	static const char *Back = "Exit Screen";
+	static const char *BackValue = "End";
+
+	static const char *Enter = "Select Setting";
+	static const char *EnterValue = "Enter";
+
+	static const char *Up = "Previous Control";
+	static const char *UpValue = "Up";
+
+	static const char *Down = "Next Control";
+	static const char *DownValue = "Down";
 }
 
 namespace LoginScreenControls
@@ -379,6 +399,7 @@ void Config::Init()
 			using namespace WorkScreenControls;
 			_configFile.Set(Section, Exit, ExitValue);
 			_configFile.Set(Section, Connect, ConnectValue);
+			_configFile.Set(Section, Account, AccountValue);
 			_configFile.Set(Section, Contact, ContactValue);
 			_configFile.Set(Section, ListSelect, ListSelectValue);
 			_configFile.Set(Section, ListUp, ListUpValue);
@@ -391,6 +412,14 @@ void Config::Init()
 			_configFile.Set(Section, CursorRight, CursorRightValue);
 			_configFile.Set(Section, CursorUp, CursorUpValue);
 			_configFile.Set(Section, CursorDown, CursorDownValue);
+		}
+
+		{
+			using namespace AccountScreenControls;
+			_configFile.Set(Section, Back, BackValue);
+			_configFile.Set(Section, Enter, EnterValue);
+			_configFile.Set(Section, Up, UpValue);
+			_configFile.Set(Section, Down, DownValue);
 		}
 
 		{
@@ -436,6 +465,8 @@ void Config::LoadControls()
 		_keyNames[(int)Keys::WorkExit] = _configFile.Get(Section, Exit);
 		_keyNames[(int)Keys::WorkConnect] =
 			_configFile.Get(Section, Connect);
+		_keyNames[(int)Keys::WorkAccount] =
+			_configFile.Get(Section, Account);
 		_keyNames[(int)Keys::WorkContact] =
 			_configFile.Get(Section, Contact);
 		_keyNames[(int)Keys::WorkListSelect] =
@@ -460,6 +491,18 @@ void Config::LoadControls()
 			_configFile.Get(Section, CursorUp);
 		_keyNames[(int)Keys::WorkCursorDown] =
 			_configFile.Get(Section, CursorDown);
+	}
+
+	{
+		using namespace AccountScreenControls;
+		_keyNames[(int)Keys::AccountBack] =
+			_configFile.Get(Section, Back);
+		_keyNames[(int)Keys::AccountEnter] =
+			_configFile.Get(Section, Enter);
+		_keyNames[(int)Keys::AccountUp] =
+			_configFile.Get(Section, Up);
+		_keyNames[(int)Keys::AccountDown] =
+			_configFile.Get(Section, Down);
 	}
 
 	{

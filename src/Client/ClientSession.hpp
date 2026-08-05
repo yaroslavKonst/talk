@@ -40,6 +40,11 @@ public:
 
 	void SendMessage(const CowBuffer<uint8_t> message);
 
+	void GetAccountSettings();
+	void SetAccountSettings(bool allowMessages, bool allowCalls);
+	void SetAccountSettingsProcessor(
+		NetworkEventProcessor::AccountSettingsProcessor *processor);
+
 private:
 	Root *_root;
 
@@ -63,6 +68,9 @@ private:
 	bool ProcessGetMaxMessageSize(const CowBuffer<uint8_t> buffer);
 	bool ProcessRequestID();
 	bool ProcessUpdateID(const CowBuffer<uint8_t> buffer);
+	bool ProcessGetAccountSettings(const CowBuffer<uint8_t> buffer);
+	NetworkEventProcessor::AccountSettingsProcessor
+		*_accountSettingsProcessor;
 	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer);
 	bool ProcessBlockContact(const CowBuffer<uint8_t> buffer);

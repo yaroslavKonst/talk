@@ -149,6 +149,43 @@ void User::NotifyWriteCompleted(const ObjectStorage::ID &id)
 {
 }
 
+void User::GetAccountSettings(bool &messages, bool &calls)
+{
+	String path = _root + "/AccountSettings";
+
+	if (!FileExists(path)) {
+		messages = false;
+		calls = true;
+		return;
+	}
+
+	uint32_t settings;
+
+	BinaryFile file(path, false);
+	file.Read<uint32_t>(&settings, 1, 0);
+
+	messages = settings & 0x1;
+	calls = settings & 0x2;
+}
+
+void User::SetAccountSettings(bool messages, bool calls)
+{
+	String path = _root + "/AccountSettings";
+
+	uint32_t settings = 0;
+
+	if (messages) {
+		settings |= 0x1;
+	}
+
+	if (calls) {
+		settings |= 0x2;
+	}
+
+	BinaryFile file(path, true);
+	file.Write<uint32_t>(&settings, 1, 0);
+}
+
 void User::AddContact(String name)
 {
 	_contactStorage.AddNewContact(name);
@@ -273,6 +310,13 @@ int32_t User::CheckInboundMessage(
 	const Message::X25519::HeaderPointToPoint &header,
 	const ObjectStorage::ID &messageID)
 {
+	bool allowMessagesOnlyFromContacts;
+	bool allowCallsOnlyFromContacts;
+
+	GetAccountSettings(
+		allowMessagesOnlyFromContacts,
+		allowCallsOnlyFromContacts);
+
 	if (!Message::VerifyFullUserName(header.Source)) {
 		return GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER;
 	}
@@ -334,6 +378,10 @@ int32_t User::CheckInboundMessage(
 
 		if (contact->IsKeyBlocked(header.SourceKey)) {
 			return GATE_MESSAGE_HEADER_REJECT_SENDER_KEY_BANNED;
+		}
+	} else {
+		if (allowMessagesOnlyFromContacts) {
+			return GATE_MESSAGE_HEADER_REJECT_SENDER_BANNED;
 		}
 	}
 

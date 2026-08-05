@@ -3,6 +3,7 @@
 #include <curses.h>
 
 #include "LoginScreen.hpp"
+#include "AccountScreen.hpp"
 #include "ContactScreen.hpp"
 //#include "AttachmentScreen.hpp"
 #include "TextColor.hpp"
@@ -44,7 +45,16 @@ void WorkScreen::Redraw()
 Screen *WorkScreen::ProcessEvent(int event)
 {
 	if (event == _root->Conf->WorkConnectKey()) {
-		return new LoginScreen(_root);
+		if (_root->Conf->GetName().Length()) {
+			return new LoginScreen(_root);
+		} else {
+			_root->Ui->Notify("User name is not specified.");
+			return new AccountScreen(_root);
+		}
+	}
+
+	if (event == _root->Conf->WorkAccountKey()) {
+		return new AccountScreen(_root);
 	}
 
 	if (event == _root->Conf->WorkContactKey()) {

@@ -113,6 +113,17 @@ public:
 			const CommandListContacts::Response &contactList) = 0;
 	};
 
+	class AccountSettingsProcessor
+	{
+	public:
+		virtual ~AccountSettingsProcessor()
+		{ }
+
+		virtual void ReceiveAccountSettings(
+			bool allowMessagesOnlyFromContactList,
+			bool allowCallsOnlyFromContactList) = 0;
+	};
+
 	virtual ~NetworkEventProcessor()
 	{ }
 
@@ -122,6 +133,7 @@ public:
 	virtual void StartConnection(
 		int fd,
 		const Crypto::X25519::PublicKeyContainer &serverKey) = 0;
+	virtual void Disconnect() = 0;
 
 	virtual uint64_t GetMaxMessageSize() = 0;
 
@@ -141,6 +153,13 @@ public:
 		ContactListProcessor *processor) = 0;
 
 	virtual bool SendMessage(const CowBuffer<uint8_t> message) = 0;
+
+	virtual bool RequestAccountSettings() = 0;
+	virtual bool SetAccountSettings(
+		bool allowMessages,
+		bool allowCalls) = 0;
+	virtual bool SetAccountSettingsProcessor(
+		AccountSettingsProcessor *processor) = 0;
 };
 
 // UI.

@@ -149,6 +149,10 @@ bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessGetHostName();
 	case SESSION_COMMAND_GET_MAX_MESSAGE_SIZE:
 		return ProcessGetMaxMessageSize();
+	case SESSION_COMMAND_GET_ACCOUNT_SETTINGS:
+		return ProcessGetAccountSettings();
+	case SESSION_COMMAND_SET_ACCOUNT_SETTINGS:
+		return ProcessSetAccountSettings(buffer);
 	case SESSION_COMMAND_REQUEST_ID:
 		return ProcessRequestID(buffer);
 	case SESSION_COMMAND_ADD_CONTACT:
@@ -202,6 +206,35 @@ bool ServerSession::ProcessGetMaxMessageSize()
 	response.Value = _config->GetMessageSizeLimit();
 
 	_protocol->Send(CommandGetMaxMessageSize::BuildResponse(response), 0);
+	return true;
+}
+
+bool ServerSession::ProcessGetAccountSettings()
+{
+	CommandGetAccountSettings::Response response;
+
+	_storage->GetAccountSettings(
+		response.AllowMessagesOnlyFromContactList,
+		response.AllowCallsOnlyFromContactList);
+
+	_protocol->Send(CommandGetAccountSettings::BuildResponse(response), 0);
+	return true;
+}
+
+bool ServerSession::ProcessSetAccountSettings(const CowBuffer<uint8_t> buffer)
+{
+	CommandSetAccountSettings::Command command;
+	bool parseResult = CommandSetAccountSettings::ParseCommand(
+		buffer,
+		command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_storage->SetAccountSettings(
+		command.AllowMessagesOnlyFromContactList,
+		command.AllowCallsOnlyFromContactList);
 	return true;
 }
 

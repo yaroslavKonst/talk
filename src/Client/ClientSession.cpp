@@ -21,6 +21,7 @@ ClientSession::ClientSession(
 
 	_keepAliveTimestamp = 0;
 	_contactListProcessor = nullptr;
+	_accountSettingsProcessor = nullptr;
 
 	_messageSizeLimit = 2048;
 
@@ -146,6 +147,26 @@ void ClientSession::SendMessage(const CowBuffer<uint8_t> message)
 	_protocol->Send(CommandSendMessage::BuildCommand(command), 1);
 }
 
+void ClientSession::GetAccountSettings()
+{
+	_protocol->Send(CommandGetAccountSettings::BuildCommand(), 0);
+}
+
+void ClientSession::SetAccountSettings(bool allowMessages, bool allowCalls)
+{
+	CommandSetAccountSettings::Command command;
+	command.AllowMessagesOnlyFromContactList = allowMessages;
+	command.AllowCallsOnlyFromContactList = allowCalls;
+
+	_protocol->Send(CommandSetAccountSettings::BuildCommand(command), 0);
+}
+
+void ClientSession::SetAccountSettingsProcessor(
+	NetworkEventProcessor::AccountSettingsProcessor *processor)
+{
+	_accountSettingsProcessor = processor;
+}
+
 bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 {
 	if (buffer.Size() < sizeof(int32_t)) {
@@ -167,6 +188,8 @@ bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessRequestID();
 	case SESSION_COMMAND_UPDATE_ID:
 		return ProcessUpdateID(buffer);
+	case SESSION_COMMAND_GET_ACCOUNT_SETTINGS:
+		return ProcessGetAccountSettings(buffer);
 	case SESSION_COMMAND_UPDATE_CONTACT_KEY:
 		return ProcessUpdateContactKey(buffer);
 	case SESSION_COMMAND_BLOCK_CONTACT:
@@ -271,6 +294,26 @@ bool ClientSession::ProcessUpdateID(const CowBuffer<uint8_t> buffer)
 	}
 
 	_root->Messages->SetKnownID(command.Id);
+	return true;
+}
+
+bool ClientSession::ProcessGetAccountSettings(const CowBuffer<uint8_t> buffer)
+{
+	CommandGetAccountSettings::Response response;
+	bool parseResult = CommandGetAccountSettings::ParseResponse(
+		buffer,
+		response);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	if (_accountSettingsProcessor) {
+		_accountSettingsProcessor->ReceiveAccountSettings(
+			response.AllowMessagesOnlyFromContactList,
+			response.AllowCallsOnlyFromContactList);
+	}
+
 	return true;
 }
 

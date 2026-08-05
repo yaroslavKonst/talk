@@ -172,6 +172,12 @@ void Network::StartConnection(
 	_root->Dispatcher->RegisterTimeProcessor(this);
 }
 
+void Network::Disconnect()
+{
+	CloseConnection();
+	_root->Ui->Redraw();
+}
+
 uint64_t Network::GetMaxMessageSize()
 {
 	if (_session) {
@@ -248,6 +254,36 @@ bool Network::SendMessage(const CowBuffer<uint8_t> message)
 	}
 
 	_session->SendMessage(message);
+	return true;
+}
+
+bool Network::RequestAccountSettings()
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->GetAccountSettings();
+	return true;
+}
+
+bool Network::SetAccountSettings(bool allowMessages, bool allowCalls)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->SetAccountSettings(allowMessages, allowCalls);
+	return true;
+}
+
+bool Network::SetAccountSettingsProcessor(AccountSettingsProcessor *processor)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->SetAccountSettingsProcessor(processor);
 	return true;
 }
 

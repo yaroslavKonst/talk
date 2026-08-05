@@ -14,7 +14,7 @@ public:
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;
 
-	CowBuffer<String> GetControlHelp();
+	CowBuffer<String> GetControlHelp() override;
 
 	void ActivateCurrentChat();
 

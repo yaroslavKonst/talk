@@ -11,6 +11,7 @@
 #include <cerrno>
 
 #include "WorkScreen.hpp"
+#include "TextColor.hpp"
 #include "../Common/Hex.hpp"
 #include "../Common/File.hpp"
 #include "../Common/Resolver.hpp"
@@ -52,15 +53,13 @@ void LoginScreen::Redraw()
 		addch(ACS_HLINE);
 	}
 
-	String helpString =
-		"Exit: " + _root->Conf->LoginBackName() +
-		" | Next: " + _root->Conf->LoginDownName() + "/" +
-		_root->Conf->LoginConnectName() +
-		" | Previous: " + _root->Conf->LoginUpName() +
-		" | Connect: " + _root->Conf->LoginConnectName();
-
-	move(5, 0);
-	addstr(helpString.CStr());
+	UiHelpers::DrawFrame(
+		5,
+		_rows - 3,
+		1,
+		_columns - 2,
+		"Login to server as " + _root->Conf->GetName(),
+		COLOR_PAIR(YELLOW_TEXT));
 
 	_ip.SetCaptionPosition(_rows / 2 - 2, 4);
 	_ip.AlignTextToCaption();

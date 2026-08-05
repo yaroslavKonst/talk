@@ -71,6 +71,7 @@ CLIENT_MODULES=\
 	Client/UiHelpers.o \
 	Client/Screen.o \
 	Client/WorkScreen.o \
+	Client/AccountScreen.o \
 	Client/LoginScreen.o \
 	Client/ContactScreen.o \
 	Client/ContactManageScreen.o \

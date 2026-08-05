@@ -199,6 +199,98 @@ CowBuffer<uint8_t> CommandUpdateID::BuildCommand(const Command &command)
 	return buffer;
 }
 
+CowBuffer<uint8_t> CommandGetAccountSettings::BuildCommand()
+{
+	CowBuffer<uint8_t> buffer(sizeof(int32_t));
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_GET_ACCOUNT_SETTINGS);
+	return buffer;
+}
+
+bool CommandGetAccountSettings::ParseResponse(
+	const CowBuffer<uint8_t> buffer,
+	Response &result)
+{
+	if (buffer.Size() != sizeof(int32_t) + 2 * sizeof(uint8_t)) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != SESSION_COMMAND_GET_ACCOUNT_SETTINGS) {
+		return false;
+	}
+
+	uint64_t offset = sizeof(int32_t);
+
+	result.AllowMessagesOnlyFromContactList = *buffer.Pointer(offset);
+	offset += 1;
+
+	result.AllowCallsOnlyFromContactList = *buffer.Pointer(offset);
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandGetAccountSettings::BuildResponse(
+	const Response &data)
+{
+	CowBuffer<uint8_t> buffer(sizeof(int32_t) + 2 * sizeof(uint8_t));
+
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_GET_ACCOUNT_SETTINGS);
+
+	uint64_t offset = sizeof(int32_t);
+
+	*buffer.Pointer(offset) = data.AllowMessagesOnlyFromContactList;
+	offset += 1;
+
+	*buffer.Pointer(offset) = data.AllowCallsOnlyFromContactList;
+
+	return buffer;
+}
+
+bool CommandSetAccountSettings::ParseCommand(
+	const CowBuffer<uint8_t> buffer,
+	Command &result)
+{
+	if (buffer.Size() != sizeof(int32_t) + 2 * sizeof(uint8_t)) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != SESSION_COMMAND_SET_ACCOUNT_SETTINGS) {
+		return false;
+	}
+
+	uint64_t offset = sizeof(int32_t);
+
+	result.AllowMessagesOnlyFromContactList = *buffer.Pointer(offset);
+	offset += 1;
+
+	result.AllowCallsOnlyFromContactList = *buffer.Pointer(offset);
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandSetAccountSettings::BuildCommand(
+	const Command &command)
+{
+	CowBuffer<uint8_t> buffer(sizeof(int32_t) + 2 * sizeof(uint8_t));
+
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_SET_ACCOUNT_SETTINGS);
+
+	uint64_t offset = sizeof(int32_t);
+
+	*buffer.Pointer(offset) = command.AllowMessagesOnlyFromContactList;
+	offset += 1;
+
+	*buffer.Pointer(offset) = command.AllowCallsOnlyFromContactList;
+
+	return buffer;
+}
+
 bool CommandAddContact::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)

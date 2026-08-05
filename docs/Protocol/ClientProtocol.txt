@@ -404,6 +404,26 @@ database has lost consistency and the client requested the wrong item.
 The client must be ready for such situation and silently ignore received
 items that are already in the client's local database.
 
+Account settings
+----------------
+
+User can set global account settings. These settings are applied to
+all inbound messages and calls.
+
+| GET_ACCOUNT_SETTINGS |
+Sent by the client to request account settings.
+
+Response:
+| GET_ACCOUNT_SETTINGS | allow messages only from contact list |...
+...| allow calls only from contact list |
+
+All response parameters are bytes interpreted as boolean values.
+
+| SET_ACCOUNT_SETTINGS | allow messages only from contact list |...
+...| allow calls only from contact list |
+Sent by the client to set new settings. Has the same arguments as
+GET_ACCOUNT_SETTINGS response. This command does not have response.
+
 Managing contacts and their keys
 --------------------------------
 
