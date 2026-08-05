@@ -94,12 +94,20 @@ TextEditor::Line *TextEditor::FirstLine()
 
 void TextEditor::SetPosition(int fromY, int toY, int fromX, int toX)
 {
+	bool changed =
+		_fromY != fromY ||
+		_toY != toY ||
+		_fromX != fromX ||
+		_toX != toX;
+
 	_fromY = fromY;
 	_toY = toY;
 	_fromX = fromX;
 	_toX = toX;
 
-	RebuildLines(nullptr);
+	if (changed) {
+		RebuildLines(nullptr);
+	}
 }
 
 void TextEditor::Normalize()
@@ -657,6 +665,9 @@ void TextEditor::InsertChar(uint32_t c)
 	if (canAddCharToWord) {
 		_currentWord->Data = _currentWord->Data.Concat(one);
 		++_currentChar;
+	} else if (_currentWord->Data.Size() == 0) {
+		_currentWord->Data = one;
+		_currentChar = _currentWord->Data.Size();
 	} else {
 		Word *w = new Word;
 		w->Data = one;
@@ -669,7 +680,8 @@ void TextEditor::InsertChar(uint32_t c)
 
 		_currentWord->Next = w;
 		_currentWord = w;
-		_currentChar = 0;
+
+		_currentChar = _currentWord->Data.Size();
 	}
 
 	if (right.Size()) {
@@ -682,6 +694,7 @@ void TextEditor::InsertChar(uint32_t c)
 			_currentWord->Next->Previous = w;
 		}
 
+		_currentWord->Next = w;
 		_currentWord = w;
 		_currentChar = 0;
 	}
@@ -734,7 +747,10 @@ void TextEditor::DeleteChar()
 	RemoveIfEmpty(_currentWord);
 
 	Normalize();
-	RebuildLines(_currentLine);
+
+	FreeLines(nullptr);
+	_currentLine = nullptr;
+	RebuildLines(nullptr);
 }
 
 void TextEditor::RemoveIfEmpty(Word *word)
@@ -781,11 +797,21 @@ void TextEditor::RemoveIfEmpty(Word *word)
 
 void TextEditor::AddChar(int event)
 {
-	if (event < 0 || event > 0xff) {
-		if (event == KEY_DC) {
+
+	if (event == KEY_DC) {
+		DeleteChar();
+		return;
+	}
+
+	if (event == '\b') {
+		if (GoLeft()) {
 			DeleteChar();
 		}
 
+		return;
+	}
+
+	if ((event < ' ' || event > 0xff) && event != '\n') {
 		return;
 	}
 
@@ -798,15 +824,7 @@ void TextEditor::AddChar(int event)
 	uint32_t c = _utf8Decoder.GetChar();
 	_utf8Decoder.Reset();
 
-	if (c == '\b') {
-		if (GoLeft()) {
-			DeleteChar();
-		}
-	} else if (c == KEY_DC) {
-		DeleteChar();
-	} else {
-		InsertChar(c);
-	}
+	InsertChar(c);
 
 	RebuildLines(_currentLine);
 }

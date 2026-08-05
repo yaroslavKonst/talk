@@ -29,8 +29,16 @@ void WorkScreen::Redraw()
 {
 	RedrawFrames();
 	RedrawChatList();
-	RedrawCurrentChat();
-	RedrawTextBox();
+
+	if (_chatStack) {
+		if (_chatStack->Writing) {
+			RedrawCurrentChat();
+			RedrawTextBox();
+		} else {
+			RedrawTextBox();
+			RedrawCurrentChat();
+		}
+	}
 }
 
 Screen *WorkScreen::ProcessEvent(int event)
@@ -222,7 +230,21 @@ void WorkScreen::RedrawCurrentChat()
 
 	ObjectStorage::ID currentMessageID = _chatStack->CurrentMessageID;
 
-	while (currentLinePosition >= 5) {
+	if (_chatStack->AutoScroll) {
+		for (;;) {
+			ObjectStorage::ID nextID =
+				_root->Messages->GetNextMessage(
+					currentMessageID);
+
+			if (nextID.IsZero()) {
+				break;
+			}
+
+			currentMessageID = nextID;
+		}
+	}
+
+	while (currentLinePosition >= 7) {
 		if (currentMessageID.IsZero()) {
 			RedrawConversationStart(currentLinePosition, skipLines);
 			break;
@@ -270,7 +292,7 @@ bool WorkScreen::AddLineToChatScreen(
 	String text,
 	bool centering)
 {
-	if (currentLinePosition < 5) {
+	if (currentLinePosition < 7) {
 		return false;
 	}
 
@@ -498,6 +520,25 @@ bool WorkScreen::RedrawMessageDelimiter(
 
 void WorkScreen::RedrawTextBox()
 {
+	MessageDraft &draft = _chatStack->Draft;
+
+	MessageDraft::DraftEntryBase *currItem = draft.GetCurrentEntry();
+
+	if (!currItem || currItem->Type != MessageDraft::EntryType::Text) {
+		move(_rows - 8, _columns / 4 + 1);
+		return;
+	}
+
+	MessageDraft::DraftText *e = static_cast<MessageDraft::DraftText*>(
+		currItem);
+
+	e->Editor.SetPosition(
+		_rows - 8,
+		_rows - 4,
+		_columns / 4 + 1,
+		_columns - 2);
+
+	e->Editor.Redraw();
 }
 
 Screen *WorkScreen::ProcessChatListEvent(int event)
@@ -534,10 +575,81 @@ Screen *WorkScreen::ProcessChatListEvent(int event)
 
 Screen *WorkScreen::ProcessChatScreenEvent(int event)
 {
+	if (_chatStack && _chatStack->Writing) {
+		return ProcessChatTypeEvent(event);
+	}
+
 	if (event == _root->Conf->WorkChatBackKey()) {
 		PopChat();
 		return this;
 	}
+
+	if (event == _root->Conf->WorkChatTypeKey()) {
+		_chatStack->Writing = true;
+		return this;
+	}
+
+	return this;
+}
+
+Screen *WorkScreen::ProcessChatTypeEvent(int event)
+{
+	if (event == _root->Conf->WorkTypeBackKey()) {
+		_chatStack->Writing = false;
+		return this;
+	}
+
+	// TODO: here must be attachment management.
+
+	MessageDraft &draft = _chatStack->Draft;
+
+	if (event == _root->Conf->WorkTypeSendKey()) {
+		_root->Messages->SendMessage(&draft);
+		return this;
+	}
+
+	MessageDraft::DraftEntryBase *currItem = draft.GetCurrentEntry();
+
+	bool needSetSize = false;
+
+	if (!currItem || currItem->Type != MessageDraft::EntryType::Text) {
+		draft.InsertNodeAfterCurrent(MessageDraft::EntryType::Text);
+		currItem = draft.GetCurrentEntry();
+		needSetSize = true;
+	}
+
+	MessageDraft::DraftText *e = static_cast<MessageDraft::DraftText*>(
+		currItem);
+
+	if (needSetSize) {
+		e->Editor.SetPosition(
+			_rows - 8,
+			_rows - 4,
+			_columns / 4 + 1,
+			_columns - 2);
+	}
+
+	if (event == _root->Conf->WorkCursorLeftKey()) {
+		e->Editor.GoLeft();
+		return this;
+	}
+
+	if (event == _root->Conf->WorkCursorRightKey()) {
+		e->Editor.GoRight();
+		return this;
+	}
+
+	if (event == _root->Conf->WorkCursorUpKey()) {
+		e->Editor.GoUp();
+		return this;
+	}
+
+	if (event == _root->Conf->WorkCursorDownKey()) {
+		e->Editor.GoDown();
+		return this;
+	}
+
+	e->Editor.AddChar(event);
 
 	return this;
 }
@@ -560,6 +672,8 @@ void WorkScreen::PushChat(const ObjectStorage::ID &threadID)
 
 	node->LineOffset = 0;
 	node->AutoScroll = true;
+
+	node->Writing = false;
 
 	_chatStack = node;
 }

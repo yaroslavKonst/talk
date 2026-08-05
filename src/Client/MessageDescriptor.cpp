@@ -189,10 +189,25 @@ MessageEncryptor::MessageEncryptor(
 	header.MessageSize = _body.Size() +
 		blockCount * Crypto::X25519::MAC_SIZE;
 
+	Message::X25519::WriteHeaderSize(header);
+
+	bool messageIsTooBig =
+		sizeof(int32_t) * 2 + header.HeaderSize + header.MessageSize >
+		root->Network->GetMaxMessageSize();
+
+	if (messageIsTooBig) {
+		_failure = true;
+		root->Ui->Notify(
+			"Message is too big. Limit is " +
+			DataSizeToString(
+				root->Network->GetMaxMessageSize() -
+				sizeof(int32_t) * 2) +
+			".");
+		return;
+	}
+
 	Crypto::X25519::InitNonce(_stream.Nonce);
 	memcpy(header.Nonce, _stream.Nonce, Crypto::X25519::NONCE_SIZE);
-
-	Message::X25519::WriteHeaderSize(header);
 
 	header.Index = 0;
 
@@ -218,23 +233,6 @@ MessageEncryptor::MessageEncryptor(
 		}
 	}
 
-	_header = Message::X25519::BuildHeader(header);
-
-	bool messageIsTooBig =
-		sizeof(int32_t) * 2 + _header.Size() + header.MessageSize >
-		root->Network->GetMaxMessageSize();
-
-	if (messageIsTooBig) {
-		_failure = true;
-		root->Ui->Notify(
-			"Message is too big. Limit is " +
-			DataSizeToString(
-				root->Network->GetMaxMessageSize() -
-				sizeof(int32_t) * 2) +
-			".");
-		return;
-	}
-
 	bool keyIsValid = GenerateSymmetricKey(
 		root,
 		peerName,
@@ -248,6 +246,8 @@ MessageEncryptor::MessageEncryptor(
 	}
 
 	_streamWriter.Init(&_stream);
+
+	_header = Message::X25519::BuildHeader(header);
 
 	*_message = CowBuffer<uint8_t>(_header.Size() + header.MessageSize);
 	memcpy(_message->Pointer(), _header.Pointer(), _header.Size());

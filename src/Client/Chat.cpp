@@ -198,6 +198,9 @@ void Chat::DeliverMessage(
 		attrs = Message::AttributeAction::Set(
 			attrs,
 			Message::Attribute::Local);
+		attrs = Message::AttributeAction::Set(
+			attrs,
+			Message::Attribute::Unread);
 	}
 
 	AddMessageToThread(messageID, header, message, attrs);

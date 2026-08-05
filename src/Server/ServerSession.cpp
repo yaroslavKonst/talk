@@ -492,6 +492,9 @@ void ServerSession::SendOfferMessage(const CowBuffer<uint8_t> object)
 		THROW("Corrupt database entry.");
 	}
 
+	_offeredMessagePeerName = data.PeerName;
+	_offeredMessageID = data.HeaderHash;
+
 	CommandOfferMessage::Command command;
 	command.PeerName = data.PeerName;
 	command.HeaderHash = data.HeaderHash.GetValue();

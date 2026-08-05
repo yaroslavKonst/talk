@@ -83,6 +83,9 @@ public:
 		const sigset_t *processedSignals = nullptr);
 	~EventDispatcher();
 
+	EventDispatcher(const EventDispatcher &dispatcher) = delete;
+	EventDispatcher &operator=(const EventDispatcher &dispatcher) = delete;
+
 	void Run();
 	void Stop();
 
@@ -161,6 +164,8 @@ private:
 	sigset_t _origSigMask;
 
 	Tree<SignalProcessorNodeTreeEntry> _signalProcessors;
+
+	static bool _instanceExists;
 
 	static sigset_t _signalsToProcess;
 	static volatile sig_atomic_t _hasSignals;

@@ -6,6 +6,8 @@
 #include "UnixTime.hpp"
 #include "Exception.hpp"
 
+bool EventDispatcher::_instanceExists = false;
+
 sigset_t EventDispatcher::_signalsToProcess;
 volatile sig_atomic_t EventDispatcher::_hasSignals = false;
 
@@ -13,6 +15,10 @@ EventDispatcher::EventDispatcher(
 	int64_t idleInterval,
 	const sigset_t *processedSignals)
 {
+	if (_instanceExists) {
+		THROW("Only one instance of EventDispatcher is allowed.");
+	}
+
 	_idleInterval = idleInterval;
 	_work = true;
 
@@ -34,6 +40,8 @@ EventDispatcher::EventDispatcher(
 	if (res == -1) {
 		THROW("Failed to set signal mask.");
 	}
+
+	_instanceExists = true;
 }
 
 EventDispatcher::~EventDispatcher()
@@ -72,6 +80,8 @@ EventDispatcher::~EventDispatcher()
 		RemoveHandler(tmp->Key.SignalNumber);
 		_signalProcessors.RemoveEntry(tmp);
 	}
+
+	_instanceExists = false;
 }
 
 void EventDispatcher::Run()

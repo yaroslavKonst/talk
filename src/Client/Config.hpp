@@ -87,6 +87,16 @@ public:
 		return _keyNames[(int)Keys::WorkListDown];
 	}
 
+	int WorkChatTypeKey()
+	{
+		return _keys[(int)Keys::WorkChatType];
+	}
+
+	String WorkChatTypeName()
+	{
+		return _keyNames[(int)Keys::WorkChatType];
+	}
+
 	int WorkChatBackKey()
 	{
 		return _keys[(int)Keys::WorkChatBack];
@@ -95,6 +105,66 @@ public:
 	String WorkChatBackName()
 	{
 		return _keyNames[(int)Keys::WorkChatBack];
+	}
+
+	int WorkTypeSendKey()
+	{
+		return _keys[(int)Keys::WorkTypeSend];
+	}
+
+	String WorkTypeSendName()
+	{
+		return _keyNames[(int)Keys::WorkTypeSend];
+	}
+
+	int WorkTypeBackKey()
+	{
+		return _keys[(int)Keys::WorkTypeBack];
+	}
+
+	String WorkTypeBackName()
+	{
+		return _keyNames[(int)Keys::WorkTypeBack];
+	}
+
+	int WorkCursorLeftKey()
+	{
+		return _keys[(int)Keys::WorkCursorLeft];
+	}
+
+	String WorkCursorLeftName()
+	{
+		return _keyNames[(int)Keys::WorkCursorLeft];
+	}
+
+	int WorkCursorRightKey()
+	{
+		return _keys[(int)Keys::WorkCursorRight];
+	}
+
+	String WorkCursorRightName()
+	{
+		return _keyNames[(int)Keys::WorkCursorRight];
+	}
+
+	int WorkCursorUpKey()
+	{
+		return _keys[(int)Keys::WorkCursorUp];
+	}
+
+	String WorkCursorUpName()
+	{
+		return _keyNames[(int)Keys::WorkCursorUp];
+	}
+
+	int WorkCursorDownKey()
+	{
+		return _keys[(int)Keys::WorkCursorDown];
+	}
+
+	String WorkCursorDownName()
+	{
+		return _keyNames[(int)Keys::WorkCursorDown];
 	}
 
 	int LoginBackKey()
@@ -255,6 +325,8 @@ private:
 		WorkTypeBack,
 		WorkCursorLeft,
 		WorkCursorRight,
+		WorkCursorUp,
+		WorkCursorDown,
 
 		LoginBack,
 		LoginUp,

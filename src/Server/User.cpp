@@ -166,7 +166,14 @@ void User::UpdateContactKey(
 	bool blocked,
 	bool setAsDefault)
 {
-	_contactStorage.GetContact(name)->UpdateKey(key, validated, blocked);
+	Contact *contact = _contactStorage.GetContact(name);
+
+	if (!contact) {
+		_contactStorage.AddNewContact(name);
+		contact = _contactStorage.GetContact(name);
+	}
+
+	contact->UpdateKey(key, validated, blocked);
 
 	if (setAsDefault) {
 		_contactStorage.GetContact(name)->SetDefaultKey(key);
@@ -177,7 +184,7 @@ void User::UpdateContactKey(
 	data.Key = key;
 	data.Validated = validated;
 	data.Blocked = blocked;
-	data.SetAsDefault =setAsDefault;
+	data.SetAsDefault = setAsDefault;
 
 	AddNewObject(UpdateContactKeyObject::BuildData(data));
 }

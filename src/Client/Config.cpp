@@ -53,8 +53,29 @@ namespace WorkScreenControls
 	static const char *ListDown = "Next Chat";
 	static const char *ListDownValue = "Down";
 
+	static const char *ChatType = "Type New Message";
+	static const char *ChatTypeValue = "Enter";
+
 	static const char *ChatBack = "Exit Chat";
 	static const char *ChatBackValue = "q";
+
+	static const char *TypeSend = "Send Message";
+	static const char *TypeSendValue = "Ctrl-S";
+
+	static const char *TypeBack = "Exit Type Mode";
+	static const char *TypeBackValue = "Escape";
+
+	static const char *CursorLeft = "Move Cursor Left";
+	static const char *CursorLeftValue = "Left";
+
+	static const char *CursorRight = "Move Cursor Right";
+	static const char *CursorRightValue = "Right";
+
+	static const char *CursorUp = "Move Cursor Up";
+	static const char *CursorUpValue = "Up";
+
+	static const char *CursorDown = "Move Cursor Down";
+	static const char *CursorDownValue = "Down";
 }
 
 namespace LoginScreenControls
@@ -362,7 +383,14 @@ void Config::Init()
 			_configFile.Set(Section, ListSelect, ListSelectValue);
 			_configFile.Set(Section, ListUp, ListUpValue);
 			_configFile.Set(Section, ListDown, ListDownValue);
+			_configFile.Set(Section, ChatType, ChatTypeValue);
 			_configFile.Set(Section, ChatBack, ChatBackValue);
+			_configFile.Set(Section, TypeSend, TypeSendValue);
+			_configFile.Set(Section, TypeBack, TypeBackValue);
+			_configFile.Set(Section, CursorLeft, CursorLeftValue);
+			_configFile.Set(Section, CursorRight, CursorRightValue);
+			_configFile.Set(Section, CursorUp, CursorUpValue);
+			_configFile.Set(Section, CursorDown, CursorDownValue);
 		}
 
 		{
@@ -416,8 +444,22 @@ void Config::LoadControls()
 			_configFile.Get(Section, ListUp);
 		_keyNames[(int)Keys::WorkListDown] =
 			_configFile.Get(Section, ListDown);
+		_keyNames[(int)Keys::WorkChatType] =
+			_configFile.Get(Section, ChatType);
 		_keyNames[(int)Keys::WorkChatBack] =
 			_configFile.Get(Section, ChatBack);
+		_keyNames[(int)Keys::WorkTypeSend] =
+			_configFile.Get(Section, TypeSend);
+		_keyNames[(int)Keys::WorkTypeBack] =
+			_configFile.Get(Section, TypeBack);
+		_keyNames[(int)Keys::WorkCursorLeft] =
+			_configFile.Get(Section, CursorLeft);
+		_keyNames[(int)Keys::WorkCursorRight] =
+			_configFile.Get(Section, CursorRight);
+		_keyNames[(int)Keys::WorkCursorUp] =
+			_configFile.Get(Section, CursorUp);
+		_keyNames[(int)Keys::WorkCursorDown] =
+			_configFile.Get(Section, CursorDown);
 	}
 
 	{

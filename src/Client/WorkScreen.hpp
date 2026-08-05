@@ -49,6 +49,7 @@ private:
 
 	Screen *ProcessChatListEvent(int event);
 	Screen *ProcessChatScreenEvent(int event);
+	Screen *ProcessChatTypeEvent(int event);
 
 	struct ChatState
 	{
@@ -61,6 +62,8 @@ private:
 		bool AutoScroll;
 
 		MessageDraft Draft;
+
+		bool Writing;
 	};
 
 	ChatState *_chatStack;

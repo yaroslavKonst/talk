@@ -517,7 +517,6 @@ namespace Crypto
 
 		void CryptoStreamWriter::Init(EncryptedStream *ES)
 		{
-			UpdateNonce(ES->Nonce);
 			crypto_aead_init_x(&_ctx, ES->Key.Key, ES->Nonce);
 		}
 
