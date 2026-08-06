@@ -230,6 +230,13 @@ bool SendPlanner::OutboundChannelTreeEntry::ReportDeliveryFailure(
 	return continueWork;
 }
 
+CowBuffer<uint8_t> SendPlanner::OutboundChannelTreeEntry::GetMessageForChannel(
+	String source,
+	String destination)
+{
+	return Planner->GetMessageForChannel(source, destination);
+}
+
 bool SendPlanner::ReportChannelActionStatus(
 	String source,
 	String destination,
@@ -251,7 +258,12 @@ bool SendPlanner::ReportChannelActionStatus(
 		THROW("Server database contains corrupt outbound queue entry.");
 	}
 
-	User *user = _users->GetUser(source);
+	String userName;
+	String hostName;
+
+	Message::SplitFullUserName(source, userName, hostName);
+
+	User *user = _users->GetUser(userName);
 
 	if (user) {
 		user->UpdateMessage(
@@ -314,6 +326,42 @@ bool SendPlanner::ReportChannelActionStatus(
 	_objectStorage.SetRef(headRef, data.NextObject);
 	_objectStorage.DeleteObject(headId);
 	return true;
+}
+
+CowBuffer<uint8_t> SendPlanner::GetMessageForChannel(
+	String source,
+	String destination)
+{
+	String refBase = source + " " + destination;
+	String headRef = "Head " + refBase;
+
+	ObjectStorage::ID headId = _objectStorage.GetRef(headRef);
+
+	CowBuffer<uint8_t> object = _objectStorage.ReadObject(headId);
+
+	ChannelObjectData data;
+	bool parseResult = ParseChannelObject(object, data);
+
+	if (!parseResult) {
+		THROW("Server database contains corrupt outbound queue entry.");
+	}
+
+	String userName;
+	String hostName;
+
+	Message::SplitFullUserName(source, userName, hostName);
+
+	User *user = _users->GetUser(userName);
+
+	if (user) {
+		Message::Attribute attr;
+		return user->GetMessage(
+			destination,
+			data.MessageID,
+			attr);
+	}
+
+	return CowBuffer<uint8_t>();
 }
 
 void SendPlanner::ProcessChannel(OutboundChannelTreeEntry &entry)

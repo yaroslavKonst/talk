@@ -54,6 +54,9 @@ namespace GateHandshakeSyn
 	CowBuffer<uint8_t> BuildData(const Data &data);
 }
 
+#define GATE_COMMAND_MESSAGE 1
+#define GATE_COMMAND_MESSAGE_TEXT 1
+
 #define GATE_MESSAGE_HEADER_ACCEPT 0
 #define GATE_MESSAGE_HEADER_REJECT 1
 #define GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER 2
@@ -71,5 +74,32 @@ namespace GateHandshakeSyn
 #define GATE_MESSAGE_BODY_ACCEPT 0
 #define GATE_MESSAGE_BODY_REJECT 1
 #define GATE_MESSAGE_BODY_REJECT_INVALID_SIZE 2
+
+namespace GateCommandMessage
+{
+	struct Header
+	{
+		CowBuffer<uint8_t> MessageHeader;
+	};
+
+	struct Text
+	{
+		String Text;
+	};
+
+	struct VerificationCode
+	{
+		int32_t Code;
+	};
+
+	bool ParseHeader(const CowBuffer<uint8_t> buffer, Header &data);
+	CowBuffer<uint8_t> BuildHeader(const Header &data);
+
+	bool ParseText(const CowBuffer<uint8_t> buffer, Text &data);
+	CowBuffer<uint8_t> BuildText(const Text &data);
+
+	bool ParseCode(const CowBuffer<uint8_t> buffer, VerificationCode &data);
+	CowBuffer<uint8_t> BuildCode(const VerificationCode &data);
+}
 
 #endif

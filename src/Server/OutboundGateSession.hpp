@@ -2,6 +2,8 @@
 #define _OUTBOUND_GATE_SESSION_HPP
 
 #include "Config.hpp"
+#include "../Protocol/GateProtocol.hpp"
+#include "../Message/Message.hpp"
 #include "../Common/EventDispatcher.hpp"
 #include "../Common/Resolver.hpp"
 #include "../Common/StreamReader.hpp"
@@ -32,9 +34,9 @@ public:
 	virtual void ReportConnectionFailure() = 0;
 	virtual void ReportRequestRateLimit() = 0;
 
-	//virtual bool HasData() = 0;
-	//virtual CowBuffer<uint8_t> GetData() = 0;
-	//virtual bool ProcessData(const CowBuffer<uint8_t> buffer) = 0;
+	virtual bool HasData() = 0;
+	virtual CowBuffer<uint8_t> GetData() = 0;
+	virtual bool ProcessData(const CowBuffer<uint8_t> buffer) = 0;
 
 protected:
 	bool MustReportFailure();
@@ -55,10 +57,15 @@ public:
 
 	virtual bool ReportDeliverySuccess() = 0;
 	virtual bool ReportDeliveryFailure(int32_t reason) = 0;
+
+	virtual CowBuffer<uint8_t> GetMessageForChannel(
+		String source,
+		String destination) = 0;
 };
 
-struct TaskProcessChannel : public TaskBase
+class TaskProcessChannel : public TaskBase
 {
+public:
 	String Source;
 	String Destination;
 
@@ -69,6 +76,25 @@ struct TaskProcessChannel : public TaskBase
 	String GetConnectionDestination() override;
 	void ReportConnectionFailure() override;
 	void ReportRequestRateLimit() override;
+
+	bool HasData() override;
+	CowBuffer<uint8_t> GetData() override;
+	bool ProcessData(const CowBuffer<uint8_t> buffer) override;
+
+private:
+	enum class State
+	{
+		Init,
+		SentMessageHeader,
+		SentMessageBody
+	};
+
+	State _state;
+
+	bool _hasOutput;
+
+	CowBuffer<uint8_t> _currentMessage;
+	Message::X25519::HeaderPointToPoint _header;
 };
 
 class OutboundGateSessionStorage;
@@ -153,8 +179,10 @@ private:
 		const CowBuffer<uint8_t> signature);
 	void SendVerificationStatus(bool success);
 
-	// Session  processing.
-	bool ProcessSessionInput(const CowBuffer<uint8_t> buffer);
+	// Session processing.
+	GateProtocol *_protocol;
+	bool ProcessSessionInput(CowBuffer<uint8_t> buffer);
+	bool _expectChunkSize;
 
 	// Logging.
 	void OutboundGateLog(String message);

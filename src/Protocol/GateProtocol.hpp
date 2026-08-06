@@ -40,7 +40,6 @@ private:
 
 	// Input processing.
 	uint64_t _inputSizeLimit;
-	bool _waitingForSize;
 	CowBuffer<uint8_t> _inputBuffer;
 	uint64_t _inputBufferOffset;
 };

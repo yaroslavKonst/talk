@@ -16,7 +16,6 @@ GateProtocol::GateProtocol(
 	_outputBufferOffset = 0;
 
 	_inputSizeLimit = 4096;
-	_waitingForSize = true;
 	_inputBufferOffset = 0;
 }
 
@@ -45,7 +44,7 @@ bool GateProtocol::ProcessRead(CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
-	if (_waitingForSize) {
+	if (!_inputBuffer.Size()) {
 		if (decryptedBuffer.Size() <= sizeof(uint64_t)) {
 			return false;
 		}
@@ -58,9 +57,7 @@ bool GateProtocol::ProcessRead(CowBuffer<uint8_t> buffer)
 		}
 
 		_inputBuffer = CowBuffer<uint8_t>(size);
-
 		_inputBufferOffset = 0;
-		_waitingForSize = false;
 
 		decryptedBuffer = decryptedBuffer.Slice(
 			sizeof(size),
@@ -77,10 +74,6 @@ bool GateProtocol::ProcessRead(CowBuffer<uint8_t> buffer)
 		decryptedBuffer.Size());
 
 	_inputBufferOffset += decryptedBuffer.Size();
-
-	if (_inputBufferOffset >= _inputBuffer.Size()) {
-		_waitingForSize = true;
-	}
 
 	return true;
 }

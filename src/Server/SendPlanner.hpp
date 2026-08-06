@@ -70,6 +70,10 @@ private:
 
 		bool ReportDeliverySuccess() override;
 		bool ReportDeliveryFailure(int32_t reason) override;
+
+		CowBuffer<uint8_t> GetMessageForChannel(
+			String source,
+			String destination);
 	};
 
 	Tree<OutboundChannelTreeEntry> _outboundChannels;
@@ -80,6 +84,9 @@ private:
 		String destination,
 		bool success,
 		int32_t errorCode);
+	CowBuffer<uint8_t> GetMessageForChannel(
+		String source,
+		String destination);
 
 	void ProcessChannel(OutboundChannelTreeEntry &entry);
 	void StartTransmission(OutboundChannelTreeEntry &entry);

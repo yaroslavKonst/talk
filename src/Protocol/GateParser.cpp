@@ -143,3 +143,95 @@ CowBuffer<uint8_t> GateHandshakeSyn::BuildData(const Data &data)
 
 	return result;
 }
+
+bool GateCommandMessage::ParseHeader(
+	const CowBuffer<uint8_t> buffer,
+	Header &data)
+{
+	if (buffer.Size() <= sizeof(int32_t)) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != GATE_COMMAND_MESSAGE) {
+		return false;
+	}
+
+	uint64_t offset = sizeof(int32_t);
+	data.MessageHeader = buffer.Slice(offset, buffer.Size() - offset);
+
+	return true;
+}
+
+CowBuffer<uint8_t> GateCommandMessage::BuildHeader(const Header &data)
+{
+	CowBuffer<uint8_t> result(sizeof(int32_t));
+
+	*result.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(GATE_COMMAND_MESSAGE);
+
+	return result.Concat(data.MessageHeader);
+}
+
+bool GateCommandMessage::ParseText(
+	const CowBuffer<uint8_t> buffer,
+	Text &data)
+{
+	if (buffer.Size() < sizeof(int32_t)) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != GATE_COMMAND_MESSAGE_TEXT) {
+		return false;
+	}
+
+	uint64_t offset = sizeof(int32_t);
+
+	if (!ParseString(buffer, offset, data.Text)) {
+		return false;
+	}
+
+	if (!data.Text.Length()) {
+		return false;
+	}
+
+	return true;
+}
+
+CowBuffer<uint8_t> GateCommandMessage::BuildText(const Text &data)
+{
+	uint64_t size = sizeof(int32_t) + BuiltStringSize(data.Text);
+
+	CowBuffer<uint8_t> result(size);
+	uint64_t offset = 0;
+
+	*result.SwitchType<int32_t>(offset) =
+		SetProtoEndian<int32_t>(GATE_COMMAND_MESSAGE_TEXT);
+	offset += sizeof(int32_t);
+
+	BuildString(result, offset, data.Text);
+
+	return result;
+}
+
+bool GateCommandMessage::ParseCode(
+	const CowBuffer<uint8_t> buffer,
+	VerificationCode &data)
+{
+	if (buffer.Size() != sizeof(int32_t)) {
+		return false;
+	}
+
+	data.Code = SetProtoEndian(*buffer.SwitchType<int32_t>());
+	return true;
+}
+
+CowBuffer<uint8_t> GateCommandMessage::BuildCode(const VerificationCode &data)
+{
+	CowBuffer<uint8_t> result(sizeof(int32_t));
+	*result.SwitchType<int32_t>() = SetProtoEndian(data.Code);
+	return result;
+}
