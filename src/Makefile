@@ -22,6 +22,7 @@ SERVER_MODULES =\
 	Protocol/ParserHelpers.o \
 	Protocol/HandshakeParser.o \
 	Protocol/SessionProtocol.o \
+	Protocol/GateProtocol.o \
 	Protocol/SessionParser.o \
 	Protocol/ControlParser.o \
 	Protocol/GateParser.o \

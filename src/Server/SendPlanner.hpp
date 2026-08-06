@@ -68,8 +68,8 @@ private:
 		void ReportConnectionFailure() override;
 		void ReportRequestRateLimit() override;
 
-		bool ReportDeliverySuccess();
-		bool ReportDeliveryFailure(int32_t reason);
+		bool ReportDeliverySuccess() override;
+		bool ReportDeliveryFailure(int32_t reason) override;
 	};
 
 	Tree<OutboundChannelTreeEntry> _outboundChannels;

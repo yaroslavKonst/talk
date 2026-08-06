@@ -32,6 +32,10 @@ public:
 	virtual void ReportConnectionFailure() = 0;
 	virtual void ReportRequestRateLimit() = 0;
 
+	//virtual bool HasData() = 0;
+	//virtual CowBuffer<uint8_t> GetData() = 0;
+	//virtual bool ProcessData(const CowBuffer<uint8_t> buffer) = 0;
+
 protected:
 	bool MustReportFailure();
 	void MarkFailureReport();
@@ -48,6 +52,9 @@ public:
 
 	virtual void ReportConnectionFailure() = 0;
 	virtual void ReportRequestRateLimit() = 0;
+
+	virtual bool ReportDeliverySuccess() = 0;
+	virtual bool ReportDeliveryFailure(int32_t reason) = 0;
 };
 
 struct TaskProcessChannel : public TaskBase
