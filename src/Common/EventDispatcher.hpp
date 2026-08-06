@@ -78,9 +78,7 @@ public:
 class EventDispatcher
 {
 public:
-	EventDispatcher(
-		int64_t idleInterval,
-		const sigset_t *processedSignals = nullptr);
+	EventDispatcher(const sigset_t *processedSignals = nullptr);
 	~EventDispatcher();
 
 	EventDispatcher(const EventDispatcher &dispatcher) = delete;
@@ -108,8 +106,6 @@ public:
 private:
 	bool _work;
 
-	int64_t _idleInterval;
-
 	// Poll.
 	DescriptorEventProcessor **_pollProcessors;
 	struct pollfd *_pollFds;
@@ -118,6 +114,12 @@ private:
 
 	void PreparePollFds();
 	void ProcessPollFds();
+
+	// Cleanup.
+	void FreeFds();
+	void FreeQuantProcessors();
+	void FreeTimeProcessors();
+	void FreeSignalProcessors();
 
 	// Quant.
 	struct QuantProcessorNode
@@ -138,7 +140,22 @@ private:
 		TimeEventProcessor *Processor;
 	};
 
-	TimeProcessorNode *_timeProcessors;
+	struct TimeProcessorNodeTreeEntry
+	{
+		int64_t RunTime;
+
+		TimeProcessorNode *Processors;
+
+		TimeProcessorNodeTreeEntry();
+		TimeProcessorNodeTreeEntry(int64_t runTime);
+
+		bool operator==(const TimeProcessorNodeTreeEntry &e) const;
+		bool operator<(const TimeProcessorNodeTreeEntry &e) const;
+	};
+
+	Tree<TimeProcessorNodeTreeEntry> _timeProcessors;
+	TimeEventProcessor *_currentTimeProcessor;
+	bool _removeCurrentTimeProcessor;
 
 	void ProcessTime();
 
@@ -157,8 +174,8 @@ private:
 		SignalProcessorNodeTreeEntry();
 		SignalProcessorNodeTreeEntry(int signum);
 
-		bool operator==(SignalProcessorNodeTreeEntry &e) const;
-		bool operator<(SignalProcessorNodeTreeEntry &e) const;
+		bool operator==(const SignalProcessorNodeTreeEntry &e) const;
+		bool operator<(const SignalProcessorNodeTreeEntry &e) const;
 	};
 
 	sigset_t _origSigMask;

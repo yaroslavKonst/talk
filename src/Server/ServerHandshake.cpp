@@ -21,8 +21,8 @@ ServerHandshake::ServerHandshake(
 	_privateKey(privateKey),
 	_publicKey(publicKey)
 {
-	SetInterval(10);
-	SetTimestamp(GetUnixTime());
+	SetInterval(10000);
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_fd = fd;
 	_ip = ip;
@@ -84,7 +84,7 @@ void ServerHandshake::ProcessRead()
 		THROW("Reader is null.");
 	}
 
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	if (_writer) {
 		_storage->MarkSessionForRemoval(this);
@@ -125,7 +125,7 @@ void ServerHandshake::ProcessWrite()
 		THROW("Writer is null.");
 	}
 
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	bool writeSuccess = _writer->Write();
 

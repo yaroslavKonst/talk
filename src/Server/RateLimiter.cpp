@@ -11,8 +11,8 @@ RateLimiter::RateLimiter(EventDispatcher *dispatcher, Config *config)
 
 	ReloadConfig();
 
-	SetTimestamp(GetUnixTime());
-	SetInterval(3600); // Run cleanup every hour.
+	SetTimestamp(GetMonotonicMillisecondTime());
+	SetInterval(3600000); // Run cleanup every hour.
 
 	_dispatcher->RegisterTimeProcessor(this);
 	_config->RegisterConfigUser(this);

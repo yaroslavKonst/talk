@@ -23,8 +23,8 @@ ServerSession::ServerSession(
 	uint8_t outScramblerInit,
 	uint8_t inScramblerInit)
 {
-	SetInterval(10);
-	SetTimestamp(GetUnixTime());
+	SetInterval(10000);
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_dispatcher = dispatcher;
 	_fd = fd;
@@ -90,7 +90,7 @@ bool ServerSession::RequestWrite()
 
 void ServerSession::ProcessRead()
 {
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	bool success = _protocol->Read();
 
@@ -112,7 +112,7 @@ void ServerSession::ProcessRead()
 
 void ServerSession::ProcessWrite()
 {
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	bool success = _protocol->Write();
 

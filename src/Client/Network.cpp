@@ -8,8 +8,8 @@
 
 Network::Network(Root *root)
 {
-	SetInterval(2);
-	SetTimestamp(GetUnixTime());
+	SetInterval(2000);
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_fd = -1;
 	_root = root;
@@ -51,7 +51,7 @@ bool Network::RequestWrite()
 
 void Network::ProcessRead()
 {
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	if (_handshake) {
 		bool success = _handshake->ProcessRead();
@@ -83,7 +83,7 @@ void Network::ProcessRead()
 
 void Network::ProcessWrite()
 {
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	if (_handshake) {
 		bool success = _handshake->ProcessWrite();
@@ -143,7 +143,7 @@ void Network::StartConnection(
 	int fd,
 	const Crypto::X25519::PublicKeyContainer &serverKey)
 {
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_fd = fd;
 

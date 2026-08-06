@@ -18,8 +18,8 @@ InboundGateSession::InboundGateSession(
 	Config *config,
 	RateLimiter *rateLimiter)
 {
-	SetInterval(60);
-	SetTimestamp(GetUnixTime());
+	SetInterval(60000);
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_fd = fd;
 	_ipv4 = ipv4;
@@ -78,7 +78,7 @@ bool InboundGateSession::RequestWrite()
 
 void InboundGateSession::ProcessRead()
 {
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	if (!_reader) {
 		THROW("Reader is NULL.");
@@ -128,7 +128,7 @@ void InboundGateSession::ProcessRead()
 
 void InboundGateSession::ProcessWrite()
 {
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	if (!_writer) {
 		THROW("Writer is NULL.");

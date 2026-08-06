@@ -21,8 +21,8 @@ SendPlanner::SendPlanner(
 
 	_users->SetSendPlanner(this);
 
-	SetTimestamp(GetUnixTime());
-	SetInterval(10);
+	SetTimestamp(GetMonotonicMillisecondTime());
+	SetInterval(10000);
 
 	ReloadConfig();
 	LoadChannels();

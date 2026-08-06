@@ -11,7 +11,7 @@ FailBan::FailBan(EventDispatcher *dispatcher, Config *config)
 {
 	_rootPath = "storage/FailBan";
 
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_dispatcher = dispatcher;
 	_config = config;
@@ -167,6 +167,8 @@ void FailBan::ProcessQuant()
 void FailBan::ReloadConfig()
 {
 	LoadConfig();
+	_dispatcher->UnregisterTimeProcessor(this);
+	_dispatcher->RegisterTimeProcessor(this);
 }
 
 void FailBan::Load()
@@ -209,7 +211,8 @@ void FailBan::LoadConfig()
 	_cooldownInterval = _config->GetFailBanCooldownInterval();
 
 	SetInterval(
-		_banTime < _cooldownInterval ? _banTime : _cooldownInterval);
+		(_banTime < _cooldownInterval ? _banTime : _cooldownInterval) *
+		1000);
 }
 
 void FailBan::CheckBanned()

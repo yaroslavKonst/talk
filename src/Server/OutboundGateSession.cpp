@@ -182,8 +182,8 @@ OutboundGateSession::OutboundGateSession(
 	TaskBase *task) :
 	_resolver(dispatcher)
 {
-	SetInterval(60);
-	SetTimestamp(GetUnixTime());
+	SetInterval(60000);
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_fd = -1;
 	_ipv4 = 0xffffffff;
@@ -283,7 +283,7 @@ bool OutboundGateSession::RequestWrite()
 
 void OutboundGateSession::ProcessRead()
 {
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	if (!_reader) {
 		THROW("Reader is NULL.");
@@ -333,7 +333,7 @@ void OutboundGateSession::ProcessRead()
 
 void OutboundGateSession::ProcessWrite()
 {
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	if (_state == State::WaitingForConnect) {
 		ProcessConnect();

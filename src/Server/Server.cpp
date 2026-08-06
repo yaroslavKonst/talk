@@ -40,7 +40,7 @@ int Server::Run()
 	sigaddset(&processedSignals, SIGTERM);
 	sigaddset(&processedSignals, SIGQUIT);
 
-	EventDispatcher dispatcher(10000, &processedSignals);
+	EventDispatcher dispatcher(&processedSignals);
 	ShutdownSignalController shutdownController(&dispatcher);
 	Config config(&dispatcher);
 	FailBan failBan(&dispatcher, &config);

@@ -19,8 +19,8 @@ ControlSession::ControlSession(
 	EventDispatcher *dispatcher,
 	FailBan *failBan)
 {
-	SetInterval(10);
-	SetTimestamp(GetUnixTime());
+	SetInterval(10000);
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_fd = fd;
 	_users = users;
@@ -79,7 +79,7 @@ void ControlSession::ProcessRead()
 		THROW("Reader is null.");
 	}
 
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	bool readSuccess = _reader->Read();
 
@@ -115,7 +115,7 @@ void ControlSession::ProcessWrite()
 		THROW("Writer is null.");
 	}
 
-	SetTimestamp(GetUnixTime());
+	SetTimestamp(GetMonotonicMillisecondTime());
 
 	bool writeSuccess = _writer->Write();
 

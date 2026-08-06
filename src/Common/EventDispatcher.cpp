@@ -11,15 +11,12 @@ bool EventDispatcher::_instanceExists = false;
 sigset_t EventDispatcher::_signalsToProcess;
 volatile sig_atomic_t EventDispatcher::_hasSignals = false;
 
-EventDispatcher::EventDispatcher(
-	int64_t idleInterval,
-	const sigset_t *processedSignals)
+EventDispatcher::EventDispatcher(const sigset_t *processedSignals)
 {
 	if (_instanceExists) {
 		THROW("Only one instance of EventDispatcher is allowed.");
 	}
 
-	_idleInterval = idleInterval;
 	_work = true;
 
 	_pollProcessors = nullptr;
@@ -30,7 +27,8 @@ EventDispatcher::EventDispatcher(
 	_quantProcessorFirst = 0;
 	_quantProcessorLast = 0;
 
-	_timeProcessors = nullptr;
+	_currentTimeProcessor = nullptr;
+	_removeCurrentTimeProcessor = false;
 
 	sigemptyset(&_signalsToProcess);
 	sigemptyset(&_origSigMask);
@@ -48,38 +46,10 @@ EventDispatcher::~EventDispatcher()
 {
 	sigprocmask(SIG_SETMASK, &_origSigMask, nullptr);
 
-	if (_reservedFds) {
-		delete[] _pollProcessors;
-		delete[] _pollFds;
-	}
-
-	while (_quantProcessorFirst) {
-		QuantProcessorNode *tmp = _quantProcessorFirst;
-		_quantProcessorFirst = _quantProcessorFirst->Next;
-		delete tmp;
-	}
-
-	while (_timeProcessors) {
-		TimeProcessorNode *tmp = _timeProcessors;
-		_timeProcessors = _timeProcessors->Next;
-		delete tmp;
-	}
-
-	Tree<SignalProcessorNodeTreeEntry>::Entry *entry =
-		_signalProcessors.FindSmallest();
-
-	while (entry) {
-		while (entry->Key.Processors) {
-			SignalProcessorNode *tmp = entry->Key.Processors;
-			entry->Key.Processors = entry->Key.Processors->Next;
-			delete tmp;
-		}
-
-		Tree<SignalProcessorNodeTreeEntry>::Entry *tmp = entry;
-		entry = _signalProcessors.Next(entry);
-		RemoveHandler(tmp->Key.SignalNumber);
-		_signalProcessors.RemoveEntry(tmp);
-	}
+	FreeFds();
+	FreeQuantProcessors();
+	FreeTimeProcessors();
+	FreeSignalProcessors();
 
 	_instanceExists = false;
 }
@@ -94,12 +64,23 @@ void EventDispatcher::Run()
 		struct timespec interval;
 		bool needInterval = true;
 
+		Tree<TimeProcessorNodeTreeEntry>::Entry *entry =
+			_timeProcessors.FindSmallest();
+
 		if (_quantProcessorFirst) {
 			interval.tv_sec = 0;
 			interval.tv_nsec = 0;
-		} else if (_timeProcessors) {
-			interval.tv_sec = _idleInterval / 1000;
-			interval.tv_nsec = _idleInterval % 1000 * 1000000;
+		} else if (entry) {
+			int64_t idleInterval =
+				entry->Key.RunTime -
+				GetMonotonicMillisecondTime();
+
+			if (idleInterval < 0) {
+				idleInterval = 0;
+			}
+
+			interval.tv_sec = idleInterval / 1000;
+			interval.tv_nsec = idleInterval % 1000 * 1000000;
 		} else {
 			needInterval = false;
 		}
@@ -237,25 +218,51 @@ void EventDispatcher::UnregisterQuantProcessor(
 void EventDispatcher::RegisterTimeProcessor(
 	TimeEventProcessor *processor)
 {
+	int64_t runTime = processor->GetTimestamp() + processor->GetInterval();
+
+	Tree<TimeProcessorNodeTreeEntry>::Entry *entry =
+		_timeProcessors.FindEntry(runTime);
+
+	if (!entry) {
+		_timeProcessors.AddEntry(runTime);
+		entry = _timeProcessors.FindEntry(runTime);
+	}
+
 	TimeProcessorNode *node = new TimeProcessorNode;
 	node->Processor = processor;
-	node->Next = _timeProcessors;
-	_timeProcessors = node;
+	node->Next = entry->Key.Processors;
+	entry->Key.Processors = node;
 }
 
 void EventDispatcher::UnregisterTimeProcessor(
 	TimeEventProcessor *processor)
 {
-	TimeProcessorNode **curr = &_timeProcessors;
+	Tree<TimeProcessorNodeTreeEntry>::Entry *entry =
+		_timeProcessors.FindSmallest();
 
-	while (*curr) {
-		if ((*curr)->Processor == processor) {
-			TimeProcessorNode *tmp = *curr;
-			*curr = (*curr)->Next;
-			delete tmp;
-		} else {
-			curr = &(*curr)->Next;
+	while (entry) {
+		TimeProcessorNode **curr = &entry->Key.Processors;
+
+		while (*curr) {
+			if ((*curr)->Processor == processor) {
+				TimeProcessorNode *tmp = *curr;
+				*curr = (*curr)->Next;
+				delete tmp;
+			} else {
+				curr = &(*curr)->Next;
+			}
 		}
+
+		Tree<TimeProcessorNodeTreeEntry>::Entry *tmp = entry;
+		entry = _timeProcessors.Next(entry);
+
+		if (!tmp->Key.Processors) {
+			_timeProcessors.RemoveEntry(tmp);
+		}
+	}
+
+	if (processor == _currentTimeProcessor) {
+		_removeCurrentTimeProcessor = true;
 	}
 }
 
@@ -305,6 +312,60 @@ void EventDispatcher::UnregisterSignalProcessor(
 	if (!entry->Key.Processors) {
 		RemoveHandler(entry->Key.SignalNumber);
 		_signalProcessors.RemoveEntry(entry);
+	}
+}
+
+void EventDispatcher::FreeFds()
+{
+	if (_reservedFds) {
+		delete[] _pollProcessors;
+		delete[] _pollFds;
+	}
+}
+
+void EventDispatcher::FreeQuantProcessors()
+{
+	while (_quantProcessorFirst) {
+		QuantProcessorNode *tmp = _quantProcessorFirst;
+		_quantProcessorFirst = _quantProcessorFirst->Next;
+		delete tmp;
+	}
+}
+
+void EventDispatcher::FreeTimeProcessors()
+{
+	Tree<TimeProcessorNodeTreeEntry>::Entry *entry =
+		_timeProcessors.FindSmallest();
+
+	while (entry) {
+		while (entry->Key.Processors) {
+			TimeProcessorNode *tmp = entry->Key.Processors;
+			entry->Key.Processors = entry->Key.Processors->Next;
+			delete tmp;
+		}
+
+		Tree<TimeProcessorNodeTreeEntry>::Entry *tmp = entry;
+		entry = _timeProcessors.Next(entry);
+		_timeProcessors.RemoveEntry(tmp);
+	}
+}
+
+void EventDispatcher::FreeSignalProcessors()
+{
+	Tree<SignalProcessorNodeTreeEntry>::Entry *entry =
+		_signalProcessors.FindSmallest();
+
+	while (entry) {
+		while (entry->Key.Processors) {
+			SignalProcessorNode *tmp = entry->Key.Processors;
+			entry->Key.Processors = entry->Key.Processors->Next;
+			delete tmp;
+		}
+
+		Tree<SignalProcessorNodeTreeEntry>::Entry *tmp = entry;
+		entry = _signalProcessors.Next(entry);
+		RemoveHandler(tmp->Key.SignalNumber);
+		_signalProcessors.RemoveEntry(tmp);
 	}
 }
 
@@ -387,25 +448,76 @@ void EventDispatcher::ProcessQuants()
 	delete node;
 }
 
+EventDispatcher::TimeProcessorNodeTreeEntry::TimeProcessorNodeTreeEntry()
+{
+	RunTime = 0;
+	Processors = nullptr;
+}
+
+EventDispatcher::TimeProcessorNodeTreeEntry::TimeProcessorNodeTreeEntry(
+	int64_t runTime)
+{
+	RunTime = runTime;
+	Processors = nullptr;
+}
+
+bool EventDispatcher::TimeProcessorNodeTreeEntry::operator==(
+	const TimeProcessorNodeTreeEntry &e) const
+{
+	return RunTime == e.RunTime;
+}
+
+bool EventDispatcher::TimeProcessorNodeTreeEntry::operator<(
+	const TimeProcessorNodeTreeEntry &e) const
+{
+	return RunTime < e.RunTime;
+}
+
 void EventDispatcher::ProcessTime()
 {
-	TimeProcessorNode *node = _timeProcessors;
+	int64_t currentTime = GetMonotonicMillisecondTime();
 
-	int64_t currentTime = GetUnixTime();
+	Tree<TimeProcessorNodeTreeEntry>::Entry *entry =
+		_timeProcessors.FindSmallest();
+
+	if (!entry) {
+		return;
+	}
+
+	if (entry->Key.RunTime > currentTime) {
+		return;
+	}
+
+	TimeProcessorNode *node = entry->Key.Processors;
+
+	_timeProcessors.RemoveEntry(entry);
 
 	while (node) {
-		bool update =
-			currentTime - node->Processor->GetTimestamp() >=
-			node->Processor->GetInterval();
+		TimeEventProcessor *proc = node->Processor;
 
-		TimeProcessorNode *nextNode = node->Next;
+		TimeProcessorNode *tmp = node;
+		node = node->Next;
+		delete tmp;
+
+		_currentTimeProcessor = proc;
+		_removeCurrentTimeProcessor = false;
+
+		bool update =
+			currentTime - proc->GetTimestamp() >=
+			proc->GetInterval();
 
 		if (update) {
-			node->Processor->SetTimestamp(currentTime);
-			node->Processor->ProcessTimeEvent();
+			proc->SetTimestamp(currentTime);
+			proc->ProcessTimeEvent();
 		}
 
-		node = nextNode;
+		_currentTimeProcessor = nullptr;
+
+		if (!_removeCurrentTimeProcessor) {
+			RegisterTimeProcessor(proc);
+		}
+
+		_removeCurrentTimeProcessor = false;
 	}
 }
 
@@ -423,13 +535,13 @@ EventDispatcher::SignalProcessorNodeTreeEntry::SignalProcessorNodeTreeEntry(
 }
 
 bool EventDispatcher::SignalProcessorNodeTreeEntry::operator==(
-	SignalProcessorNodeTreeEntry &e) const
+	const SignalProcessorNodeTreeEntry &e) const
 {
 	return SignalNumber == e.SignalNumber;
 }
 
 bool EventDispatcher::SignalProcessorNodeTreeEntry::operator<(
-	SignalProcessorNodeTreeEntry &e) const
+	const SignalProcessorNodeTreeEntry &e) const
 {
 	return SignalNumber < e.SignalNumber;
 }

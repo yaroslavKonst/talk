@@ -38,7 +38,7 @@ int Client::Run()
 	root.PrivateKey = &_privateKey;
 	root.PublicKey = &_publicKey;
 
-	EventDispatcher dispatcher(2000, &processedSignals);
+	EventDispatcher dispatcher(&processedSignals);
 	root.Dispatcher = &dispatcher;
 
 	Config config(_publicKey);
