@@ -10,11 +10,13 @@
 
 GateListeningSocket::GateListeningSocket(
 	EventDispatcher *dispatcher,
+	UserDB *users,
 	Config *config,
 	RateLimiter *rateLimiter)
 {
 	_socketFd = -1;
 	_dispatcher = dispatcher;
+	_users = users;
 	_config = config;
 	_rateLimiter = rateLimiter;
 	_sessions = nullptr;
@@ -136,6 +138,7 @@ void GateListeningSocket::ProcessRead()
 			addr.sin_addr.s_addr,
 			this,
 			_dispatcher,
+			_users,
 			_config,
 			_rateLimiter);
 

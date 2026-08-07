@@ -10,11 +10,185 @@
 #include "../Common/Log.hpp"
 #include "../Common/Endianness.hpp"
 
+InboundTaskBase *InboundTaskBase::GetTask(
+	int32_t command,
+	UserDB *users,
+	InboundTaskSecurityValues *secVal)
+{
+	switch (command) {
+	case GATE_COMMAND_MESSAGE:
+		return new InboundTaskReceiveMessage(users, secVal);
+	default:
+		break;
+	}
+
+	return nullptr;
+}
+
+InboundTaskReceiveMessage::InboundTaskReceiveMessage(
+	UserDB *users,
+	InboundTaskSecurityValues *secVal)
+{
+	_users = users;
+	_securityValues = secVal;
+
+	_state = State::WaitForHeader;
+	_silentBlock = false;
+}
+
+bool InboundTaskReceiveMessage::HasData()
+{
+	return _response.Size() > 0;
+}
+
+CowBuffer<uint8_t> InboundTaskReceiveMessage::GetData()
+{
+	CowBuffer<uint8_t> buffer = _response;
+	_response = CowBuffer<uint8_t>();
+	return buffer;
+}
+
+bool InboundTaskReceiveMessage::ProcessData(const CowBuffer<uint8_t> buffer)
+{
+	if (_state == State::WaitForHeader) {
+		return ProcessWaitHeader(buffer);
+	} else if (_state == State::WaitForBody) {
+		return ProcessWaitBody(buffer);
+	}
+
+	return false;
+}
+
+bool InboundTaskReceiveMessage::ProcessWaitHeader(
+	const CowBuffer<uint8_t> buffer)
+{
+	GateCommandMessage::Header headerData;
+	bool parseResult =
+		GateCommandMessage::ParseHeader(buffer, headerData);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	parseResult = Message::X25519::ParseHeader(
+		headerData.MessageHeader,
+		_header);
+
+	if (!parseResult) {
+		SendVerificationCode(
+			GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER);
+		return true;
+	}
+
+	if (headerData.MessageHeader.Size() != _header.HeaderSize) {
+		SendVerificationCode(
+			GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER);
+		return true;
+	}
+
+	String hostName;
+
+	bool res = Message::SplitFullUserName(
+		_header.Destination,
+		_userName,
+		hostName);
+
+	if (!res) {
+		SendVerificationCode(
+			GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER);
+		return true;
+	}
+
+	String sourceName;
+	String sourceHost;
+
+	res = Message::SplitFullUserName(
+		_header.Source,
+		sourceName,
+		sourceHost);
+
+	if (!res) {
+		SendVerificationCode(
+			GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER);
+		return true;
+	}
+
+	if (sourceHost != _securityValues->PeerName) {
+		SendVerificationCode(GATE_MESSAGE_HEADER_REJECT);
+		return true;
+	}
+
+	User *user = _users->GetUser(_userName);
+
+	if (!user) {
+		SendVerificationCode(
+			GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER);
+		return true;
+	}
+
+	int32_t resultCode = user->CheckInboundMessage(
+		_header,
+		Crypto::GetHash(
+			headerData.MessageHeader,
+			(int)ObjectStorage::Constants::IDSize).Pointer());
+
+	if (resultCode == GATE_MESSAGE_HEADER_ACCEPT) {
+		_receivedPart = headerData.MessageHeader;
+		_state = State::WaitForBody;
+	}
+
+	SendVerificationCode(resultCode);
+	return true;
+}
+
+bool InboundTaskReceiveMessage::ProcessWaitBody(
+	const CowBuffer<uint8_t> buffer)
+{
+	if (buffer.Size() != _header.MessageSize) {
+		SendVerificationCode(GATE_MESSAGE_BODY_REJECT_INVALID_SIZE);
+	} else {
+		_receivedPart = _receivedPart.Concat(buffer);
+
+		if (!_silentBlock) {
+			User *user = _users->GetUser(_userName);
+
+			if (!user) {
+				SendVerificationCode(
+					GATE_MESSAGE_BODY_REJECT);
+			} else {
+				user->DeliverMessage(_header, _receivedPart);
+				SendVerificationCode(GATE_MESSAGE_BODY_ACCEPT);
+			}
+		} else {
+			SendVerificationCode(GATE_MESSAGE_BODY_ACCEPT);
+		}
+	}
+
+	_state = State::WaitForHeader;
+	_silentBlock = false;
+	return true;
+}
+
+void InboundTaskReceiveMessage::SendVerificationCode(int32_t code)
+{
+	if (code == GATE_MESSAGE_HEADER_REJECT_SILENTBLOCK) {
+		_state = State::WaitForBody;
+		_silentBlock = true;
+		code = GATE_MESSAGE_HEADER_ACCEPT;
+	}
+
+	GateCommandMessage::VerificationCode codeStruct;
+	codeStruct.Code = code;
+
+	_response = GateCommandMessage::BuildCode(codeStruct);
+}
+
 InboundGateSession::InboundGateSession(
 	int fd,
 	uint32_t ipv4,
 	InboundGateSessionStorage *storage,
 	EventDispatcher *dispatcher,
+	UserDB *users,
 	Config *config,
 	RateLimiter *rateLimiter)
 {
@@ -25,11 +199,17 @@ InboundGateSession::InboundGateSession(
 	_ipv4 = ipv4;
 	_storage = storage;
 	_dispatcher = dispatcher;
+	_users = users;
 	_config = config;
 	_rateLimiter = rateLimiter;
 
 	_reader = nullptr;
 	_writer = nullptr;
+
+	_protocol = nullptr;
+	_expectedChunkSize = true;
+
+	_task = nullptr;
 
 	_dispatcher->RegisterTimeProcessor(this);
 	_dispatcher->RegisterDescriptorProcessor(this);
@@ -42,6 +222,16 @@ InboundGateSession::InboundGateSession(
 InboundGateSession::~InboundGateSession()
 {
 	InboundGateLog("Session closed.");
+
+	if (_task) {
+		delete _task;
+		_task = nullptr;
+	}
+
+	if (_protocol) {
+		delete _protocol;
+		_protocol = nullptr;
+	}
 
 	_dispatcher->UnregisterDescriptorProcessor(this);
 	_dispatcher->UnregisterTimeProcessor(this);
@@ -73,7 +263,19 @@ bool InboundGateSession::RequestRead()
 
 bool InboundGateSession::RequestWrite()
 {
-	return _writer;
+	if (_writer) {
+		return true;
+	}
+
+	if (_protocol && _protocol->HasOutput()) {
+		return true;
+	}
+
+	if (_protocol && _task && _task->HasData()) {
+		return true;
+	}
+
+	return false;
 }
 
 void InboundGateSession::ProcessRead()
@@ -130,8 +332,36 @@ void InboundGateSession::ProcessWrite()
 {
 	SetTimestamp(GetMonotonicMillisecondTime());
 
+	if (_protocol && _task && _task->HasData()) {
+		CowBuffer<uint8_t> buf = _task->GetData();
+
+		if (buf.Size()) {
+			_protocol->AddBufferForOutput(buf);
+		} else {
+			_storage->MarkSessionForRemoval(this);
+			return;
+		}
+	}
+
 	if (!_writer) {
-		THROW("Writer is NULL.");
+		if (!(_protocol && _protocol->HasOutput())) {
+			THROW("Writer is NULL.");
+		}
+
+		CowBuffer<uint8_t> outBuffer = _protocol->GetOutputBuffer();
+
+		CowBuffer<uint8_t> sizeBuffer(sizeof(int32_t));
+		*sizeBuffer.SwitchType<uint32_t>() =
+			SetProtoEndian<uint32_t>(outBuffer.Size());
+
+		outBuffer = sizeBuffer.Concat(outBuffer);
+
+		_outScramblerInit = Crypto::ApplyScrambler(
+			outBuffer.Pointer(),
+			outBuffer.Size(),
+			_outScramblerInit);
+
+		_writer = new StreamWriter(_fd, outBuffer);
 	}
 
 	bool success = _writer->Write();
@@ -247,7 +477,7 @@ bool InboundGateSession::ProcessHandshakeSyn(CowBuffer<uint8_t> buffer)
 	} else if (syn.EncryptionScheme != Crypto::X25519::SCHEME_ID) {
 		response = BuildUnsupportedEncryptionScheme();
 	} else {
-		_peerName = syn.ServerName;
+		_securityValues.PeerName = syn.ServerName;
 		_peerPublicKey = syn.Key;
 		_salt1 = syn.Salt;
 
@@ -383,12 +613,93 @@ bool InboundGateSession::ProcessHandshakeVerificationResponse(
 	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
 
 	_state = State::OpenedSession;
+	_reader = new StreamReader(_fd, sizeof(uint32_t));
+	_protocol = new GateProtocol(&_outES, &_inES);
+
+	_protocol->SetInputSizeLimit(_config->GetMessageSizeLimit());
 	return true;
 }
 
 bool InboundGateSession::ProcessSessionInput(CowBuffer<uint8_t> buffer)
 {
-#warning TODO: data processing.
+	if (!buffer.Size()) {
+		return false;
+	}
+
+	_inScramblerInit = Crypto::ApplyScrambler(
+		buffer.Pointer(),
+		buffer.Size(),
+		_inScramblerInit);
+
+	if (_expectedChunkSize) {
+		if (buffer.Size() != sizeof(uint32_t)) {
+			return false;
+		}
+
+		uint32_t size = SetProtoEndian(*buffer.SwitchType<uint32_t>());
+
+		if (!size || size > 4096) {
+			return false;
+		}
+
+		_reader = new StreamReader(_fd, size);
+		_expectedChunkSize = false;
+		return true;
+	}
+
+	if (!_protocol) {
+		THROW("Protocol is NULL.");
+	}
+
+	bool inputIsCorrect = _protocol->ProcessRead(buffer);
+
+	if (!inputIsCorrect) {
+		return false;
+	}
+
+	_reader = new StreamReader(_fd, sizeof(uint32_t));
+	_expectedChunkSize = true;
+
+	if (!_protocol->HasInputBuffer()) {
+		return true;
+	}
+
+	CowBuffer<uint8_t> inputBuffer = _protocol->GetInputBuffer();
+
+	if (!_task) {
+		if (inputBuffer.Size() < sizeof(int32_t)) {
+			return false;
+		}
+
+		int32_t command =
+			SetProtoEndian(*inputBuffer.SwitchType<int32_t>());
+
+		_task = InboundTaskBase::GetTask(
+			command,
+			_users,
+			&_securityValues);
+
+		if (!_task) {
+			return false;
+		}
+	}
+
+	bool processingResult = _task->ProcessData(inputBuffer);
+
+	if (!processingResult) {
+		return false;
+	}
+
+	if (_task->HasData()) {
+		CowBuffer<uint8_t> buf = _task->GetData();
+
+		if (!buf.Size()) {
+			return false;
+		}
+
+		_protocol->AddBufferForOutput(buf);
+	}
+
 	return true;
 }
 

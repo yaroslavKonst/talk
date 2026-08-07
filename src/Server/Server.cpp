@@ -54,7 +54,11 @@ int Server::Run()
 		&config,
 		&failBan,
 		_publicKey);
-	GateListeningSocket gateSocket(&dispatcher, &config, &rateLimiter);
+	GateListeningSocket gateSocket(
+		&dispatcher,
+		&users,
+		&config,
+		&rateLimiter);
 
 	listeningSocket.OpenSocket();
 	controlSocket.OpenSocket();

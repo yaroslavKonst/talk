@@ -14,6 +14,7 @@ class GateListeningSocket :
 public:
 	GateListeningSocket(
 		EventDispatcher *dispatcher,
+		UserDB *users,
 		Config *config,
 		RateLimiter *rateLimiter);
 	~GateListeningSocket();
@@ -35,6 +36,7 @@ public:
 private:
 	int _socketFd;
 	EventDispatcher *_dispatcher;
+	UserDB *_users;
 	Config *_config;
 	RateLimiter *_rateLimiter;
 

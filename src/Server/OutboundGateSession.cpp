@@ -302,11 +302,15 @@ bool OutboundGateSession::RequestRead()
 
 bool OutboundGateSession::RequestWrite()
 {
-	if (_writer || (_protocol && _protocol->HasOutput())) {
+	if (_writer) {
 		return true;
 	}
 
 	if (_state == State::WaitingForConnect) {
+		return true;
+	}
+
+	if (_protocol && _protocol->HasOutput()) {
 		return true;
 	}
 
