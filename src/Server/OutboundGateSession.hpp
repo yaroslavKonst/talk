@@ -34,13 +34,17 @@ public:
 	virtual void ReportConnectionFailure() = 0;
 	virtual void ReportRequestRateLimit() = 0;
 
+	// Has data to write.
 	virtual bool HasData() = 0;
+	// Get data. Returned empty buffer must close the session.
 	virtual CowBuffer<uint8_t> GetData() = 0;
+	// Process data. Returned false must close the session.
 	virtual bool ProcessData(const CowBuffer<uint8_t> buffer) = 0;
 
 protected:
 	bool MustReportFailure();
 	void MarkFailureReport();
+	void AllowFailureReport();
 
 private:
 	bool _reportedFailure;
@@ -55,12 +59,11 @@ public:
 	virtual void ReportConnectionFailure() = 0;
 	virtual void ReportRequestRateLimit() = 0;
 
-	virtual bool ReportDeliverySuccess() = 0;
-	virtual bool ReportDeliveryFailure(int32_t reason) = 0;
+	virtual bool ReportDeliveryStatus(
+		bool success,
+		int32_t errorCode) = 0;
 
-	virtual CowBuffer<uint8_t> GetMessageForChannel(
-		String source,
-		String destination) = 0;
+	virtual CowBuffer<uint8_t> GetMessageForChannel() = 0;
 };
 
 class TaskProcessChannel : public TaskBase

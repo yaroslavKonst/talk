@@ -27,6 +27,11 @@ void TaskBase::MarkFailureReport()
 	_reportedFailure = true;
 }
 
+void TaskBase::AllowFailureReport()
+{
+	_reportedFailure = false;
+}
+
 TaskProcessChannel::TaskProcessChannel()
 {
 	Type = TaskType::ProcessChannel;
@@ -84,16 +89,25 @@ CowBuffer<uint8_t> TaskProcessChannel::GetData()
 	}
 
 	if (_state == State::Init) {
-		_currentMessage = ReportTarget->GetMessageForChannel(
-			Source,
-			Destination);
+		for (;;) {
+			_currentMessage = ReportTarget->GetMessageForChannel();
 
-		bool parseResult = Message::X25519::ParseHeader(
-			_currentMessage,
-			_header);
+			bool parseResult = Message::X25519::ParseHeader(
+				_currentMessage,
+				_header);
 
-		if (!parseResult) {
-			THROW("Corrupt message in the database.");
+			if (parseResult) {
+				break;
+			}
+
+			bool cont = ReportTarget->ReportDeliveryStatus(
+				false,
+				GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER);
+
+			if (!cont) {
+				MarkFailureReport();
+				return CowBuffer<uint8_t>();
+			}
 		}
 
 		GateCommandMessage::Header header;
@@ -138,15 +152,25 @@ bool TaskProcessChannel::ProcessData(const CowBuffer<uint8_t> buffer)
 			return false;
 		}
 
+		if (code.Code > GATE_MESSAGE_HEADER_REJECT_EXISTS) {
+			return false;
+		}
+
 		if (code.Code == GATE_MESSAGE_HEADER_ACCEPT) {
 			_hasOutput = true;
 			return true;
 		}
 
-		bool continueProc = ReportTarget->ReportDeliveryFailure(
+		bool continueProc = ReportTarget->ReportDeliveryStatus(
+			false,
 			code.Code);
 		_hasOutput = false;
 		_state = State::Init;
+
+		if (!continueProc) {
+			MarkFailureReport();
+		}
+
 		return continueProc;
 	}
 
@@ -158,17 +182,29 @@ bool TaskProcessChannel::ProcessData(const CowBuffer<uint8_t> buffer)
 			return false;
 		}
 
+		if (code.Code > GATE_MESSAGE_BODY_REJECT_INVALID_SIZE) {
+			return false;
+		}
+
 		bool continueProc;
 
 		if (code.Code == GATE_MESSAGE_BODY_ACCEPT) {
-			continueProc = ReportTarget->ReportDeliverySuccess();
+			continueProc = ReportTarget->ReportDeliveryStatus(
+				true,
+				0);
 		} else {
-			continueProc = ReportTarget->ReportDeliveryFailure(
+			continueProc = ReportTarget->ReportDeliveryStatus(
+				false,
 				GATE_MESSAGE_HEADER_REJECT);
 		}
 
 		_hasOutput = false;
 		_state = State::Init;
+
+		if (!continueProc) {
+			MarkFailureReport();
+		}
+
 		return continueProc;
 	}
 
@@ -346,6 +382,7 @@ void OutboundGateSession::ProcessWrite()
 		if (buf.Size()) {
 			_protocol->AddBufferForOutput(buf);
 		} else {
+			_storage->MarkSessionForRemoval(this);
 			return;
 		}
 	}
