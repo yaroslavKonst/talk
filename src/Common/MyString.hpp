@@ -38,6 +38,8 @@ public:
 
 	void Wipe();
 
+	void Detach();
+
 private:
 	struct Data
 	{

@@ -211,7 +211,10 @@ Screen *LoginScreen::ProcessConnection()
 	void *blockHandle = _root->Ui->BlockNotify("Connecting...");
 
 	Resolver resolver(_root->Dispatcher);
-	resolver.Resolve(_ip.Text, _port.Text, SOCK_STREAM);
+	struct addrinfo *addrinfoHead = resolver.ResolveGetAddrInfo(
+		_ip.Text,
+		_port.Text,
+		SOCK_STREAM);
 	int res = resolver.GetResolveStatus();
 
 	if (res) {
@@ -220,7 +223,7 @@ Screen *LoginScreen::ProcessConnection()
 		return this;
 	}
 
-	struct addrinfo *addrs = resolver.GetResolveResult();
+	struct addrinfo *addrs = addrinfoHead;
 
 	if (!addrs) {
 		_root->Ui->BlockCancel(blockHandle);
@@ -259,7 +262,7 @@ Screen *LoginScreen::ProcessConnection()
 		addrs = addrs->ai_next;
 	}
 
-	resolver.Clear();
+	Resolver::FreeAddrInfo(addrinfoHead);
 
 	if (socketFd == -1) {
 		_root->Ui->BlockCancel(blockHandle);

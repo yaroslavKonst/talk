@@ -256,6 +256,14 @@ OutboundGateSession::~OutboundGateSession()
 
 	_resolver.SetResolverUser(nullptr);
 
+	for (uint32_t i = 0; i < _resolverRequests.Size(); i++) {
+		if (_resolverRequests[i]) {
+			_resolverRequests[i] = nullptr;
+		}
+	}
+
+	_resolver.PassOwnership();
+
 	if (_fd != -1) {
 		_dispatcher->UnregisterDescriptorProcessor(this);
 		shutdown(_fd, SHUT_RDWR);
@@ -437,22 +445,33 @@ void OutboundGateSession::ProcessWrite()
 
 void OutboundGateSession::ProcessTimeEvent()
 {
+	if (_state == State::WaitingForDestinationNameResolve) {
+		// Resolver deletion on resolve will lead to hangup.
+		return;
+	}
+
 	OutboundGateLog("Timeout.");
 	_storage->MarkSessionForRemoval(this);
 }
 
 void OutboundGateSession::ResolveCompleted()
 {
-	int resolveStatus = _resolver.GetResolveStatus();
+	Resolver::RequestGetAddrInfo *info =
+		static_cast<Resolver::RequestGetAddrInfo*>(
+			_resolverRequests[0]);
 
-	if (resolveStatus) {
+	if (info->Status) {
 		OutboundGateLog("Server name resolve failure.");
 		_task->ReportConnectionFailure();
 		_storage->MarkSessionForRemoval(this);
+
+		delete _resolverRequests[0];
+		_resolverRequests[0] = nullptr;
+
 		return;
 	}
 
-	_addrinfo = _resolver.GetResolveResult();
+	_addrinfo = info->AddrInfo;
 
 	TryConnect();
 }
@@ -475,7 +494,16 @@ void OutboundGateSession::StartConnection()
 
 	OutboundGateLog("Requested resolve " +
 		hostName + ", " + serviceName + ".");
-	_resolver.RequestResolve(hostName, serviceName, SOCK_STREAM);
+
+	Resolver::RequestGetAddrInfo *info = new Resolver::RequestGetAddrInfo;
+	info->Host = hostName;
+	info->Service = serviceName;
+	info->SocketType = SOCK_STREAM;
+
+	_resolverRequests = CowBuffer<Resolver::RequestBase*>(1);
+	_resolverRequests[0] = info;
+
+	_resolver.StartAsyncResolve(_resolverRequests);
 
 	_state = State::WaitingForDestinationNameResolve;
 }
@@ -483,6 +511,9 @@ void OutboundGateSession::StartConnection()
 void OutboundGateSession::TryConnect()
 {
 	if (!_addrinfo) {
+		delete _resolverRequests[0];
+		_resolverRequests[0] = nullptr;
+
 		OutboundGateLog("No connectable address found.");
 		_task->ReportConnectionFailure();
 		_storage->MarkSessionForRemoval(this);
@@ -568,7 +599,9 @@ void OutboundGateSession::SetupHandshakeWaitInit()
 	_state = State::HandshakeWaitInit;
 	_reader = new StreamReader(_fd, sizeof(int32_t) + 1);
 
-	_resolver.Clear();
+	delete _resolverRequests[0];
+	_resolverRequests[0] = nullptr;
+
 	_addrinfo = nullptr;
 }
 

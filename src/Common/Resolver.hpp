@@ -23,16 +23,126 @@ class Resolver :
 	public QuantEventProcessor
 {
 public:
+	struct SRVResult
+	{
+		int Priority;
+		int Weight;
+		uint16_t Port; // Stored in network byte order.
+		String Target;
+
+		SRVResult *Next;
+
+		SRVResult();
+		~SRVResult();
+	};
+
+	struct RequestBase
+	{
+		int Status;
+
+		enum class Type
+		{
+			GetAddrInfo,
+			A,
+			RDNS,
+			PTR,
+			TXT,
+			SRV
+		};
+
+		Type T;
+
+		virtual ~RequestBase()
+		{ }
+
+		virtual void Detach() = 0;
+	};
+
+	struct RequestGetAddrInfo : public RequestBase
+	{
+		String Host;
+		String Service;
+		int SocketType;
+
+		struct addrinfo *AddrInfo;
+
+		RequestGetAddrInfo();
+		~RequestGetAddrInfo();
+
+		void Detach() override;
+	};
+
+	struct RequestA : public RequestBase
+	{
+		String DNSName;
+
+		uint32_t ResultIPv4;
+
+		void Detach() override;
+	};
+
+	struct RequestRDNS : public RequestBase
+	{
+		uint32_t IPv4;
+
+		String ResultName;
+
+		void Detach() override;
+	};
+
+	struct RequestPTR : public RequestBase
+	{
+		String DNSName;
+
+		String ResultName;
+
+		void Detach() override;
+	};
+
+	struct RequestTXT : public RequestBase
+	{
+		String DNSName;
+
+		String Result;
+
+		void Detach() override;
+	};
+
+	struct RequestSRV : public RequestBase
+	{
+		String DNSName;
+		String ServiceName;
+		bool TCP;
+
+		SRVResult *Result;
+
+		RequestSRV();
+		~RequestSRV();
+
+		void Detach() override;
+	};
+
+	static void FreeAddrInfo(struct addrinfo *addr);
+
 	Resolver(EventDispatcher *dispatcher);
 	~Resolver();
 
 	void SetResolverUser(ResolverUser *user);
-
-	void Resolve(String host, String service, int socketType);
-	void RequestResolve(String host, String service, int socketType);
 	int GetResolveStatus();
-	struct addrinfo *GetResolveResult();
-	void Clear();
+
+	void PassOwnership();
+
+	struct addrinfo *ResolveGetAddrInfo(
+		String host,
+		String service,
+		int socketType);
+	uint32_t ResolveA(String dnsName);
+	String ResolveRDNS(uint32_t ipv4);
+	String ResolvePTR(String dnsName);
+	String ResolveTXT(String dnsName);
+	SRVResult *ResolveSRV(String dnsName, String serviceName, bool tcp);
+
+	void StartAsyncResolve(CowBuffer<RequestBase*> requests);
 
 	int GetDescriptor() override;
 	bool RequestRead() override;
@@ -46,23 +156,20 @@ private:
 	EventDispatcher *_dispatcher;
 	ResolverUser *_resolverUser;
 
-	struct addrinfo *_addrinfo;
+	CowBuffer<RequestBase*> _asyncRequests;
+
+	CowBuffer<unsigned char> RunQuery(String dnsName, int cls, int type);
 
 	int _status;
 	int _fd[2];
 
+	bool _hasOwnership;
+
 	struct ThreadFunctionParams
 	{
 		Resolver *Object;
-		char *HostName;
-		char *ServiceName;
-		int SocketType;
-
-		~ThreadFunctionParams()
-		{
-			delete[] HostName;
-			delete[] ServiceName;
-		}
+		RequestBase **Requests;
+		int RequestCount;
 	};
 
 	pthread_t _threadId;

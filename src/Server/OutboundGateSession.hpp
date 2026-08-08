@@ -152,6 +152,7 @@ private:
 	State _state;
 	Resolver _resolver;
 	struct addrinfo *_addrinfo;
+	CowBuffer<Resolver::RequestBase*> _resolverRequests;
 
 	uint8_t _inScramblerInit;
 	uint8_t _outScramblerInit;

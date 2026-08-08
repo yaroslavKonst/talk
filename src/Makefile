@@ -104,7 +104,8 @@ CLIENT_MODULES=\
 	Crypto/Crypto.o \
 	ThirdParty/monocypher.o
 
-CLIENT_LIBS = -lncursesw -lpulse-simple -pthread
+SERVER_LIBS = -lresolv
+CLIENT_LIBS = -lncursesw -lpulse-simple -pthread -lresolv
 
 .PHONY: all server client
 
@@ -123,7 +124,7 @@ BUILD_DIRS := $(BUILD_DIRS:%=$(BUILD_DIR)/%)
 
 # Server
 $(BUILD_DIR)/talkd: $(SERVER_MODULES_ABS) | $(BUILD_DIRS)
-	$(CXX) $(STATIC_FLAG) -o $@ $(SERVER_MODULES_ABS)
+	$(CXX) $(STATIC_FLAG) -o $@ $(SERVER_MODULES_ABS) $(SERVER_LIBS)
 
 # Server control
 $(BUILD_DIR)/talkdctl: $(SERVERCTL_MODULES_ABS) | $(BUILD_DIRS)

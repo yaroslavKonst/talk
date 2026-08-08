@@ -569,7 +569,22 @@ bool InboundGateSession::VerifyPeer(
 	const CowBuffer<uint8_t> buffer,
 	const CowBuffer<uint8_t> signature)
 {
-#warning TODO: peer check.
+	// Remove port if present.
+	CowBuffer<String> parts = _securityValues.PeerName.Split(':', false);
+
+	if (!parts.Size()) {
+		return false;
+	}
+
+	String peerName = parts[0];
+
+	// IP name check.
+	if (IPToString(_ipv4) == peerName) {
+		return true;
+	}
+
+	// TODO: DNS name check.
+
 	return true;
 }
 

@@ -329,6 +329,11 @@ void String::Wipe()
 	Clear();
 }
 
+void String::Detach()
+{
+	MakeExclusive();
+}
+
 String::String(Data *data)
 {
 	_data = data;
