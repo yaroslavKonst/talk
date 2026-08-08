@@ -9,6 +9,7 @@
 #include "../Protocol/GateParser.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/File.hpp"
+#include "../Common/UnixTime.hpp"
 #include "../Common/Log.hpp"
 #include "../Common/Endianness.hpp"
 
@@ -141,7 +142,9 @@ bool TaskProcessChannel::ProcessData(const CowBuffer<uint8_t> buffer)
 		bool parseResult = GateCommandMessage::ParseText(buffer, text);
 
 		if (parseResult) {
-			Log("Outbound message", text.Text);
+			Log(LogLevel::Info,
+				"Outbound message rejected",
+				text.Text);
 			return true;
 		}
 
@@ -255,12 +258,6 @@ OutboundGateSession::~OutboundGateSession()
 	_dispatcher->UnregisterTimeProcessor(this);
 
 	_resolver.SetResolverUser(nullptr);
-
-	for (uint32_t i = 0; i < _resolverRequests.Size(); i++) {
-		if (_resolverRequests[i]) {
-			_resolverRequests[i] = nullptr;
-		}
-	}
 
 	_resolver.PassOwnership();
 
@@ -862,5 +859,7 @@ bool OutboundGateSession::ProcessSessionInput(CowBuffer<uint8_t> buffer)
 
 void OutboundGateSession::OutboundGateLog(String message)
 {
-	Log("Outbound gate to " + _task->GetConnectionDestination(), message);
+	Log(LogLevel::Verbose,
+		"Outbound gate to " + _task->GetConnectionDestination(),
+		message);
 }

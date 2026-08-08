@@ -38,5 +38,5 @@ void ShutdownSignalController::ProcessSignal(int signum)
 
 void ShutdownSignalController::ControllerLog(String message)
 {
-	Log("Signal controller", message);
+	Log(LogLevel::Warning, "Signal controller", message);
 }

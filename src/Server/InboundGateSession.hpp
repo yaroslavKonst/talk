@@ -7,6 +7,7 @@
 #include "../Protocol/GateParser.hpp"
 #include "../Protocol/GateProtocol.hpp"
 #include "../Common/EventDispatcher.hpp"
+#include "../Common/Resolver.hpp"
 #include "../Common/StreamReader.hpp"
 #include "../Common/StreamWriter.hpp"
 #include "../Crypto/Crypto.hpp"
@@ -78,7 +79,8 @@ class InboundGateSessionStorage;
 
 class InboundGateSession :
 	public DescriptorEventProcessor,
-	public TimeEventProcessor
+	public TimeEventProcessor,
+	public ResolverUser
 {
 public:
 	InboundGateSession(
@@ -98,6 +100,8 @@ public:
 	void ProcessWrite() override;
 
 	void ProcessTimeEvent() override;
+
+	void ResolveCompleted() override;
 
 private:
 	InboundGateSessionStorage *_storage;
@@ -135,28 +139,37 @@ private:
 		WriteAllAndExit,
 		HandshakeWaitSynSize,
 		HandshakeWaitSyn,
+		HandshakeWaitPeerAddressResolving,
+		HandshakeWaitPeerParamsResolving,
 		HandshakeWaitVerificationResponse,
 		OpenedSession
 	};
 
 	State _state;
 
+	Resolver _resolver;
+	CowBuffer<Resolver::RequestBase*> _resolverRequests;
+
 	void SendInit();
 	bool ProcessHandshakeSynSize(CowBuffer<uint8_t> buffer);
 	bool ProcessHandshakeSyn(CowBuffer<uint8_t> buffer);
-	GateHandshakeSyn::Data BuildUnsupportedProtocolVersion();
-	GateHandshakeSyn::Data BuildUnsupportedEncryptionScheme();
-	GateHandshakeSyn::Data BuildVerificationFailure();
-	GateHandshakeSyn::Data BuildSyn();
-	bool VerifyPeer(
-		const CowBuffer<uint8_t> buffer,
-		const CowBuffer<uint8_t> signature);
+	void SendUnsupportedProtocolVersion();
+	void SendUnsupportedEncryptionScheme();
+	void SendVerificationFailure();
+	void SendSyn();
+	void VerifyPeer();
+	CowBuffer<uint8_t> _peerSynBuffer;
+	CowBuffer<uint8_t> _peerSynSignature;
+	String _srvPeerName;
+	void ProcessPeerAddressResolve();
+	void ProcessPeerParamsResolve();
 
 	bool ProcessHandshakeVerificationResponse(CowBuffer<uint8_t> buffer);
 	bool ProcessSessionInput(CowBuffer<uint8_t> buffer);
 
 	InboundTaskBase *_task;
 
+	void CreateSizePrefixAndSend(CowBuffer<uint8_t> buffer);
 	void InboundGateLog(String message);
 };
 

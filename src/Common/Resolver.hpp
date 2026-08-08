@@ -78,6 +78,8 @@ public:
 
 		uint32_t ResultIPv4;
 
+		RequestA();
+
 		void Detach() override;
 	};
 
@@ -86,6 +88,8 @@ public:
 		uint32_t IPv4;
 
 		String ResultName;
+
+		RequestRDNS();
 
 		void Detach() override;
 	};
@@ -96,6 +100,8 @@ public:
 
 		String ResultName;
 
+		RequestPTR();
+
 		void Detach() override;
 	};
 
@@ -104,6 +110,8 @@ public:
 		String DNSName;
 
 		String Result;
+
+		RequestTXT();
 
 		void Detach() override;
 	};
@@ -174,6 +182,8 @@ private:
 
 	pthread_t _threadId;
 	static void *ThreadFunction(void *data);
+
+	static void ResolverLog(String message);
 };
 
 #endif

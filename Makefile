@@ -1,8 +1,8 @@
 export BUILD_DIR != echo `pwd`/build
 INSTALL_DIR = /usr/local/bin
 
-export CC = gcc -Wall -O3 -g
-export CXX = g++ -Wall -O3 -g
+export CC = gcc -Wall -Wshadow -O3 -g
+export CXX = g++ -Wall -Wshadow -O3 -g
 export OBJ_FLAG = -c
 export STATIC_FLAG = -static
 

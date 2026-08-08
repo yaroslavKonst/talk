@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 
 #include "../Common/File.hpp"
+#include "../Common/UnixTime.hpp"
 #include "../Common/Log.hpp"
 #include "../Common/Debug.hpp"
 
@@ -264,5 +265,5 @@ void FailBan::CheckSuspicious()
 
 void FailBan::FailBanLog(String message)
 {
-	Log("FailBan", message);
+	Log(LogLevel::Info, "FailBan", message);
 }

@@ -518,7 +518,7 @@ bool Message::ExtractServerDataFromFullName(
 		return false;
 	}
 
-	serviceName = "talkdgate";
+	serviceName = String();
 	parts = hostName.Split(':', false);
 
 	if (parts.Size() == 2) {

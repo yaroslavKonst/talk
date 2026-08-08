@@ -106,6 +106,10 @@ static void Daemonize()
 
 static void SetWorkingDirectory(String path)
 {
+	if (!path.Length()) {
+		return;
+	}
+
 	int res = chdir(path.CStr());
 
 	if (res == -1) {
@@ -114,11 +118,37 @@ static void SetWorkingDirectory(String path)
 	}
 }
 
+static void SetLogLevel(String levelString)
+{
+	if (!levelString.Length()) {
+		return;
+	}
+
+	levelString = levelString.ToLowerCase();
+
+	if (levelString == "debug") {
+		SetLogLevel(LogLevel::Debug);
+	} else if (levelString == "verbose") {
+		SetLogLevel(LogLevel::Verbose);
+	} else if (levelString == "info") {
+		SetLogLevel(LogLevel::Info);
+	} else if (levelString == "warning") {
+		SetLogLevel(LogLevel::Warning);
+	} else if (levelString == "error") {
+		SetLogLevel(LogLevel::Error);
+	} else if (levelString == "fatal") {
+		SetLogLevel(LogLevel::Fatal);
+	} else {
+		THROW("Unknown log level: " + levelString + ".");
+	}
+}
+
 static const char *HelpKey = "-help";
 static const char *VersionKey = "-version";
 static const char *NoDaemonizeKey = "-no-D";
 static const char *NoMultilineLogKey = "-no-multiline-log";
 static const char *WorkingDirectoryArg = "-work-dir";
+static const char *LogLevelArg = "-log-level";
 
 static void PrintHelp()
 {
@@ -130,6 +160,9 @@ static void PrintHelp()
 		NoMultilineLogKey);
 	printf("%-19s set working directory.\n",
 		(String(WorkingDirectoryArg) + " PATH").CStr());
+	printf("%-19s set log level. Levels: Debug, Verbose, Info, Warning,\n",
+		(String(LogLevelArg) + " LEVEL").CStr());
+	printf("                    Error, Fatal. Default: Verbose.\n");
 }
 
 static bool ParseCmd(CommandLineParser &cmd, int argc, char **argv)
@@ -140,8 +173,9 @@ static bool ParseCmd(CommandLineParser &cmd, int argc, char **argv)
 	keys[2] = NoDaemonizeKey;
 	keys[3] = NoMultilineLogKey;
 
-	CowBuffer<String> args(1);
+	CowBuffer<String> args(2);
 	args[0] = WorkingDirectoryArg;
+	args[1] = LogLevelArg;
 
 	cmd = CommandLineParser(keys, CowBuffer<String>(), args);
 	bool parseResult = cmd.Parse(argc, argv);
@@ -186,11 +220,8 @@ int main(int argc, char **argv)
 			AllowMultilineLog(true);
 		}
 
-		String workDir = cmd.GetArgumentValue(WorkingDirectoryArg);
-
-		if (workDir.Length()) {
-			SetWorkingDirectory(workDir);
-		}
+		SetWorkingDirectory(cmd.GetArgumentValue(WorkingDirectoryArg));
+		SetLogLevel(cmd.GetArgumentValue(LogLevelArg));
 
 		Server server;
 
@@ -201,7 +232,7 @@ int main(int argc, char **argv)
 		return server.Run();
 	}
 	catch (Exception &ex) {
-		Log("Fatal", ex.Message());
+		Log(LogLevel::Fatal, "Fatal", ex.Message());
 	}
 
 	return 100;

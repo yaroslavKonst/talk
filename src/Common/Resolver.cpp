@@ -24,6 +24,7 @@ Resolver::SRVResult::~SRVResult()
 
 Resolver::RequestGetAddrInfo::RequestGetAddrInfo()
 {
+	T = Type::GetAddrInfo;
 	AddrInfo = nullptr;
 }
 
@@ -41,9 +42,19 @@ void Resolver::RequestGetAddrInfo::Detach()
 	Service.Detach();
 }
 
+Resolver::RequestA::RequestA()
+{
+	T = Type::A;
+}
+
 void Resolver::RequestA::Detach()
 {
 	DNSName.Detach();
+}
+
+Resolver::RequestRDNS::RequestRDNS()
+{
+	T = Type::RDNS;
 }
 
 void Resolver::RequestRDNS::Detach()
@@ -51,10 +62,20 @@ void Resolver::RequestRDNS::Detach()
 	ResultName.Detach();
 }
 
+Resolver::RequestPTR::RequestPTR()
+{
+	T = Type::PTR;
+}
+
 void Resolver::RequestPTR::Detach()
 {
 	DNSName.Detach();
 	ResultName.Detach();
+}
+
+Resolver::RequestTXT::RequestTXT()
+{
+	T = Type::TXT;
 }
 
 void Resolver::RequestTXT::Detach()
@@ -65,6 +86,7 @@ void Resolver::RequestTXT::Detach()
 
 Resolver::RequestSRV::RequestSRV()
 {
+	T = Type::SRV;
 	Result = nullptr;
 }
 
@@ -114,7 +136,7 @@ Resolver::~Resolver()
 			_dispatcher->UnregisterQuantProcessor(this);
 		}
 	} catch (const Exception &ex) {
-		Log("Resolver", ex.What());
+		ResolverLog(ex.What());
 	}
 }
 
@@ -158,7 +180,9 @@ struct addrinfo *Resolver::ResolveGetAddrInfo(
 
 uint32_t Resolver::ResolveA(String dnsName)
 {
+	ResolverLog("Resolve A: " + dnsName + ".");
 	CowBuffer<unsigned char> response = RunQuery(dnsName, C_IN, T_A);
+	ResolverLog("Parsing.");
 
 	if (!response.Size()) {
 		_status = 1;
@@ -190,6 +214,8 @@ uint32_t Resolver::ResolveA(String dnsName)
 			uint32_t ipv4;
 			memcpy(&ipv4, ns_rr_rdata(rr), sizeof(ipv4));
 			_status = 0;
+
+			ResolverLog("Result: " + IPToString(ipv4) + ".");
 			return ipv4;
 		}
 	}
@@ -216,7 +242,9 @@ String Resolver::ResolveRDNS(uint32_t ipv4)
 
 String Resolver::ResolvePTR(String dnsName)
 {
+	ResolverLog("Resolve PTR: " + dnsName + ".");
 	CowBuffer<unsigned char> response = RunQuery(dnsName, C_IN, T_PTR);
+	ResolverLog("Parsing.");
 
 	if (!response.Size()) {
 		_status = 1;
@@ -259,6 +287,7 @@ String Resolver::ResolvePTR(String dnsName)
 
 			String result(name);
 			_status = 0;
+			ResolverLog("Result: " + result + ".");
 			return result;
 		}
 	}
@@ -269,7 +298,9 @@ String Resolver::ResolvePTR(String dnsName)
 
 String Resolver::ResolveTXT(String dnsName)
 {
+	ResolverLog("Resolve TXT: " + dnsName + ".");
 	CowBuffer<unsigned char> response = RunQuery(dnsName, C_IN, T_TXT);
+	ResolverLog("Parsing.");
 
 	if (!response.Size()) {
 		_status = 1;
@@ -288,6 +319,8 @@ String Resolver::ResolveTXT(String dnsName)
 
 	String resultString;
 	bool hasEntry = false;
+
+	bool needDelimiter = false;
 
 	for (int i = 0; i < entryCount; i++) {
 		ns_rr rr;
@@ -314,13 +347,22 @@ String Resolver::ResolveTXT(String dnsName)
 				}
 
 				String part((const char*)curr, len);
+
+				if (needDelimiter) {
+					resultString += '\n';
+					needDelimiter = false;
+				}
+
 				resultString += part;
 				curr += len;
 			}
+
+			needDelimiter = true;
 		}
 	}
 
 	_status = !hasEntry;
+	ResolverLog("Result: " + resultString + ".");
 	return resultString;
 }
 
@@ -334,7 +376,9 @@ Resolver::SRVResult *Resolver::ResolveSRV(
 		"._" + (tcp ? "tcp" : "udp") +
 		"." + dnsName;
 
+	ResolverLog("Resolve SRV: " + query + ".");
 	CowBuffer<unsigned char> response = RunQuery(query, C_IN, T_SRV);
+	ResolverLog("Parsing.");
 
 	if (!response.Size()) {
 		_status = 1;
@@ -421,6 +465,7 @@ Resolver::SRVResult *Resolver::ResolveSRV(
 	}
 
 	_status = !firstEntry;
+	ResolverLog("Result: " + ToString((long)firstEntry) + ".");
 	return firstEntry;
 }
 
@@ -429,6 +474,8 @@ void Resolver::StartAsyncResolve(CowBuffer<RequestBase*> requests)
 	if (_fd[0] != -1) {
 		THROW("Resolver is busy.");
 	}
+
+	ResolverLog("Starting async resolve.");
 
 	_asyncRequests = requests;
 
@@ -462,6 +509,8 @@ void Resolver::StartAsyncResolve(CowBuffer<RequestBase*> requests)
 	}
 
 	_dispatcher->RegisterDescriptorProcessor(this);
+
+	ResolverLog("Async resolve started.");
 }
 
 int Resolver::GetDescriptor()
@@ -540,6 +589,7 @@ void Resolver::ProcessQuant()
 
 CowBuffer<unsigned char> Resolver::RunQuery(String dnsName, int cls, int type)
 {
+	ResolverLog("Run query.");
 	struct __res_state state;
 	memset(&state, 0, sizeof(state));
 
@@ -604,10 +654,14 @@ void *Resolver::ThreadFunction(void *data)
 {
 	ThreadFunctionParams *params = static_cast<ThreadFunctionParams*>(data);
 
+	ResolverLog("Thread started work.");
+
 	for (int i = 0; i < params->RequestCount; i++) {
+		ResolverLog("Thread index: " + ToString(i) + ".");
 		RequestBase *r = params->Requests[i];
 
 		if (r->T == RequestBase::Type::GetAddrInfo) {
+			ResolverLog("Thread type: AddrInfo.");
 			RequestGetAddrInfo *req =
 				static_cast<RequestGetAddrInfo*>(r);
 
@@ -617,30 +671,35 @@ void *Resolver::ThreadFunction(void *data)
 				req->SocketType);
 			req->Status = params->Object->GetResolveStatus();
 		} else if (r->T == RequestBase::Type::A) {
+			ResolverLog("Thread type: A.");
 			RequestA *req = static_cast<RequestA*>(r);
 
 			req->ResultIPv4 = params->Object->ResolveA(
 				req->DNSName);
 			req->Status = params->Object->GetResolveStatus();
 		} else if (r->T == RequestBase::Type::RDNS) {
+			ResolverLog("Thread type: rDNS.");
 			RequestRDNS *req = static_cast<RequestRDNS*>(r);
 
 			req->ResultName = params->Object->ResolveRDNS(
 				req->IPv4);
 			req->Status = params->Object->GetResolveStatus();
 		} else if (r->T == RequestBase::Type::PTR) {
+			ResolverLog("Thread type: PTR.");
 			RequestPTR *req = static_cast<RequestPTR*>(r);
 
 			req->ResultName = params->Object->ResolvePTR(
 				req->DNSName);
 			req->Status = params->Object->GetResolveStatus();
 		} else if (r->T == RequestBase::Type::TXT) {
+			ResolverLog("Thread type: TXT.");
 			RequestTXT *req = static_cast<RequestTXT*>(r);
 
 			req->Result = params->Object->ResolveTXT(
 				req->DNSName);
 			req->Status = params->Object->GetResolveStatus();
 		} else if (r->T == RequestBase::Type::SRV) {
+			ResolverLog("Thread type: SRV.");
 			RequestSRV *req = static_cast<RequestSRV*>(r);
 
 			req->Result = params->Object->ResolveSRV(
@@ -656,4 +715,9 @@ void *Resolver::ThreadFunction(void *data)
 
 	delete params;
 	return nullptr;
+}
+
+void Resolver::ResolverLog(String message)
+{
+	Log(LogLevel::Debug, "Resolver", message);
 }

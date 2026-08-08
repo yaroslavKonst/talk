@@ -1,12 +1,20 @@
 #ifndef _LOG_HPP
 #define _LOG_HPP
 
-#include <cstdio>
-
 #include "MyString.hpp"
-#include "UnixTime.hpp"
 
-void Log(String section, String message);
+enum class LogLevel
+{
+	Debug = 0,
+	Verbose = 1,
+	Info = 2,
+	Warning = 3,
+	Error = 4,
+	Fatal = 5
+};
+
+void Log(LogLevel level, String section, String message);
 void AllowMultilineLog(bool allow);
+void SetLogLevel(LogLevel level);
 
 #endif

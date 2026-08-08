@@ -301,6 +301,45 @@ String String::Replace(char from, char to) const
 	return res;
 }
 
+int String::Find(const String &s) const
+{
+	if (!Length() || !s.Length()) {
+		return -1;
+	}
+
+	if (Length() < s.Length()) {
+		return -1;
+	}
+
+	const char *str = _data->Data;
+	const char *lim = _data->Data + Length() - s.Length();
+
+	while (str <= lim) {
+		const char *strPart = str;
+		const char *patt = s._data->Data;
+
+		bool differenceFound = false;
+
+		for (int i = 0; i < s.Length(); i++) {
+			if (*strPart != *patt) {
+				differenceFound = true;
+				break;
+			}
+
+			++strPart;
+			++patt;
+		}
+
+		if (!differenceFound) {
+			return str - _data->Data;
+		}
+
+		++str;
+	}
+
+	return -1;
+}
+
 String String::ToLowerCase() const
 {
 	String res = *this;

@@ -117,7 +117,7 @@ public:
 			CopyData(newBuffer, _data->Data + _offset, _size);
 		}
 
-		if (_size || _offset) {
+		if (_data->Data) {
 			delete[] _data->Data;
 		}
 

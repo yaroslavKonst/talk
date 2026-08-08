@@ -2,7 +2,10 @@
 
 #include <cstdio>
 
+#include "UnixTime.hpp"
+
 static bool AllowMultilineLogValue = false;
+static LogLevel LogLevelValue = LogLevel::Verbose;
 
 static CowBuffer<String> MakeMultiline(String text, int limit)
 {
@@ -91,8 +94,12 @@ static CowBuffer<String> MakeMultiline(String text, int limit)
 	return result;
 }
 
-void Log(String section, String message)
+void Log(LogLevel level, String section, String message)
 {
+	if (level < LogLevelValue) {
+		return;
+	}
+
 	String timeStr = "[" + TimeInSecondsToString(GetUnixTime()) + "]: " +
 		section + ": ";
 
@@ -145,4 +152,9 @@ void Log(String section, String message)
 void AllowMultilineLog(bool allow)
 {
 	AllowMultilineLogValue = allow;
+}
+
+void SetLogLevel(LogLevel level)
+{
+	LogLevelValue = level;
 }

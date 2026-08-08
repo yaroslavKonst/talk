@@ -33,7 +33,7 @@ public:
 	String Trim() const;
 	String Substring(int start, int length) const;
 	String Replace(char from, char to) const;
-
+	int Find(const String &s) const;
 	String ToLowerCase() const;
 
 	void Wipe();
@@ -233,7 +233,8 @@ inline String TimeSpanInSecondsToString(int64_t timeSpan)
 
 inline String TimeInSecondsToString(int64_t timePoint)
 {
-	String timeStr = ctime(&timePoint);
+	char buf[64];
+	String timeStr = ctime_r(&timePoint, buf);
 
 	if (!timeStr.Length()) {
 		return "Unparsable time point value";

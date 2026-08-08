@@ -24,12 +24,14 @@ Server::Server()
 
 Server::~Server()
 {
-	Log("Core", "Shutdown.");
+	Log(LogLevel::Fatal, "Core", "Shutdown.");
 }
 
 int Server::Run()
 {
-	Log("Core", "Startup. PID: " + ToString(getpid()) + ".");
+	Log(LogLevel::Fatal,
+		"Core",
+		"Startup. PID: " + ToString(getpid()) + ".");
 
 	DisableSigPipe();
 

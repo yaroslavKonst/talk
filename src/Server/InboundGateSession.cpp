@@ -7,8 +7,10 @@
 #include "../Protocol/GateParser.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/File.hpp"
+#include "../Common/UnixTime.hpp"
 #include "../Common/Log.hpp"
 #include "../Common/Endianness.hpp"
+#include "../Common/Hex.hpp"
 
 InboundTaskBase *InboundTaskBase::GetTask(
 	int32_t command,
@@ -190,7 +192,8 @@ InboundGateSession::InboundGateSession(
 	EventDispatcher *dispatcher,
 	UserDB *users,
 	Config *config,
-	RateLimiter *rateLimiter)
+	RateLimiter *rateLimiter) :
+	_resolver(dispatcher)
 {
 	SetInterval(60000);
 	SetTimestamp(GetMonotonicMillisecondTime());
@@ -214,6 +217,8 @@ InboundGateSession::InboundGateSession(
 	_dispatcher->RegisterTimeProcessor(this);
 	_dispatcher->RegisterDescriptorProcessor(this);
 
+	_resolver.SetResolverUser(this);
+
 	InboundGateLog("Session opened.");
 
 	SendInit();
@@ -222,6 +227,9 @@ InboundGateSession::InboundGateSession(
 InboundGateSession::~InboundGateSession()
 {
 	InboundGateLog("Session closed.");
+
+	_resolver.SetResolverUser(nullptr);
+	_resolver.PassOwnership();
 
 	if (_task) {
 		delete _task;
@@ -389,9 +397,28 @@ void InboundGateSession::ProcessWrite()
 
 void InboundGateSession::ProcessTimeEvent()
 {
+	if (_state == State::HandshakeWaitPeerAddressResolving) {
+		return;
+	}
+
+	if (_state == State::HandshakeWaitPeerParamsResolving) {
+		return;
+	}
+
 	_rateLimiter->RecordSessionTimeout(_ipv4);
 	InboundGateLog("Timeout.");
 	_storage->MarkSessionForRemoval(this);
+}
+
+void InboundGateSession::ResolveCompleted()
+{
+	if (_state == State::HandshakeWaitPeerAddressResolving) {
+		ProcessPeerAddressResolve();
+	} else if (_state == State::HandshakeWaitPeerParamsResolving) {
+		ProcessPeerParamsResolve();
+	} else {
+		THROW("Resolve handler was called in wrong state.");
+	}
 }
 
 void InboundGateSession::SendInit()
@@ -470,73 +497,58 @@ bool InboundGateSession::ProcessHandshakeSyn(CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
-	GateHandshakeSyn::Data response;
-
 	if (syn.ProtocolVersion != 0) {
-		response = BuildUnsupportedProtocolVersion();
-	} else if (syn.EncryptionScheme != Crypto::X25519::SCHEME_ID) {
-		response = BuildUnsupportedEncryptionScheme();
-	} else {
-		_securityValues.PeerName = syn.ServerName;
-		_peerPublicKey = syn.Key;
-		_salt1 = syn.Salt;
-
-		if (!VerifyPeer(buffer, syn.Signature)) {
-			response = BuildVerificationFailure();
-		} else {
-			response = BuildSyn();
-		}
+		SendUnsupportedProtocolVersion();
+		return true;
 	}
 
-	CowBuffer<uint8_t> responseBuffer =
-		GateHandshakeSyn::BuildData(response);
+	if (syn.EncryptionScheme != Crypto::X25519::SCHEME_ID) {
+		SendUnsupportedEncryptionScheme();
+		return true;
+	}
 
-	CowBuffer<uint8_t> sizeBuffer(sizeof(uint32_t));
-	*sizeBuffer.SwitchType<uint32_t>() =
-		SetProtoEndian<uint32_t>(responseBuffer.Size());
+	_securityValues.PeerName = syn.ServerName;
+	_peerPublicKey = syn.Key;
+	_salt1 = syn.Salt;
 
-	responseBuffer = sizeBuffer.Concat(responseBuffer);
+	_peerSynBuffer = buffer;
+	_peerSynSignature = syn.Signature;
 
-	_outScramblerInit = Crypto::ApplyScrambler(
-		responseBuffer.Pointer(),
-		responseBuffer.Size(),
-		_outScramblerInit);
-
-	_writer = new StreamWriter(_fd, responseBuffer);
+	VerifyPeer();
 	return true;
 }
 
-GateHandshakeSyn::Data InboundGateSession::BuildUnsupportedProtocolVersion()
+void InboundGateSession::SendUnsupportedProtocolVersion()
 {
 	GateHandshakeSyn::Data data;
 	data.Stat = GateHandshakeSyn::Data::Status::ErrorCode;
 	data.ErrorCode = GATE_HANDSHAKE_UNSUPPORTED_PROTOCOL_VERSION;
 
 	_state = State::WriteAllAndExit;
-	return data;
+	CreateSizePrefixAndSend(GateHandshakeSyn::BuildData(data));
 }
 
-GateHandshakeSyn::Data InboundGateSession::BuildUnsupportedEncryptionScheme()
+void InboundGateSession::SendUnsupportedEncryptionScheme()
 {
 	GateHandshakeSyn::Data data;
 	data.Stat = GateHandshakeSyn::Data::Status::ErrorCode;
 	data.ErrorCode = GATE_HANDSHAKE_UNSUPPORTED_ENCRYPTION_SCHEME;
 
 	_state = State::WriteAllAndExit;
-	return data;
+	CreateSizePrefixAndSend(GateHandshakeSyn::BuildData(data));
 }
 
-GateHandshakeSyn::Data InboundGateSession::BuildVerificationFailure()
+void InboundGateSession::SendVerificationFailure()
 {
 	GateHandshakeSyn::Data data;
 	data.Stat = GateHandshakeSyn::Data::Status::ErrorCode;
 	data.ErrorCode = GATE_HANDSHAKE_VERIFICATION_FAILURE;
 
 	_state = State::WriteAllAndExit;
-	return data;
+	CreateSizePrefixAndSend(GateHandshakeSyn::BuildData(data));
 }
 
-GateHandshakeSyn::Data InboundGateSession::BuildSyn()
+void InboundGateSession::SendSyn()
 {
 	Crypto::X25519::GenerateEphemeralKeyPair(
 		_ephemeralPrivateKey,
@@ -560,32 +572,274 @@ GateHandshakeSyn::Data InboundGateSession::BuildSyn()
 	syn.Salt = _salt2;
 	// TODO: signature processing.
 
+	CreateSizePrefixAndSend(GateHandshakeSyn::BuildData(syn));
+
 	_state = State::HandshakeWaitVerificationResponse;
 	_reader = new StreamReader(_fd, sizeof(int32_t));
-	return syn;
 }
 
-bool InboundGateSession::VerifyPeer(
-	const CowBuffer<uint8_t> buffer,
-	const CowBuffer<uint8_t> signature)
+void InboundGateSession::VerifyPeer()
 {
 	// Remove port if present.
 	CowBuffer<String> parts = _securityValues.PeerName.Split(':', false);
 
-	if (!parts.Size()) {
-		return false;
+	if (!parts.Size() || parts.Size() > 2) {
+		SendVerificationFailure();
+		return;
 	}
 
 	String peerName = parts[0];
 
 	// IP name check.
 	if (IPToString(_ipv4) == peerName) {
-		return true;
+		InboundGateLog("IP check: " + peerName + ".");
+
+		if (_peerSynSignature.Size()) {
+			SendVerificationFailure();
+		} else {
+			SendSyn();
+		}
+
+		return;
 	}
 
-	// TODO: DNS name check.
+	// DNS check.
+	InboundGateLog("DNS check: " + peerName + ".");
 
-	return true;
+	if (parts.Size() == 1) {
+		InboundGateLog("SRV query.");
+		Resolver::RequestSRV *srv = new Resolver::RequestSRV;
+		srv->DNSName = peerName;
+		srv->ServiceName = "talkdgate";
+
+		_state = State::HandshakeWaitPeerAddressResolving;
+
+		_resolverRequests.Resize(1);
+		_resolverRequests[0] = srv;
+	} else {
+		InboundGateLog("A, rDNS, TXT query.");
+
+		_srvPeerName = peerName;
+
+		Resolver::RequestA *a = new Resolver::RequestA;
+		a->DNSName = peerName;
+
+		Resolver::RequestRDNS *rdns = new Resolver::RequestRDNS;
+		rdns->IPv4 = _ipv4;
+
+		Resolver::RequestTXT *txt = new Resolver::RequestTXT;
+		txt->DNSName = peerName;
+
+		_state = State::HandshakeWaitPeerParamsResolving;
+
+		_resolverRequests.Resize(3);
+		_resolverRequests[0] = a;
+		_resolverRequests[1] = rdns;
+		_resolverRequests[2] = txt;
+	}
+
+	_resolver.StartAsyncResolve(_resolverRequests);
+}
+
+void InboundGateSession::ProcessPeerAddressResolve()
+{
+	Resolver::RequestSRV *srv =
+		static_cast<Resolver::RequestSRV*>(_resolverRequests[0]);
+
+	if (srv->Status || !srv->Result) {
+		InboundGateLog("SRV record was not found.");
+		delete srv;
+		SendVerificationFailure();
+		return;
+	}
+
+	InboundGateLog("A, rDNS, TXT query (SRV based).");
+
+	Resolver::SRVResult *res = srv->Result;
+
+	_srvPeerName = res->Target;
+
+	Resolver::RequestA *a = new Resolver::RequestA;
+	a->DNSName = res->Target;
+
+	Resolver::RequestRDNS *rdns = new Resolver::RequestRDNS;
+	rdns->IPv4 = _ipv4;
+
+	Resolver::RequestTXT *txt = new Resolver::RequestTXT;
+	txt->DNSName = res->Target;
+
+	delete srv;
+
+	_state = State::HandshakeWaitPeerParamsResolving;
+
+	_resolverRequests.Resize(3);
+	_resolverRequests[0] = a;
+	_resolverRequests[1] = rdns;
+	_resolverRequests[2] = txt;
+
+	_resolver.StartAsyncResolve(_resolverRequests);
+}
+
+void InboundGateSession::ProcessPeerParamsResolve()
+{
+	InboundGateLog("Processing DNS response.");
+
+	Resolver::RequestA *a =
+		static_cast<Resolver::RequestA*>(_resolverRequests[0]);
+	Resolver::RequestRDNS *rdns =
+		static_cast<Resolver::RequestRDNS*>(_resolverRequests[1]);
+	Resolver::RequestTXT *txt =
+		static_cast<Resolver::RequestTXT*>(_resolverRequests[2]);
+
+	_resolverRequests.Resize(0);
+
+	bool success = !a->Status && !rdns->Status;
+
+	if (!success) {
+		delete a;
+		delete rdns;
+		delete txt;
+		SendVerificationFailure();
+		return;
+	}
+
+	success =
+		a->ResultIPv4 == _ipv4 &&
+		rdns->ResultName == _srvPeerName;
+
+	if (!success) {
+		delete a;
+		delete rdns;
+		delete txt;
+		SendVerificationFailure();
+		return;
+	}
+
+	delete a;
+	delete rdns;
+
+	if (txt->Status) {
+		delete txt;
+
+		if (_peerSynSignature.Size()) {
+			SendVerificationFailure();
+		} else {
+			SendSyn();
+		}
+
+		return;
+	}
+
+	String keyString = "talkdkey=";
+	String rawTXT = txt->Result;
+
+	delete txt;
+
+	int pos = 0;
+
+	for (;;) {
+		pos = rawTXT.Find(keyString);
+
+		if (pos == -1) {
+			if (_peerSynSignature.Size()) {
+				SendVerificationFailure();
+			} else {
+				SendSyn();
+			}
+
+			return;
+		}
+
+		if (pos > 0 && rawTXT.CStr()[pos - 1] != '\n') {
+			rawTXT = rawTXT.Substring(
+				pos + 1,
+				rawTXT.Length() - pos - 1);
+			continue;
+		}
+
+		break;
+	}
+
+	if (!_peerSynSignature.Size()) {
+		SendVerificationFailure();
+		return;
+	}
+
+	pos += keyString.Length();
+	String keyLine = rawTXT.Substring(pos, rawTXT.Length() - pos);
+
+	bool validKeyLineLength =
+		keyLine.Length() >=
+		Crypto::X25519::SIGNATURE_PUBLIC_KEY_SIZE * 2 + 2;
+
+	if (!validKeyLineLength) {
+		SendVerificationFailure();
+		return;
+	}
+
+	if (keyLine.CStr()[0] != '"') {
+		SendVerificationFailure();
+		return;
+	}
+
+	int quotePos = 1;
+
+	while (quotePos < keyLine.Length()) {
+		if (keyLine.CStr()[quotePos] == '"') {
+			break;
+		}
+
+		++quotePos;
+	}
+
+	if (quotePos >= keyLine.Length()) {
+		SendVerificationFailure();
+		return;
+	}
+
+	keyLine = keyLine.Substring(1, quotePos - 1);
+
+	CowBuffer<String> signatureKeys =
+		keyLine.Split(';', true);
+
+	for (uint32_t keyIdx = 0; keyIdx < signatureKeys.Size(); keyIdx++) {
+		Crypto::X25519::SignaturePublicKeyContainer sPubKey;
+
+		String keyHex = signatureKeys[keyIdx];
+
+		bool validLength =
+			keyHex.Length() ==
+			Crypto::X25519::SIGNATURE_PUBLIC_KEY_SIZE * 2;
+
+		if (!validLength) {
+			continue;
+		}
+
+		keyHex = keyHex.ToLowerCase();
+
+		try {
+			HexToData(keyHex, sPubKey.Key);
+		} catch (Exception &ex) {
+			continue;
+		}
+
+		bool validSignature = Crypto::X25519::Verify(
+			_peerSynBuffer.Slice(
+				0,
+				_peerSynBuffer.Size() -
+				Crypto::X25519::SIGNATURE_SIZE),
+			sPubKey,
+			_peerSynSignature.Pointer());
+
+		if (!validSignature) {
+			continue;
+		}
+
+		SendSyn();
+		return;
+	}
+
+	SendVerificationFailure();
 }
 
 bool InboundGateSession::ProcessHandshakeVerificationResponse(
@@ -718,7 +972,25 @@ bool InboundGateSession::ProcessSessionInput(CowBuffer<uint8_t> buffer)
 	return true;
 }
 
+void InboundGateSession::CreateSizePrefixAndSend(CowBuffer<uint8_t> buffer)
+{
+	CowBuffer<uint8_t> sizeBuffer(sizeof(uint32_t));
+	*sizeBuffer.SwitchType<uint32_t>() =
+		SetProtoEndian<uint32_t>(buffer.Size());
+
+	buffer = sizeBuffer.Concat(buffer);
+
+	_outScramblerInit = Crypto::ApplyScrambler(
+		buffer.Pointer(),
+		buffer.Size(),
+		_outScramblerInit);
+
+	_writer = new StreamWriter(_fd, buffer);
+}
+
 void InboundGateSession::InboundGateLog(String message)
 {
-	Log("Inbound gate from " + IPToString(_ipv4), message);
+	Log(LogLevel::Info,
+		"Inbound gate from " + IPToString(_ipv4),
+		message);
 }

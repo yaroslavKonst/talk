@@ -71,7 +71,7 @@ void Client::GetPassword()
 
 	while (password.Length() < 100000) {
 		char c;
-		int res = read(0, &c, 1);
+		res = read(0, &c, 1);
 
 		if (res <= 0 || c == '\n') {
 			break;

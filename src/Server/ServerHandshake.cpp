@@ -505,5 +505,5 @@ void ServerHandshake::HandshakeLog(String name, String message)
 		text += ", " + name;
 	}
 
-	Log(text, message);
+	Log(LogLevel::Info, text, message);
 }

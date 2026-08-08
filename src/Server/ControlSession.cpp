@@ -437,5 +437,5 @@ void ControlSession::ProcessFailBanUnbanCommand(CowBuffer<uint8_t> buffer)
 
 void ControlSession::ControlLog(String message)
 {
-	Log("Control", message);
+	Log(LogLevel::Warning, "Control", message);
 }

@@ -635,5 +635,5 @@ void Config::Validate()
 
 void Config::ConfigLog(String message)
 {
-	Log("Config", message);
+	Log(LogLevel::Verbose, "Config", message);
 }
