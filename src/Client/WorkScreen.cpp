@@ -206,7 +206,16 @@ void WorkScreen::RedrawChatList()
 		}
 
 		move(i, 1);
-		addstr(upName.CStr());
+
+		int widthLimit = _columns / 4 - 2;
+		bool running = UiHelpers::DrawRunningLine(
+			upName,
+			widthLimit);
+
+		if (running) {
+			_root->Ui->RequestRunningLine();
+		}
+
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 
 		if (upName == currentName) {
@@ -233,30 +242,33 @@ void WorkScreen::RedrawCurrentChat()
 
 	move(5, 0);
 
-	addstr(_chatStack->PeerName.CStr());
+	String chatCaptionLine = _chatStack->PeerName + ", ";
 
 	if (_chatStack->ThreadID.IsZero()) {
-		addstr(", main thread.");
+		chatCaptionLine += "main thread.";
 	} else {
 		MessageEventProcessor::MessageDescriptorBase *md =
 			_root->Messages->GetMessageDescriptor(
 				_chatStack->ThreadID);
 
 		if (!md) {
-			String line = ", thread " + DataToHex(
+			chatCaptionLine += "thread " + DataToHex(
 				_chatStack->ThreadID.GetValuePointer(),
 				(int)ObjectStorage::Constants::IDSize);
-
-			addstr(line.CStr());
 		} else {
-			String line =
-				", thread " +
+			chatCaptionLine += "thread " +
 				md->GetHeader().Source + ", " +
 				TimeInSecondsToString(
 					md->GetHeader().Timestamp);
-
-			addstr(line.CStr());
 		}
+	}
+
+	bool running = UiHelpers::DrawRunningLine(
+		chatCaptionLine,
+		_columns);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
 	}
 
 	int currentLinePosition = _rows - 10;
@@ -318,7 +330,8 @@ bool WorkScreen::AddLineToChatScreen(
 	int &skipLines,
 	int prefix,
 	String text,
-	bool centering)
+	bool centering,
+	int applyRunFrom)
 {
 	if (currentLinePosition < 7) {
 		return false;
@@ -327,6 +340,44 @@ bool WorkScreen::AddLineToChatScreen(
 	if (skipLines > 0) {
 		--skipLines;
 		return true;
+	}
+
+	if (applyRunFrom != -1) {
+		String staticText = text.Substring(0, applyRunFrom);
+		String runningText = text.Substring(
+			applyRunFrom,
+			text.Length() - applyRunFrom);
+
+		int widthLimit =
+			_columns -
+			_columns / 4 - 3 -
+			staticText.Length();
+
+		if (prefix) {
+			widthLimit -= 2;
+		}
+
+		if (widthLimit <= 0) {
+			return AddLineToChatScreen(
+				currentLinePosition,
+				skipLines,
+				prefix,
+				text,
+				centering,
+				0);
+		}
+
+		bool isRunning;
+		runningText = UiHelpers::GetRunningLine(
+			runningText,
+			widthLimit,
+			isRunning);
+
+		if (isRunning) {
+			_root->Ui->RequestRunningLine();
+		}
+
+		text = staticText + runningText;
 	}
 
 	if (centering) {
@@ -366,7 +417,8 @@ bool WorkScreen::RedrawConversationStart(
 		skipLines,
 		0,
 		"Conversation start",
-		true);
+		true,
+		0);
 }
 
 bool WorkScreen::RedrawMessageBody(
@@ -476,7 +528,9 @@ bool WorkScreen::RedrawAttachmentContentsEntry(
 		currentLinePosition,
 		skipLines,
 		ACS_VLINE,
-		line);
+		line,
+		false,
+		0);
 	attrset(COLOR_PAIR(DEFAULT_TEXT));
 
 	return success;
@@ -493,7 +547,9 @@ bool WorkScreen::RedrawUnknownContentsEntry(
 		currentLinePosition,
 		skipLines,
 		ACS_VLINE,
-		line);
+		line,
+		false,
+		0);
 	attrset(COLOR_PAIR(DEFAULT_TEXT));
 
 	return success;
@@ -578,7 +634,9 @@ bool WorkScreen::RedrawMessageHeader(
 			currentLinePosition,
 			skipLines,
 			0,
-			flagString + ".");
+			flagString + ".",
+			false,
+			0);
 
 		if (!success) {
 			return false;
@@ -608,7 +666,9 @@ bool WorkScreen::RedrawMessageHeader(
 				currentLinePosition,
 				skipLines,
 				0,
-				warningString);
+				warningString,
+				false,
+				0);
 			attrset(COLOR_PAIR(DEFAULT_TEXT));
 
 			if (!success) {
@@ -621,7 +681,9 @@ bool WorkScreen::RedrawMessageHeader(
 		currentLinePosition,
 		skipLines,
 		0,
-		TimeInSecondsToString(header.Timestamp));
+		TimeInSecondsToString(header.Timestamp),
+		false,
+		0);
 
 	if (!success) {
 		return false;
@@ -635,7 +697,9 @@ bool WorkScreen::RedrawMessageHeader(
 			currentLinePosition,
 			skipLines,
 			0,
-			senderName);
+			senderName,
+			false,
+			0);
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 	} else {
 		attrset(COLOR_PAIR(GREEN_TEXT));

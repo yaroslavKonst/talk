@@ -52,6 +52,7 @@ int Client::Run()
 
 	UI ui(&root);
 	root.Ui = &ui;
+	ui.ProcessResize();
 
 	dispatcher.Run();
 

@@ -48,6 +48,10 @@ namespace UiHelpers
 		int _tX;
 		int _tY;
 	};
+
+	String GetRunningLine(String text, int widthLimit, bool &running);
+	bool DrawRunningLine(String text, int widthLimit);
+	void UpdateRunningLineSeed();
 }
 
 #endif

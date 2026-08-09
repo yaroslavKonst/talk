@@ -175,6 +175,8 @@ public:
 	virtual void Notify(String message) = 0;
 	virtual void *BlockNotify(String message) = 0;
 	virtual void BlockCancel(void *handle) = 0;
+
+	virtual void RequestRunningLine() = 0;
 };
 
 #endif

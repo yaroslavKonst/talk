@@ -9,7 +9,8 @@
 class UI :
 	public UIEventProcessor,
 	public DescriptorEventProcessor,
-	public SignalEventProcessor
+	public SignalEventProcessor,
+	public TimeEventProcessor
 {
 public:
 	UI(Root *root);
@@ -47,6 +48,10 @@ public:
 	void *BlockNotify(String message) override;
 	void BlockCancel(void *handle) override;
 
+	void RequestRunningLine() override;
+
+	void ProcessTimeEvent() override;
+
 private:
 	Root *_root;
 
@@ -73,6 +78,8 @@ private:
 	};
 
 	ScreenStackEntry *_screenStack;
+
+	bool _needRunningString;
 };
 
 #endif

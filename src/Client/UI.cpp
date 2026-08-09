@@ -9,6 +9,7 @@
 #include "WorkScreen.hpp"
 #include "UiHelpers.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/UnixTime.hpp"
 #include "../Common/Hex.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
@@ -30,10 +31,10 @@ UI::UI(Root *root) :
 	init_pair(YELLOW_TEXT, COLOR_YELLOW, COLOR_BLACK);
 	init_pair(RED_TEXT, COLOR_RED, COLOR_BLACK);
 
+	_needRunningString = false;
+
 	_screenStack = new ScreenStackEntry(nullptr);
 	_screenStack->screen = new WorkScreen(_root);
-
-	ProcessResize();
 
 	_root->Dispatcher->RegisterDescriptorProcessor(this);
 	_root->Dispatcher->RegisterSignalProcessor(this, SIGWINCH);
@@ -43,6 +44,7 @@ UI::~UI()
 {
 	_root->Dispatcher->UnregisterSignalProcessor(this, SIGWINCH);
 	_root->Dispatcher->UnregisterDescriptorProcessor(this);
+	_root->Dispatcher->UnregisterTimeProcessor(this);
 	endwin();
 }
 
@@ -74,7 +76,7 @@ bool UI::ProcessEvent()
 		return true;
 	}
 
-	if (_rows < 24 || _columns < 80) {
+	if (_rows < 20 || _columns < 20) {
 		return true;
 	}
 
@@ -139,26 +141,36 @@ void UI::Redraw()
 {
 	UiHelpers::ClearScreen(0, _rows - 1, 0, _columns - 1);
 
-	if (_rows < 24 || _columns < 80) {
-		move(0, 1);
-		addstr("Terminal screen is too small.");
+	bool hadRunningString = _needRunningString;
+	_needRunningString = false;
+
+	if (_rows < 20 || _columns < 20) {
 		move(0, 0);
-		refresh();
-		return;
+		addstr("Terminal screen is too small.");
+		move(1, 0);
+	} else {
+		DrawUserData();
+		DrawConnectionState();
+		DrawVoiceState();
+		DrawControlHelp();
+
+		if (_screenStack) {
+			_screenStack->screen->Redraw();
+		}
+
+		_notifier.Redraw();
 	}
-
-	DrawUserData();
-	DrawConnectionState();
-	DrawVoiceState();
-	DrawControlHelp();
-
-	if (_screenStack) {
-		_screenStack->screen->Redraw();
-	}
-
-	_notifier.Redraw();
 
 	refresh();
+
+	if (_needRunningString && !hadRunningString) {
+		SetTimestamp(GetMonotonicMillisecondTime());
+		SetInterval(500);
+
+		_root->Dispatcher->RegisterTimeProcessor(this);
+	} else if (hadRunningString && !_needRunningString) {
+		_root->Dispatcher->UnregisterTimeProcessor(this);
+	}
 }
 
 void UI::Notify(String message)
@@ -176,34 +188,66 @@ void UI::BlockCancel(void *handle)
 	_notifier.BlockCancel(handle);
 }
 
+void UI::RequestRunningLine()
+{
+	_needRunningString = true;
+}
+
+void UI::ProcessTimeEvent()
+{
+	UiHelpers::UpdateRunningLineSeed();
+	_root->Ui->Redraw();
+}
+
 void UI::DrawUserData()
 {
 	move(0, 0);
 	addstr("Login: ");
+
+	String loginString;
+	bool loginValid = true;
+
 	if (_root->Conf->GetName().Length() > 0) {
-		addstr(_root->Conf->GetName().CStr());
+		loginString += _root->Conf->GetName();
 	} else {
-		attrset(COLOR_PAIR(RED_TEXT));
-		addstr("not specified");
-		attrset(COLOR_PAIR(DEFAULT_TEXT));
+		loginString += "not specified";
+		loginValid = false;
 	}
 
 	String hostName = _root->Conf->GetHostName();
 
 	if (hostName.Length() > 0) {
-		addch('@');
-		addstr(hostName.CStr());
+		loginString += "@" + hostName;
 	} else {
-		attrset(COLOR_PAIR(RED_TEXT));
-		addstr(" (host name is not specified)");
-		attrset(COLOR_PAIR(DEFAULT_TEXT));
+		loginString += " (host name is not specified)";
+		loginValid = false;
 	}
+
+	if (!loginValid) {
+		attrset(COLOR_PAIR(RED_TEXT));
+	}
+
+	bool running = UiHelpers::DrawRunningLine(
+		loginString,
+		_columns - 7);
+
+	if (running) {
+		RequestRunningLine();
+	}
+
+	attrset(COLOR_PAIR(DEFAULT_TEXT));
 
 	move(1, 0);
 	addstr("Key: ");
-	addstr(DataToHex(
-		_root->PublicKey->Key,
-		Crypto::X25519::KEY_SIZE).CStr());
+	running = UiHelpers::DrawRunningLine(
+		DataToHex(
+			_root->PublicKey->Key,
+			Crypto::X25519::KEY_SIZE),
+		_columns - 5);
+
+	if (running) {
+		RequestRunningLine();
+	}
 }
 
 void UI::DrawConnectionState()
@@ -211,19 +255,26 @@ void UI::DrawConnectionState()
 	move(2, 0);
 	addstr("Connection status: ");
 
+	String line;
+
 	if (_root->Network->ConnectionActive()) {
 		attrset(COLOR_PAIR(GREEN_TEXT));
-		addstr("connected");
+		line = "connected.";
 	} else if (_root->Network->HandshakeActive()) {
 		attrset(COLOR_PAIR(YELLOW_TEXT));
-		addstr("connecting");
+		line = "connecting.";
 	} else {
 		attrset(COLOR_PAIR(RED_TEXT));
-		addstr("not connected");
+		line = "not connected.";
+	}
+
+	bool running = UiHelpers::DrawRunningLine(line, _columns - 19);
+
+	if (running) {
+		RequestRunningLine();
 	}
 
 	attrset(COLOR_PAIR(DEFAULT_TEXT));
-	addch('.');
 }
 
 void UI::DrawVoiceState()

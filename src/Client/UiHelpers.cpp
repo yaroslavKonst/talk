@@ -7,6 +7,8 @@
 
 using namespace UiHelpers;
 
+static uint32_t RunningLineSeedValue = 0;
+
 void UiHelpers::ClearScreen(int fromY, int toY, int fromX, int toX)
 {
 	for (int r = fromY; r <= toY; r++) {
@@ -264,4 +266,40 @@ void TextBox::ProcessChar(int event)
 	}
 
 	Text += event;
+}
+
+String UiHelpers::GetRunningLine(String text, int widthLimit, bool &running)
+{
+	if (text.Length() <= widthLimit) {
+		running = false;
+		return text;
+	}
+
+	int len = text.Length();
+
+	text = text + "       " + text;
+	int maxOffset = len + 7;
+	int offset = RunningLineSeedValue % maxOffset;
+
+	text = text.Substring(offset, widthLimit);
+
+	running = true;
+	return text;
+}
+
+bool UiHelpers::DrawRunningLine(String text, int widthLimit)
+{
+	bool result;
+	text = GetRunningLine(text, widthLimit, result);
+	addstr(text.CStr());
+	return result;
+}
+
+void UiHelpers::UpdateRunningLineSeed()
+{
+	++RunningLineSeedValue;
+
+	if (RunningLineSeedValue > 1024 * 1024 * 1024) {
+		RunningLineSeedValue = 0;
+	}
 }
