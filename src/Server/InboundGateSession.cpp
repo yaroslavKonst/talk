@@ -591,13 +591,17 @@ void InboundGateSession::VerifyPeer()
 	String peerName = parts[0];
 
 	// IP name check.
-	if (IPToString(_ipv4) == peerName) {
+	if (IsValidIPv4Address(peerName)) {
 		InboundGateLog("IP check: " + peerName + ".");
 
-		if (_peerSynSignature.Size()) {
-			SendVerificationFailure();
+		if (IPToString(_ipv4) == peerName) {
+			if (_peerSynSignature.Size()) {
+				SendVerificationFailure();
+			} else {
+				SendSyn();
+			}
 		} else {
-			SendSyn();
+			SendVerificationFailure();
 		}
 
 		return;

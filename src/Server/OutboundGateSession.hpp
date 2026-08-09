@@ -140,7 +140,9 @@ private:
 
 	enum class State
 	{
+		WaitingForDestinationSRVResolve,
 		WaitingForDestinationNameResolve,
+		WaitingForDestinationParamsResolve,
 		WaitingForConnect,
 		HandshakeWaitInit,
 		HandshakeWaitSynSize,
@@ -152,6 +154,7 @@ private:
 	State _state;
 	Resolver _resolver;
 	struct addrinfo *_addrinfo;
+	Resolver::RequestGetAddrInfo *_info;
 	CowBuffer<Resolver::RequestBase*> _resolverRequests;
 
 	uint8_t _inScramblerInit;
@@ -160,7 +163,11 @@ private:
 	Crypto::X25519::EncryptedStream _outES;
 	Crypto::X25519::EncryptedStream _inES;
 
-	String _peerName;
+	String _expectedPeerHostName;
+	String _peerProvidedName;
+	String _peerTXTField;
+
+	bool _ipPeerName;
 
 	Crypto::X25519::PrivateKeyContainer _ephemeralPrivateKey;
 	Crypto::X25519::PublicKeyContainer _ephemeralPublicKey;

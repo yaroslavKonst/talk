@@ -2,6 +2,7 @@
 #define _MY_STRING_HPP
 
 #include <time.h>
+#include <stdlib.h>
 
 #include "CowBuffer.hpp"
 
@@ -241,6 +242,43 @@ inline String TimeInSecondsToString(int64_t timePoint)
 	}
 
 	return timeStr.Substring(0, timeStr.Length() - 1);
+}
+
+inline bool IsValidIPv4Address(String address)
+{
+	CowBuffer<String> parts = address.Split('.', false);
+
+	if (parts.Size() != 4) {
+		return false;
+	}
+
+	for (uint32_t partIdx = 0; partIdx < parts.Size(); partIdx++) {
+		String part = parts[partIdx];
+
+		if (!part.Length() || part.Length() > 3) {
+			return false;
+		}
+
+		for (int i = 0; i < part.Length(); i++) {
+			char c = part.CStr()[i];
+
+			if (c < '0' || c > '9') {
+				return false;
+			}
+
+			if (c == '0' && i == 0 && part.Length() > 1) {
+				return false;
+			}
+		}
+
+		int value = atoi(part.CStr());
+
+		if (value < 0 || value > 255) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 #endif

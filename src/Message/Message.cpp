@@ -528,7 +528,7 @@ bool Message::ExtractServerDataFromFullName(
 		return false;
 	}
 
-	if (!hostName.Length() || !serviceName.Length()) {
+	if (!hostName.Length()) {
 		return false;
 	}
 

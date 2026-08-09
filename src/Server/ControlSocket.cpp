@@ -27,7 +27,7 @@ ControlSocket::ControlSocket(
 ControlSocket::~ControlSocket()
 {
 	if (_timeQuantRequested) {
-		_dispatcher->RegisterQuantProcessor(this);
+		_dispatcher->UnregisterQuantProcessor(this);
 		_timeQuantRequested = false;
 	}
 

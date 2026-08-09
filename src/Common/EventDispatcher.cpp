@@ -384,6 +384,10 @@ void EventDispatcher::PreparePollFds()
 			events |= POLLOUT;
 		}
 
+		if (!events) {
+			_pollFds[i].fd = -1;
+		}
+
 		_pollFds[i].events = events;
 		_pollFds[i].revents = 0;
 	}
