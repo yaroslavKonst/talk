@@ -142,6 +142,12 @@ private:
 	};
 
 	ChannelToRemove *_channelsToRemove;
+
+	bool CanBeDeliveredByShortcut(
+		const Message::X25519::HeaderPointToPoint &header);
+	void RunDeliveryShortcut(
+		const Message::X25519::HeaderPointToPoint &header,
+		const ObjectStorage::ID &messageID);
 };
 
 #endif

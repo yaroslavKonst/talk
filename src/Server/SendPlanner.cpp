@@ -415,6 +415,14 @@ void SendPlanner::RegisterMessageForDelivery(
 	const Message::X25519::HeaderPointToPoint &header,
 	const ObjectStorage::ID &messageID)
 {
+	if (CanBeDeliveredByShortcut(header)) {
+		Log(LogLevel::Debug, "SendPlanner", "Shortcut is used.");
+		RunDeliveryShortcut(header, messageID);
+		return;
+	}
+
+	// Full delivery.
+	Log(LogLevel::Debug, "SendPlanner", "Full path is used.");
 	OutboundChannelTreeEntry e;
 	e.Source = header.Source;
 	e.Destination = header.Destination;
@@ -585,4 +593,129 @@ void SendPlanner::RemoveSessions()
 	}
 
 	_hasSessionsForRemoval = false;
+}
+
+bool SendPlanner::CanBeDeliveredByShortcut(
+	const Message::X25519::HeaderPointToPoint &header)
+{
+	String userName;
+	String hostName;
+
+	bool res = Message::SplitFullUserName(
+		header.Destination,
+		userName,
+		hostName);
+
+	if (!res) {
+		THROW("Invalid user name in server database.");
+	}
+
+	return hostName == _config->GetHostName();
+}
+
+void SendPlanner::RunDeliveryShortcut(
+	const Message::X25519::HeaderPointToPoint &header,
+	const ObjectStorage::ID &messageID)
+{
+	String sourceUserName;
+	String destinationUserName;
+	String hostName;
+
+	bool res = Message::SplitFullUserName(
+		header.Source,
+		sourceUserName,
+		hostName);
+
+	if (!res) {
+		THROW("Invalid user name in server database.");
+	}
+
+	res = Message::SplitFullUserName(
+		header.Destination,
+		destinationUserName,
+		hostName);
+
+	if (!res) {
+		THROW("Invalid user name in server database.");
+	}
+
+	User *sourceUser = _users->GetUser(sourceUserName);
+
+	if (!sourceUser) {
+		return;
+	}
+
+	User *destinationUser = _users->GetUser(destinationUserName);
+
+	bool success = true;
+	int32_t errorCode = 0;
+
+	if (!destinationUser) {
+		errorCode = GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER;
+	} else {
+		errorCode = destinationUser->CheckInboundMessage(
+			header,
+			messageID);
+	}
+
+	if (errorCode != GATE_MESSAGE_HEADER_ACCEPT) {
+		success = false;
+	} else {
+		Message::Attribute attr;
+		destinationUser->DeliverMessage(
+			header,
+			sourceUser->GetMessage(
+				header.Destination,
+				messageID,
+				attr));
+	}
+
+	sourceUser->UpdateMessage(
+		header.Destination,
+		messageID,
+		Message::Attribute::InProgress,
+		false);
+
+	if (!success && errorCode != GATE_MESSAGE_HEADER_REJECT_SILENTBLOCK) {
+		Message::Attribute failReason;
+
+		switch (errorCode) {
+		case GATE_MESSAGE_HEADER_REJECT:
+			failReason = Message::Attribute::Rejected;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER:
+			failReason = Message::Attribute::WrongDestinationUser;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_KEY:
+			failReason = Message::Attribute::WrongDestinationKey;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER:
+			failReason = Message::Attribute::InvalidHeader;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_MESSAGE_TOO_BIG:
+			failReason = Message::Attribute::MessageTooBig;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_SENDER_BANNED:
+			failReason = Message::Attribute::BannedSender;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_SENDER_KEY_BANNED:
+			failReason = Message::Attribute::BannedSenderKey;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_EXISTS:
+			failReason = Message::Attribute::Duplicate;
+			break;
+		case GATE_MESSAGE_HEADER_REJECT_CONNECTION_FAILURE:
+			failReason = Message::Attribute::ConnectionFailure;
+			break;
+		default:
+			failReason = Message::Attribute::Rejected;
+			break;
+		}
+
+		sourceUser->UpdateMessage(
+			header.Destination,
+			messageID,
+			failReason,
+			true);
+	}
 }

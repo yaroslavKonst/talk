@@ -228,7 +228,14 @@ void User::UpdateContactKey(
 
 void User::BlockContact(String name, Contact::BlockStatus block)
 {
-	_contactStorage.GetContact(name)->SetBlockStatus(block);
+	Contact *contact = _contactStorage.GetContact(name);
+
+	if (!contact) {
+		_contactStorage.AddNewContact(name);
+		contact = _contactStorage.GetContact(name);
+	}
+
+	contact->SetBlockStatus(block);
 
 	BlockContactObject::Data data;
 	data.ContactName = name;
