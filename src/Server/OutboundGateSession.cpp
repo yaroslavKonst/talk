@@ -220,13 +220,12 @@ OutboundGateSession::OutboundGateSession(
 	Config *config,
 	OutboundGateSessionStorage *storage,
 	TaskBase *task) :
-	_resolver(dispatcher)
+	_securityModule(dispatcher)
 {
 	SetInterval(60000);
 	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_fd = -1;
-	_ipv4 = 0xffffffff;
 	_dispatcher = dispatcher;
 	_config = config;
 	_storage = storage;
@@ -236,21 +235,21 @@ OutboundGateSession::OutboundGateSession(
 		THROW("Task can not be NULL.");
 	}
 
+	_state = State::WaitingForDestinationResolve;
+
 	_reader = nullptr;
 	_writer = nullptr;
 
 	_protocol = nullptr;
 	_expectChunkSize = true;
 
-	_addrinfo = nullptr;
-	_info = nullptr;
-	_resolver.SetResolverUser(this);
+	_securityModule.SetUser(this);
 
 	_dispatcher->RegisterTimeProcessor(this);
 
-	StartConnection();
-
 	OutboundGateLog("Session opened.");
+
+	StartConnection();
 }
 
 OutboundGateSession::~OutboundGateSession()
@@ -259,13 +258,7 @@ OutboundGateSession::~OutboundGateSession()
 
 	_dispatcher->UnregisterTimeProcessor(this);
 
-	_resolver.SetResolverUser(nullptr);
-	_resolver.PassOwnership();
-
-	if (_info) {
-		delete _info;
-		_info = nullptr;
-	}
+	_securityModule.SetUser(nullptr);
 
 	if (_fd != -1) {
 		_dispatcher->UnregisterDescriptorProcessor(this);
@@ -448,12 +441,7 @@ void OutboundGateSession::ProcessWrite()
 
 void OutboundGateSession::ProcessTimeEvent()
 {
-	bool inResolver =
-		_state == State::WaitingForDestinationSRVResolve ||
-		_state == State::WaitingForDestinationNameResolve ||
-		_state == State::WaitingForDestinationParamsResolve;
-
-	if (inResolver) {
+	if (_state == State::WaitingForDestinationResolve) {
 		// Resolver deletion on resolve will lead to hangup.
 		return;
 	}
@@ -464,214 +452,127 @@ void OutboundGateSession::ProcessTimeEvent()
 
 void OutboundGateSession::ResolveCompleted()
 {
-	if (_state == State::WaitingForDestinationSRVResolve) {
-		Resolver::RequestSRV *srv =
-			static_cast<Resolver::RequestSRV*>(
-				_resolverRequests[0]);
-
-		if (srv->Status || !srv->Result) {
-			delete srv;
-			_task->ReportConnectionFailure();
-			_storage->MarkSessionForRemoval(this);
-			return;
-		}
-
-		Resolver::RequestGetAddrInfo *info =
-			new Resolver::RequestGetAddrInfo;
-		info->Host = srv->Result->Target;
-		info->Service = ToString(ntohs(srv->Result->Port));
-		info->SocketType = SOCK_STREAM;
-
-		delete srv;
-
-		_state = State::WaitingForDestinationNameResolve;
-		_resolverRequests[0] = info;
-
-		_resolver.StartAsyncResolve(_resolverRequests);
-		return;
+	if (_state != State::WaitingForDestinationResolve) {
+		THROW("Invalid state in ResolveCompleted.");
 	}
 
-	if (_state == State::WaitingForDestinationNameResolve) {
-		Resolver::RequestGetAddrInfo *info =
-			static_cast<Resolver::RequestGetAddrInfo*>(
-				_resolverRequests[0]);
-
-		_resolverRequests.Resize(0);
-
-		if (info->Status || !info->AddrInfo) {
-			delete info;
-			OutboundGateLog("Server name resolve failure.");
-			_task->ReportConnectionFailure();
-			_storage->MarkSessionForRemoval(this);
-			return;
-		}
-
-		_addrinfo = info->AddrInfo;
-		_info = info;
-		TryConnect();
-		return;
-	}
-
-	if (_state == State::WaitingForDestinationParamsResolve) {
-		Resolver::RequestRDNS *rdns =
-			static_cast<Resolver::RequestRDNS*>(
-				_resolverRequests[0]);
-		Resolver::RequestTXT *txt =
-			static_cast<Resolver::RequestTXT*>(
-				_resolverRequests[1]);
-
-		_resolverRequests.Resize(0);
-
-		if (rdns->Status || _expectedPeerHostName != rdns->ResultName) {
-			delete rdns;
-			delete txt;
-			_task->ReportConnectionFailure();
-			_storage->MarkSessionForRemoval(this);
-			return;
-		}
-
-		delete rdns;
-
-		if (!txt->Status) {
-			String rawTXT = txt->Result;
-
-			String keyString = "talkdkey=";
-
-			for (;;) {
-				int pos = rawTXT.Find(keyString);
-
-				if (pos == -1) {
-					break;
-				}
-
-				if (pos > 0 && rawTXT.CStr()[pos - 1] != '\n') {
-					rawTXT = rawTXT.Substring(
-						pos + 1,
-						rawTXT.Length() - pos - 1);
-					continue;
-				}
-
-				rawTXT = rawTXT.Substring(
-					pos + keyString.Length(),
-					rawTXT.Length() -
-					pos - keyString.Length());
-
-				if (!rawTXT.Length()) {
-					break;
-				}
-
-				if (rawTXT.CStr()[0] != '"') {
-					break;
-				}
-
-				pos = 1;
-
-				while (pos < rawTXT.Length()) {
-					if (rawTXT.CStr()[pos] == '"') {
-						break;
-					}
-
-					++pos;
-				}
-
-				if (pos >= rawTXT.Length()) {
-					break;
-				}
-
-				_peerTXTField = rawTXT.Substring(1, pos - 1);
-				break;
-			}
-		}
-
-		delete txt;
-
-		_state = State::HandshakeWaitInit;
-		_reader = new StreamReader(_fd, sizeof(int32_t) + 1);
-		return;
-	}
-
-	THROW("Invalid state in ResolveCompleted.");
+	Resolve();
 }
 
 void OutboundGateSession::StartConnection()
 {
 	String fullName = _task->GetConnectionDestination();
 
+	String userName;
 	String hostName;
-	String serviceName;
 
-	bool parseResult = Message::ExtractServerDataFromFullName(
+	bool parseResult = Message::SplitFullUserName(
 		fullName,
-		hostName,
-		serviceName);
+		userName,
+		hostName);
 
 	if (!parseResult) {
 		THROW("Invalid name in server database: " + fullName + ".");
 	}
 
-	OutboundGateLog("Requested resolve " +
-		hostName + ", " + serviceName + ".");
+	_securityModule.SetKnownPeerFullHostName(hostName);
 
-	_ipPeerName = IsValidIPv4Address(hostName);
-	_expectedPeerHostName = hostName;
-
-	Resolver::RequestBase *request;
-
-	if (hostName.Length() && serviceName.Length()) {
-		Resolver::RequestGetAddrInfo *info =
-			new Resolver::RequestGetAddrInfo;
-		info->Host = hostName;
-		info->Service = serviceName;
-		info->SocketType = SOCK_STREAM;
-
-		request = info;
-		_state = State::WaitingForDestinationNameResolve;
-	} else {
-		if (_ipPeerName) {
-			_task->ReportConnectionFailure();
-			_storage->MarkSessionForRemoval(this);
-			return;
-		}
-
-		Resolver::RequestSRV *srv = new Resolver::RequestSRV;
-		srv->DNSName = hostName;
-		srv->ServiceName = "talkdgate";
-		srv->TCP = true;
-
-		request = srv;
-		_state = State::WaitingForDestinationSRVResolve;
-	}
-
-	_resolverRequests = CowBuffer<Resolver::RequestBase*>(1);
-	_resolverRequests[0] = request;
-
-	_resolver.StartAsyncResolve(_resolverRequests);
+	Resolve();
 }
 
-void OutboundGateSession::TryConnect()
+void OutboundGateSession::Resolve()
 {
-	if (!_addrinfo) {
-		delete _info;
-		_info = nullptr;
-
-		OutboundGateLog("No connectable address found.");
+	if (_securityModule.Failure()) {
 		_task->ReportConnectionFailure();
 		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
-	_fd = socket(_addrinfo->ai_family, _addrinfo->ai_socktype, 0);
+	if (_securityModule.NeedSRV()) {
+		_state = State::WaitingForDestinationResolve;
+		_securityModule.RunSRV();
+		return;
+	}
+
+	if (_securityModule.NeedA()) {
+		_state = State::WaitingForDestinationResolve;
+		_securityModule.RunA();
+		return;
+	}
+
+	if (_securityModule.NeedParams()) {
+		_state = State::WaitingForDestinationResolve;
+		_securityModule.RunParams();
+		return;
+	}
+
+	// Any other address is unknown, connecting to known address.
+	if (_securityModule.IsIPOnlyHost()) {
+		_securityModule.AcceptHostNameAsIP();
+
+		if (_securityModule.Failure()) {
+			_task->ReportConnectionFailure();
+			_storage->MarkSessionForRemoval(this);
+			return;
+		}
+	}
+
+	_securityModule.SetKnownPeerIP(_securityModule.GetDNSReportedIPv4());
+
+	if (_securityModule.Failure()) {
+		_task->ReportConnectionFailure();
+		_storage->MarkSessionForRemoval(this);
+		return;
+	}
+
+	TryConnect();
+}
+
+void OutboundGateSession::TryConnect()
+{
+	String portString = _securityModule.GetSRVReportedServiceName();
+
+	if (!portString.Length()) {
+		_task->ReportConnectionFailure();
+		_storage->MarkSessionForRemoval(this);
+		return;
+	}
+
+	for (int i = 0; i < portString.Length(); i++) {
+		char c = portString.CStr()[i];
+
+		if (c < '0' || c > '9') {
+			_task->ReportConnectionFailure();
+			_storage->MarkSessionForRemoval(this);
+			return;
+		}
+	}
+
+	int portNumber = atoi(portString.CStr());
+
+	if (portNumber <= 0 || portNumber > 65535) {
+		_task->ReportConnectionFailure();
+		_storage->MarkSessionForRemoval(this);
+		return;
+	}
+
+	struct sockaddr_in addr;
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(portNumber);
+	addr.sin_addr.s_addr = _securityModule.GetDNSReportedIPv4();
+
+	_fd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (_fd == -1) {
 		OutboundGateLog("Failed to create socket.");
-		_addrinfo = _addrinfo->ai_next;
-		TryConnect();
+		_task->ReportConnectionFailure();
+		_storage->MarkSessionForRemoval(this);
 		return;
 	}
 
 	MakeNonblocking(_fd);
 
-	int res = connect(_fd, _addrinfo->ai_addr, _addrinfo->ai_addrlen);
+	int res = connect(_fd, (struct sockaddr*)&addr, sizeof(addr));
 
 	if (res == -1) {
 		if (errno == EINPROGRESS) {
@@ -683,10 +584,9 @@ void OutboundGateSession::TryConnect()
 		close(_fd);
 		_fd = -1;
 
+		_task->ReportConnectionFailure();
+		_storage->MarkSessionForRemoval(this);
 		OutboundGateLog(String("Connect: ") + strerror(errno) + ".");
-
-		_addrinfo = _addrinfo->ai_next;
-		TryConnect();
 		return;
 	}
 
@@ -725,39 +625,14 @@ void OutboundGateSession::ProcessConnect()
 	close(_fd);
 	_fd = -1;
 
-	_addrinfo = _addrinfo->ai_next;
-	TryConnect();
+	_task->ReportConnectionFailure();
+	_storage->MarkSessionForRemoval(this);
 }
 
 void OutboundGateSession::SetupHandshakeWaitInit()
 {
-	if (_addrinfo->ai_addr->sa_family == AF_INET) {
-		_ipv4 = ((struct sockaddr_in*)(_addrinfo->ai_addr))->
-			sin_addr.s_addr;
-	}
-
-	delete _info;
-	_info = nullptr;
-
-	_addrinfo = nullptr;
-
-	if (!_ipPeerName) {
-		Resolver::RequestRDNS *rdns = new Resolver::RequestRDNS;
-		Resolver::RequestTXT *txt = new Resolver::RequestTXT;
-
-		rdns->IPv4 = _ipv4;
-		txt->DNSName = _expectedPeerHostName;
-
-		_resolverRequests.Resize(2);
-		_resolverRequests[0] = rdns;
-		_resolverRequests[1] = txt;
-
-		_state = State::WaitingForDestinationParamsResolve;
-		_resolver.StartAsyncResolve(_resolverRequests);
-	} else {
-		_state = State::HandshakeWaitInit;
-		_reader = new StreamReader(_fd, sizeof(int32_t) + 1);
-	}
+	_state = State::HandshakeWaitInit;
+	_reader = new StreamReader(_fd, sizeof(int32_t) + 1);
 }
 
 bool OutboundGateSession::ProcessInit(const CowBuffer<uint8_t> buffer)
@@ -886,10 +761,27 @@ bool OutboundGateSession::ProcessSyn(CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
-	_peerProvidedName = syn.ServerName;
+	_securityModule.SetPeerReportedFullHostName(syn.ServerName);
+
+	if (_securityModule.Failure()) {
+		SendVerificationStatus(false);
+		_state = State::SendAllAndShutdown;
+		return true;
+	}
+
 	_salt2 = syn.Salt;
 
-	if (!VerifyPeer(buffer, syn.Signature)) {
+	_securityModule.ValidateSyn(buffer, syn.Signature);
+
+	if (_securityModule.Failure()) {
+		SendVerificationStatus(false);
+		_state = State::SendAllAndShutdown;
+		return true;
+	}
+
+	_securityModule.RunFullValidation();
+
+	if (_securityModule.Failure()) {
 		SendVerificationStatus(false);
 		_state = State::SendAllAndShutdown;
 		return true;
@@ -920,97 +812,6 @@ bool OutboundGateSession::ProcessSyn(CowBuffer<uint8_t> buffer)
 	_protocol->SetInputSizeLimit(_config->GetMessageSizeLimit());
 
 	return true;
-}
-
-bool OutboundGateSession::VerifyPeer(
-	const CowBuffer<uint8_t> syn,
-	const CowBuffer<uint8_t> signature)
-{
-	CowBuffer<String> peerNameParts = _peerProvidedName.Split(':', false);
-
-	if (!peerNameParts.Size() || peerNameParts.Size() > 2) {
-		return false;
-	}
-
-	String peerHostName = peerNameParts[0];
-
-	String userName;
-	String expectedFullHostName;
-
-	bool res = Message::SplitFullUserName(
-		_task->GetConnectionDestination(),
-		userName,
-		expectedFullHostName);
-
-	if (!res) {
-		return false;
-	}
-
-	if (_peerProvidedName != expectedFullHostName) {
-		OutboundGateLog("Rejected peer provided host name: Expected: " +
-			expectedFullHostName + ", received: " +
-			_peerProvidedName + ".");
-		return false;
-	}
-
-	if (_ipPeerName) {
-		if (signature.Size()) {
-			return false;
-		}
-
-		if (peerHostName != IPToString(_ipv4)) {
-			return false;
-		}
-
-		return true;
-	}
-
-	bool hasSignature = signature.Size();
-	bool hasKeyInTXT = _peerTXTField.Length();
-
-	if (hasSignature != hasKeyInTXT) {
-		OutboundGateLog("Rejected, signature mismatch.");
-		return false;
-	}
-
-	if (!signature.Size()) {
-		return true;
-	}
-
-	CowBuffer<String> keyStrings = _peerTXTField.Split(';', true);
-
-	for (uint32_t keyIdx = 0; keyIdx < keyStrings.Size(); keyIdx++) {
-		String keyHex = keyStrings[keyIdx];
-
-		bool validKeyLength =
-			keyHex.Length() ==
-			Crypto::X25519::SIGNATURE_PUBLIC_KEY_SIZE * 2;
-
-		if (!validKeyLength) {
-			continue;
-		}
-
-		Crypto::X25519::SignaturePublicKeyContainer sPubKey;
-
-		try {
-			HexToData(keyHex, sPubKey.Key);
-		} catch (Exception &ex) {
-			continue;
-		}
-
-		bool validSignature = Crypto::X25519::Verify(
-			syn.Slice(0, syn.Size() - signature.Size()),
-			sPubKey,
-			signature.Pointer());
-
-		if (!validSignature) {
-			continue;
-		}
-
-		return true;
-	}
-
-	return false;
 }
 
 void OutboundGateSession::SendVerificationStatus(bool success)

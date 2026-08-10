@@ -12,6 +12,7 @@ SERVER_MODULES =\
 	Server/GateListeningSocket.o \
 	Server/InboundGateSession.o \
 	Server/OutboundGateSession.o \
+	Server/GateSecurityModule.o \
 	Server/SendPlanner.o \
 	Server/ObjectType.o \
 	Server/FailBan.o \

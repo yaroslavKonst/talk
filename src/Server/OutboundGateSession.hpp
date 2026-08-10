@@ -2,6 +2,7 @@
 #define _OUTBOUND_GATE_SESSION_HPP
 
 #include "Config.hpp"
+#include "GateSecurityModule.hpp"
 #include "../Protocol/GateProtocol.hpp"
 #include "../Message/Message.hpp"
 #include "../Common/EventDispatcher.hpp"
@@ -134,15 +135,12 @@ private:
 	StreamWriter *_writer;
 
 	int _fd;
-	uint32_t _ipv4;
 
 	TaskBase *_task;
 
 	enum class State
 	{
-		WaitingForDestinationSRVResolve,
-		WaitingForDestinationNameResolve,
-		WaitingForDestinationParamsResolve,
+		WaitingForDestinationResolve,
 		WaitingForConnect,
 		HandshakeWaitInit,
 		HandshakeWaitSynSize,
@@ -152,22 +150,13 @@ private:
 	};
 
 	State _state;
-	Resolver _resolver;
-	struct addrinfo *_addrinfo;
-	Resolver::RequestGetAddrInfo *_info;
-	CowBuffer<Resolver::RequestBase*> _resolverRequests;
+	GateSecurityModule _securityModule;
 
 	uint8_t _inScramblerInit;
 	uint8_t _outScramblerInit;
 
 	Crypto::X25519::EncryptedStream _outES;
 	Crypto::X25519::EncryptedStream _inES;
-
-	String _expectedPeerHostName;
-	String _peerProvidedName;
-	String _peerTXTField;
-
-	bool _ipPeerName;
 
 	Crypto::X25519::PrivateKeyContainer _ephemeralPrivateKey;
 	Crypto::X25519::PublicKeyContainer _ephemeralPublicKey;
@@ -176,6 +165,7 @@ private:
 
 	// Connection.
 	void StartConnection();
+	void Resolve();
 	void TryConnect();
 	void ProcessConnect();
 	void SetupHandshakeWaitInit();
@@ -185,9 +175,6 @@ private:
 	void SendHandshakeSyn();
 	bool ProcessSynSize(CowBuffer<uint8_t> buffer);
 	bool ProcessSyn(CowBuffer<uint8_t> buffer);
-	bool VerifyPeer(
-		const CowBuffer<uint8_t> syn,
-		const CowBuffer<uint8_t> signature);
 	void SendVerificationStatus(bool success);
 
 	// Session processing.

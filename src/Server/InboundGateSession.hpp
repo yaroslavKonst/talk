@@ -4,6 +4,7 @@
 #include "Config.hpp"
 #include "RateLimiter.hpp"
 #include "UserDB.hpp"
+#include "GateSecurityModule.hpp"
 #include "../Protocol/GateParser.hpp"
 #include "../Protocol/GateProtocol.hpp"
 #include "../Common/EventDispatcher.hpp"
@@ -12,18 +13,13 @@
 #include "../Common/StreamWriter.hpp"
 #include "../Crypto/Crypto.hpp"
 
-struct InboundTaskSecurityValues
-{
-	String PeerName;
-};
-
 class InboundTaskBase
 {
 public:
 	static InboundTaskBase *GetTask(
 		int32_t command,
 		UserDB *users,
-		InboundTaskSecurityValues *secVal);
+		GateSecurityModule *secMod);
 
 	virtual ~InboundTaskBase()
 	{ }
@@ -45,7 +41,7 @@ class InboundTaskReceiveMessage : public InboundTaskBase
 public:
 	InboundTaskReceiveMessage(
 		UserDB *users,
-		InboundTaskSecurityValues *secVal);
+		GateSecurityModule *secMod);
 
 	bool HasData() override;
 	CowBuffer<uint8_t> GetData() override;
@@ -53,7 +49,7 @@ public:
 
 private:
 	UserDB *_users;
-	InboundTaskSecurityValues *_securityValues;
+	GateSecurityModule *_securityModule;
 
 	enum class State
 	{
@@ -125,7 +121,7 @@ private:
 	Crypto::X25519::EncryptedStream _outES;
 	Crypto::X25519::EncryptedStream _inES;
 
-	InboundTaskSecurityValues _securityValues;
+	GateSecurityModule _securityModule;
 
 	Crypto::X25519::PrivateKeyContainer _ephemeralPrivateKey;
 	Crypto::X25519::PublicKeyContainer _ephemeralPublicKey;
@@ -139,16 +135,12 @@ private:
 		WriteAllAndExit,
 		HandshakeWaitSynSize,
 		HandshakeWaitSyn,
-		HandshakeWaitPeerAddressResolving,
-		HandshakeWaitPeerParamsResolving,
+		HandshakeWaitPeerResolving,
 		HandshakeWaitVerificationResponse,
 		OpenedSession
 	};
 
 	State _state;
-
-	Resolver _resolver;
-	CowBuffer<Resolver::RequestBase*> _resolverRequests;
 
 	void SendInit();
 	bool ProcessHandshakeSynSize(CowBuffer<uint8_t> buffer);
@@ -160,9 +152,6 @@ private:
 	void VerifyPeer();
 	CowBuffer<uint8_t> _peerSynBuffer;
 	CowBuffer<uint8_t> _peerSynSignature;
-	String _srvPeerName;
-	void ProcessPeerAddressResolve();
-	void ProcessPeerParamsResolve();
 
 	bool ProcessHandshakeVerificationResponse(CowBuffer<uint8_t> buffer);
 	bool ProcessSessionInput(CowBuffer<uint8_t> buffer);
