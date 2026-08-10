@@ -61,6 +61,7 @@ class ContactStorage
 {
 public:
 	ContactStorage(String root);
+	~ContactStorage();
 
 	String GetFirstContact();
 	CowBuffer<String> GetContactRange(String center, int size);
@@ -71,6 +72,7 @@ public:
 
 	void AddNewContact(String name);
 	Contact *GetContact(String name);
+	void RemoveContact(String name);
 
 private:
 	String _root;

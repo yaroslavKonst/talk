@@ -451,6 +451,11 @@ This command is used for contact key management.
 
 This command sets whether contact is blocked.
 
+| REMOVE_CONTACT | name |
+"name": string.
+
+This command permanently removes a contact. No data is saved.
+
 Contact book request
 --------------------
 

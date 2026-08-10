@@ -5,6 +5,7 @@
 #include "../Common/CowBuffer.hpp"
 
 void CreateDirectory(String path);
+void RemoveDirectory(String path);
 bool FileExists(String path);
 CowBuffer<String> ListDirectory(String path);
 void MakeNonblocking(int fd);

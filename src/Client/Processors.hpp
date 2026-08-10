@@ -149,6 +149,7 @@ public:
 	virtual bool BlockContact(
 		String contactName,
 		Contact::BlockStatus block) = 0;
+	virtual bool RemoveContact(String name) = 0;
 
 	virtual bool ListContacts() = 0;
 	virtual bool SetContactListProcessor(

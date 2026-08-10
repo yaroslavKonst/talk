@@ -67,6 +67,7 @@ public:
 	void BlockContact(
 		String name,
 		Contact::BlockStatus block) override;
+	void RemoveContact(String name) override;
 
 	ObjectStorage *GetObjectStorage() override
 	{

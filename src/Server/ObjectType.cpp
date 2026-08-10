@@ -200,6 +200,59 @@ CowBuffer<uint8_t> BlockContactObject::BuildData(const Data &data)
 	return buffer;
 }
 
+bool RemoveContactObject::ParseData(const CowBuffer<uint8_t> object, Data &data)
+{
+	uint64_t headerSize =
+		sizeof(int32_t) + (int)ObjectStorage::Constants::IDSize;
+
+	if (object.Size() < headerSize) {
+		return false;
+	}
+
+	int32_t type = *object.SwitchType<int32_t>();
+
+	if (type != (int32_t)ObjectType::RemoveContact) {
+		return false;
+	}
+
+	uint64_t offset = headerSize;
+
+	if (!ParseString(object, offset, data.ContactName, 500)) {
+		return false;
+	}
+
+	if (data.ContactName.Length() == 0) {
+		return false;
+	}
+
+	if (object.Size() != offset) {
+		return false;
+	}
+
+	return true;
+}
+
+CowBuffer<uint8_t> RemoveContactObject::BuildData(const Data &data)
+{
+	uint64_t idSize = (int)ObjectStorage::Constants::IDSize;
+
+	CowBuffer<uint8_t> buffer(
+		sizeof(int32_t) +
+		idSize +
+		BuiltStringSize(data.ContactName));
+
+	*buffer.SwitchType<int32_t>() = (int32_t)ObjectType::RemoveContact;
+
+	uint64_t offset = sizeof(int32_t);
+
+	memset(buffer.Pointer(offset), 0, idSize);
+	offset += idSize;
+
+	BuildString(buffer, offset, data.ContactName);
+
+	return buffer;
+}
+
 bool MessageObject::ParseData(const CowBuffer<uint8_t> object, Data &data)
 {
 	uint64_t headerSize =

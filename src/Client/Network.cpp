@@ -227,6 +227,16 @@ bool Network::BlockContact(String contactName, Contact::BlockStatus block)
 	return true;
 }
 
+bool Network::RemoveContact(String name)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->RemoveContact(name);
+	return true;
+}
+
 bool Network::ListContacts()
 {
 	if (!_session) {

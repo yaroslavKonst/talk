@@ -143,8 +143,11 @@ namespace ContactScreenControls
 	static const char *ToChat = "Go To Chat";
 	static const char *ToChatValue = "Ctrl-C";
 
-	static const char *Block = "Block User";
+	static const char *Block = "Block Contact";
 	static const char *BlockValue = "Ctrl-B";
+
+	static const char *Remove = "Remove Contact";
+	static const char *RemoveValue = "Ctrl-R";
 
 	static const char *List = "Request Contact List";
 	static const char *ListValue = "Ctrl-U";
@@ -447,6 +450,7 @@ void Config::Init()
 			_configFile.Set(Section, New, NewValue);
 			_configFile.Set(Section, ToChat, ToChatValue);
 			_configFile.Set(Section, Block, BlockValue);
+			_configFile.Set(Section, Remove, RemoveValue);
 			_configFile.Set(Section, List, ListValue);
 		}
 
@@ -545,6 +549,8 @@ void Config::LoadControls()
 			_configFile.Get(Section, ToChat);
 		_keyNames[(int)Keys::ContactBlock] =
 			_configFile.Get(Section, Block);
+		_keyNames[(int)Keys::ContactRemove] =
+			_configFile.Get(Section, Remove);
 		_keyNames[(int)Keys::ContactListContacts] =
 			_configFile.Get(Section, List);
 	}

@@ -15,7 +15,8 @@ enum class ObjectType
 	UpdateContactKey = 1,
 	BlockContact = 2,
 	Message = 3,
-	UpdateMessage = 4
+	UpdateMessage = 4,
+	RemoveContact = 5
 };
 
 namespace NewContactObject
@@ -50,6 +51,17 @@ namespace BlockContactObject
 	{
 		String ContactName;
 		uint8_t BlockStatus;
+	};
+
+	bool ParseData(const CowBuffer<uint8_t> object, Data &data);
+	CowBuffer<uint8_t> BuildData(const Data &data);
+}
+
+namespace RemoveContactObject
+{
+	struct Data
+	{
+		String ContactName;
 	};
 
 	bool ParseData(const CowBuffer<uint8_t> object, Data &data);

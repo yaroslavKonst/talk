@@ -244,6 +244,16 @@ void User::BlockContact(String name, Contact::BlockStatus block)
 	AddNewObject(BlockContactObject::BuildData(data));
 }
 
+void User::RemoveContact(String name)
+{
+	_contactStorage.RemoveContact(name);
+
+	RemoveContactObject::Data data;
+	data.ContactName = name;
+
+	AddNewObject(RemoveContactObject::BuildData(data));
+}
+
 CowBuffer<CommandListContacts::Response::UserData> User::GetContactList()
 {
 	CowBuffer<String> userNames = _userStorage->ListUsers();

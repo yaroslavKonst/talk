@@ -29,6 +29,15 @@ void CreateDirectory(String path)
 	}
 }
 
+void RemoveDirectory(String path)
+{
+	int res = rmdir(path.CStr());
+
+	if (res == -1) {
+		THROW("Failed to remove " + path + " directory.");
+	}
+}
+
 bool FileExists(String path)
 {
 	int fd = open(path.CStr(), O_RDONLY);

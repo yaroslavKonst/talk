@@ -207,6 +207,11 @@ ContactStorage::ContactStorage(String root)
 	LoadContacts();
 }
 
+ContactStorage::~ContactStorage()
+{
+	UnloadContacts();
+}
+
 String ContactStorage::GetFirstContact()
 {
 	Tree<ContactNode>::Entry *entry = _contacts.FindSmallest();
@@ -350,6 +355,27 @@ Contact *ContactStorage::GetContact(String name)
 	}
 
 	return entry->Key.Cont;
+}
+
+void ContactStorage::RemoveContact(String name)
+{
+	Tree<ContactNode>::Entry *entry = _contacts.FindEntry(name);
+
+	if (!entry) {
+		return;
+	}
+
+	delete entry->Key.Cont;
+	_contacts.RemoveEntry(entry);
+
+	String pathToRoot = _root + "/" + name;
+	CowBuffer<String> fileNames = ListDirectory(pathToRoot);
+
+	for (unsigned int i = 0; i < fileNames.Size(); i++) {
+		DeleteFile(pathToRoot + "/" + fileNames[i]);
+	}
+
+	RemoveDirectory(pathToRoot);
 }
 
 bool ContactStorage::ContactNode::operator<(const ContactNode &node) const

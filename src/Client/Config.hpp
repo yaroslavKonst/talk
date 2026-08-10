@@ -347,6 +347,16 @@ public:
 		return _keyNames[(int)Keys::ContactBlock];
 	}
 
+	int ContactRemoveKey()
+	{
+		return _keys[(int)Keys::ContactRemove];
+	}
+
+	String ContactRemoveName()
+	{
+		return _keyNames[(int)Keys::ContactRemove];
+	}
+
 	int ContactListContactsKey()
 	{
 		return _keys[(int)Keys::ContactListContacts];
@@ -416,6 +426,7 @@ private:
 		ContactNew,
 		ContactToChat,
 		ContactBlock,
+		ContactRemove,
 		ContactListContacts,
 
 		VoiceStart,

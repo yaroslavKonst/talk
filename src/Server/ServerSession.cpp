@@ -161,6 +161,8 @@ bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessUpdateContactKey(buffer);
 	case SESSION_COMMAND_BLOCK_CONTACT:
 		return ProcessBlockContact(buffer);
+	case SESSION_COMMAND_REMOVE_CONTACT:
+		return ProcessRemoveContact(buffer);
 	case SESSION_COMMAND_LIST_CONTACTS:
 		return ProcessListContacts();
 	case SESSION_COMMAND_SEND_MESSAGE:
@@ -304,6 +306,25 @@ bool ServerSession::ProcessBlockContact(const CowBuffer<uint8_t> buffer)
 	return true;
 }
 
+bool ServerSession::ProcessRemoveContact(const CowBuffer<uint8_t> buffer)
+{
+	CommandRemoveContact::Command command;
+	bool parseResult = CommandRemoveContact::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	if (!Message::VerifyFullUserName(command.ContactName)) {
+		return false;
+	}
+
+	SessionLog("Requested remove contact " + command.ContactName + ".");
+
+	_storage->RemoveContact(command.ContactName);
+	return true;
+}
+
 bool ServerSession::ProcessListContacts()
 {
 	CommandListContacts::Response response;
@@ -440,6 +461,9 @@ void ServerSession::SendObject(const CowBuffer<uint8_t> object)
 	case (int)ObjectType::BlockContact:
 		SendBlockContact(object);
 		break;
+	case (int)ObjectType::RemoveContact:
+		SendRemoveContact(object);
+		break;
 	case (int)ObjectType::Message:
 		SendOfferMessage(object);
 		break;
@@ -511,6 +535,26 @@ void ServerSession::SendBlockContact(const CowBuffer<uint8_t> object)
 	SessionLog("Sent block contact for " + command.ContactName + ".");
 
 	_protocol->Send(CommandBlockContact::BuildCommand(command), 1);
+
+	SendID(_currentObjectID);
+	SendIDRequest();
+}
+
+void ServerSession::SendRemoveContact(const CowBuffer<uint8_t> object)
+{
+	RemoveContactObject::Data data;
+	bool parseResult = RemoveContactObject::ParseData(object, data);
+
+	if (!parseResult) {
+		THROW("Corrupt database entry.");
+	}
+
+	CommandRemoveContact::Command command;
+	command.ContactName = data.ContactName;
+
+	SessionLog("Sent remove contact " + command.ContactName + ".");
+
+	_protocol->Send(CommandRemoveContact::BuildCommand(command), 1);
 
 	SendID(_currentObjectID);
 	SendIDRequest();

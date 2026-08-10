@@ -127,6 +127,14 @@ void ClientSession::BlockContact(String contactName, Contact::BlockStatus block)
 	_protocol->Send(CommandBlockContact::BuildCommand(command), 0);
 }
 
+void ClientSession::RemoveContact(String name)
+{
+	CommandRemoveContact::Command command;
+	command.ContactName = name;
+
+	_protocol->Send(CommandRemoveContact::BuildCommand(command), 0);
+}
+
 void ClientSession::ListContacts()
 {
 	_protocol->Send(CommandListContacts::BuildCommand(), 0);
@@ -194,6 +202,8 @@ bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessUpdateContactKey(buffer);
 	case SESSION_COMMAND_BLOCK_CONTACT:
 		return ProcessBlockContact(buffer);
+	case SESSION_COMMAND_REMOVE_CONTACT:
+		return ProcessRemoveContact(buffer);
 	case SESSION_COMMAND_LIST_CONTACTS:
 		return ProcessListContacts(buffer);
 	case SESSION_COMMAND_OFFER_MESSAGE:
@@ -396,6 +406,25 @@ bool ClientSession::ProcessBlockContact(const CowBuffer<uint8_t> buffer)
 	Contact *contact = storage->GetContact(command.ContactName);
 
 	contact->SetBlockStatus((Contact::BlockStatus)command.BlockStatus);
+	_root->Ui->Redraw();
+	return true;
+}
+
+bool ClientSession::ProcessRemoveContact(const CowBuffer<uint8_t> buffer)
+{
+	CommandRemoveContact::Command command;
+	bool parseResult = CommandRemoveContact::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	if (!Message::VerifyFullUserName(command.ContactName)) {
+		return false;
+	}
+
+	_root->Messages->GetContactStorage()->RemoveContact(
+		command.ContactName);
 	_root->Ui->Redraw();
 	return true;
 }

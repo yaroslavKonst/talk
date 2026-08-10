@@ -69,6 +69,7 @@ private:
 	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer);
 	bool ProcessBlockContact(const CowBuffer<uint8_t> buffer);
+	bool ProcessRemoveContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessListContacts();
 	bool ProcessSendMessage(const CowBuffer<uint8_t> buffer);
 	bool ProcessOfferMessage(const CowBuffer<uint8_t> buffer);
@@ -85,6 +86,7 @@ private:
 	void SendAddContact(const CowBuffer<uint8_t> object);
 	void SendUpdateContactKey(const CowBuffer<uint8_t> object);
 	void SendBlockContact(const CowBuffer<uint8_t> object);
+	void SendRemoveContact(const CowBuffer<uint8_t> object);
 	void SendOfferMessage(const CowBuffer<uint8_t> object);
 	String _offeredMessagePeerName;
 	ObjectStorage::ID _offeredMessageID;
@@ -116,6 +118,7 @@ public:
 	virtual void BlockContact(
 		String name,
 		Contact::BlockStatus block) = 0;
+	virtual void RemoveContact(String name) = 0;
 	virtual CowBuffer<CommandListContacts::Response::UserData>
 		GetContactList() = 0;
 

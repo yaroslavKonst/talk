@@ -33,6 +33,7 @@ public:
 		bool blocked,
 		bool setAsDefault);
 	void BlockContact(String contactName, Contact::BlockStatus block);
+	void RemoveContact(String name);
 
 	void ListContacts();
 	void SetContactListProcessor(
@@ -74,6 +75,7 @@ private:
 	bool ProcessAddContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessUpdateContactKey(const CowBuffer<uint8_t> buffer);
 	bool ProcessBlockContact(const CowBuffer<uint8_t> buffer);
+	bool ProcessRemoveContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessListContacts(const CowBuffer<uint8_t> buffer);
 	NetworkEventProcessor::ContactListProcessor *_contactListProcessor;
 

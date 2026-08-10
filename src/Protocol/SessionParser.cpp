@@ -462,6 +462,48 @@ CowBuffer<uint8_t> CommandBlockContact::BuildCommand(const Command &command)
 	return buffer;
 }
 
+bool CommandRemoveContact::ParseCommand(
+	const CowBuffer<uint8_t> buffer,
+	Command &result)
+{
+	if (buffer.Size() < sizeof(int32_t)) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != SESSION_COMMAND_REMOVE_CONTACT) {
+		return false;
+	}
+
+	uint64_t offset = sizeof(int32_t);
+
+	if (!ParseString(buffer, offset, result.ContactName, 500)) {
+		return false;
+	}
+
+	if (result.ContactName.Length() == 0 || offset != buffer.Size()) {
+		return false;
+	}
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandRemoveContact::BuildCommand(const Command &command)
+{
+	CowBuffer<uint8_t> buffer(
+		sizeof(int32_t) + BuiltStringSize(command.ContactName));
+
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_REMOVE_CONTACT);
+
+	uint64_t offset = sizeof(int32_t);
+
+	BuildString(buffer, offset, command.ContactName);
+
+	return buffer;
+}
+
 CowBuffer<uint8_t> CommandListContacts::BuildCommand()
 {
 	CowBuffer<uint8_t> buffer(sizeof(int32_t));

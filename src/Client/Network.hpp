@@ -46,6 +46,7 @@ public:
 	bool BlockContact(
 		String contactName,
 		Contact::BlockStatus block) override;
+	bool RemoveContact(String name) override;
 
 	bool ListContacts();
 	bool SetContactListProcessor(ContactListProcessor *processor);

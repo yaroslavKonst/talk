@@ -45,6 +45,21 @@ void ContactManageScreen::Redraw()
 		_root->Ui->RequestRunningLine();
 	}
 
+	Contact *contact = _contacts->GetContact(_contactName);
+
+	if (!contact) {
+		move(6, 3);
+		running = UiHelpers::DrawRunningLine(
+			"Contact is deleted.",
+			_columns - 8);
+
+		if (running) {
+			_root->Ui->RequestRunningLine();
+		}
+
+		return;
+	}
+
 	RedrawKeyList();
 
 	if (_mode == Mode::Add) {
@@ -56,6 +71,10 @@ void ContactManageScreen::Redraw()
 
 Screen *ContactManageScreen::ProcessEvent(int event)
 {
+	if (!_contacts->GetContact(_contactName)) {
+		return nullptr;
+	}
+
 	if (_mode == Mode::List) {
 		return ProcessListEvent(event);
 	} else if (_mode == Mode::Add) {
