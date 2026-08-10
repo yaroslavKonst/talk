@@ -22,26 +22,6 @@ Resolver::SRVResult::~SRVResult()
 	}
 }
 
-Resolver::RequestGetAddrInfo::RequestGetAddrInfo()
-{
-	T = Type::GetAddrInfo;
-	AddrInfo = nullptr;
-}
-
-Resolver::RequestGetAddrInfo::~RequestGetAddrInfo()
-{
-	if (AddrInfo) {
-		FreeAddrInfo(AddrInfo);
-		AddrInfo = nullptr;
-	}
-}
-
-void Resolver::RequestGetAddrInfo::Detach()
-{
-	Host.Detach();
-	Service.Detach();
-}
-
 Resolver::RequestA::RequestA()
 {
 	T = Type::A;
@@ -104,13 +84,6 @@ void Resolver::RequestSRV::Detach()
 	ServiceName.Detach();
 }
 
-void Resolver::FreeAddrInfo(struct addrinfo *addr)
-{
-	if (addr) {
-		freeaddrinfo(addr);
-	}
-}
-
 Resolver::Resolver(EventDispatcher *dispatcher)
 {
 	_dispatcher = dispatcher;
@@ -153,29 +126,6 @@ int Resolver::GetResolveStatus()
 void Resolver::PassOwnership()
 {
 	_hasOwnership = true;
-}
-
-struct addrinfo *Resolver::ResolveGetAddrInfo(
-	String host,
-	String service,
-	int socketType)
-{
-	struct addrinfo info;
-	memset(&info, 0, sizeof(info));
-
-	info.ai_family = AF_UNSPEC;
-	info.ai_socktype = socketType;
-	info.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
-
-	struct addrinfo *addr;
-
-	_status = getaddrinfo(host.CStr(), service.CStr(), &info, &addr);
-
-	if (_status) {
-		return nullptr;
-	}
-
-	return addr;
 }
 
 uint32_t Resolver::ResolveA(String dnsName)
@@ -660,17 +610,7 @@ void *Resolver::ThreadFunction(void *data)
 		ResolverLog("Thread index: " + ToString(i) + ".");
 		RequestBase *r = params->Requests[i];
 
-		if (r->T == RequestBase::Type::GetAddrInfo) {
-			ResolverLog("Thread type: AddrInfo.");
-			RequestGetAddrInfo *req =
-				static_cast<RequestGetAddrInfo*>(r);
-
-			req->AddrInfo = params->Object->ResolveGetAddrInfo(
-				req->Host,
-				req->Service,
-				req->SocketType);
-			req->Status = params->Object->GetResolveStatus();
-		} else if (r->T == RequestBase::Type::A) {
+		if (r->T == RequestBase::Type::A) {
 			ResolverLog("Thread type: A.");
 			RequestA *req = static_cast<RequestA*>(r);
 

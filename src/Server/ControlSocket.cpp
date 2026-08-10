@@ -71,6 +71,7 @@ void ControlSocket::OpenSocket()
 	}
 
 	struct sockaddr_un addr;
+	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	strncpy(
 		addr.sun_path,

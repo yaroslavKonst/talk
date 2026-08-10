@@ -217,24 +217,62 @@ Screen *LoginScreen::ProcessConnection()
 	void *blockHandle = _root->Ui->BlockNotify("Connecting...");
 
 	Resolver resolver(_root->Dispatcher);
-	struct addrinfo *addrinfoHead = resolver.ResolveGetAddrInfo(
-		_ip.Text,
-		_port.Text,
-		SOCK_STREAM);
-	int res = resolver.GetResolveStatus();
 
-	if (res) {
-		_root->Ui->BlockCancel(blockHandle);
-		_root->Ui->Notify("Failed to resolve host name.");
-		return this;
+	String hostName = _ip.Text;
+	String portName = _port.Text;
+
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+
+	if (!portName.Length()) {
+		Resolver::SRVResult *srv = resolver.ResolveSRV(
+			_ip.Text,
+			"talkdclient",
+			true);
+
+		if (resolver.GetResolveStatus() || !srv) {
+			if (srv) {
+				delete srv;
+			}
+
+			_root->Ui->BlockCancel(blockHandle);
+			_root->Ui->Notify("Failed to resolve host name/port.");
+			return this;
+		}
+
+		hostName = srv->Target;
+		addr.sin_port = srv->Port;
+
+		delete srv;
+	} else {
+		int port = atoi(portName.CStr());
+
+		if (!port || port > 65535) {
+			_root->Ui->BlockCancel(blockHandle);
+			_root->Ui->Notify("Invalid port number.");
+			return this;
+		}
+
+		addr.sin_port = htons(port);
 	}
 
-	struct addrinfo *addrs = addrinfoHead;
+	if (!IsValidIPv4Address(hostName)) {
+		addr.sin_addr.s_addr = resolver.ResolveA(hostName);
 
-	if (!addrs) {
-		_root->Ui->BlockCancel(blockHandle);
-		_root->Ui->Notify("Host name has no addresses.");
-		return this;
+		if (resolver.GetResolveStatus()) {
+			_root->Ui->BlockCancel(blockHandle);
+			_root->Ui->Notify("Failed to resolve host address.");
+			return this;
+		}
+	} else {
+		int res = inet_aton(hostName.CStr(), &addr.sin_addr);
+
+		if (!res) {
+			_root->Ui->BlockCancel(blockHandle);
+			_root->Ui->Notify("Invalid host address.");
+			return this;
+		}
 	}
 
 	if (_modified) {
@@ -245,40 +283,21 @@ Screen *LoginScreen::ProcessConnection()
 		_modified = false;
 	}
 
-	int socketFd = -1;
-
-	while (addrs) {
-		socketFd = socket(addrs->ai_family, addrs->ai_socktype, 0);
-
-		if (socketFd == -1) {
-			addrs = addrs->ai_next;
-			continue;
-		}
-
-		res = connect(
-			socketFd,
-			addrs->ai_addr,
-			addrs->ai_addrlen);
-
-		if (res != -1) {
-			break;
-		}
-
-		close(socketFd);
-		addrs = addrs->ai_next;
-	}
-
-	Resolver::FreeAddrInfo(addrinfoHead);
+	int socketFd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (socketFd == -1) {
 		_root->Ui->BlockCancel(blockHandle);
-		_root->Ui->Notify(
-			String("Failed to create socket: ") +
-			strerror(errno) + ".");
+		_root->Ui->Notify("Failed to create socket.");
 		return this;
 	}
 
+	int res = connect(
+		socketFd,
+		(struct sockaddr*)&addr,
+		sizeof(addr));
+
 	if (res == -1) {
+		close(socketFd);
 		_root->Ui->BlockCancel(blockHandle);
 		_root->Ui->Notify(
 			String("Failed to connect: ") + strerror(errno) + ".");
@@ -288,7 +307,6 @@ Screen *LoginScreen::ProcessConnection()
 	MakeNonblocking(socketFd);
 
 	_root->Ui->BlockCancel(blockHandle);
-
 	_root->Network->StartConnection(socketFd, serverKey);
 
 	return nullptr;

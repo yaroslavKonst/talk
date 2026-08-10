@@ -42,7 +42,6 @@ public:
 
 		enum class Type
 		{
-			GetAddrInfo,
 			A,
 			RDNS,
 			PTR,
@@ -56,20 +55,6 @@ public:
 		{ }
 
 		virtual void Detach() = 0;
-	};
-
-	struct RequestGetAddrInfo : public RequestBase
-	{
-		String Host;
-		String Service;
-		int SocketType;
-
-		struct addrinfo *AddrInfo;
-
-		RequestGetAddrInfo();
-		~RequestGetAddrInfo();
-
-		void Detach() override;
 	};
 
 	struct RequestA : public RequestBase
@@ -130,8 +115,6 @@ public:
 		void Detach() override;
 	};
 
-	static void FreeAddrInfo(struct addrinfo *addr);
-
 	Resolver(EventDispatcher *dispatcher);
 	~Resolver();
 
@@ -140,10 +123,6 @@ public:
 
 	void PassOwnership();
 
-	struct addrinfo *ResolveGetAddrInfo(
-		String host,
-		String service,
-		int socketType);
 	uint32_t ResolveA(String dnsName);
 	String ResolveRDNS(uint32_t ipv4);
 	String ResolvePTR(String dnsName);
