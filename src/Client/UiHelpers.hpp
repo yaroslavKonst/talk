@@ -13,7 +13,8 @@ namespace UiHelpers
 		int fromX,
 		int toX,
 		String caption,
-		int color);
+		int color,
+		bool &runningCaption);
 
 	void DrawSelector(
 		String name,
@@ -35,6 +36,7 @@ namespace UiHelpers
 
 		void SetCaptionPosition(int y, int x);
 		void SetTextPosition(int y, int x);
+		void SetWidthLimit(int limit);
 		void AlignTextToCaption();
 
 		void Redraw();
@@ -47,6 +49,8 @@ namespace UiHelpers
 		int _cY;
 		int _tX;
 		int _tY;
+
+		int _widthLimit;
 	};
 
 	String GetRunningLine(String text, int widthLimit, bool &running);

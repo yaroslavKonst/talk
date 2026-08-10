@@ -36,13 +36,19 @@ void ContactListScreen::Redraw()
 		addch(ACS_HLINE);
 	}
 
+	bool running;
 	UiHelpers::DrawFrame(
 		5,
 		_rows - 3,
 		1,
 		_columns - 2,
 		_root->Conf->GetHostName() + " server contact list",
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	RedrawContactList();
 
@@ -151,51 +157,91 @@ void ContactListScreen::RedrawContactList()
 	for (int i = lowIndex, index = 0; i <= highIndex; i++, index++) {
 		move(index + 6, 3);
 
+		String nameString;
+		String statusString;
+
+		int nameAttr = 0;
+		int statusAttr = 0;
+
 		if (i == _currentContact) {
-			attrset(COLOR_PAIR(YELLOW_TEXT));
+			nameAttr = COLOR_PAIR(YELLOW_TEXT);
 			currentContactPosition = index + 6;
 		}
 
-		addstr(_contactList.Data[i].Name.CStr());
-
-		if (i == _currentContact) {
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
-		}
+		nameString = _contactList.Data[i].Name;
 
 		if (_myName == _contactList.Data[i].Name) {
-			attrset(COLOR_PAIR(GREEN_TEXT));
-			addstr(" my account");
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
-			continue;
-		}
-
-		bool alreadyInContacts = _contacts->HasContact(
-			_contactList.Data[i].Name);
-
-		if (alreadyInContacts) {
-			attrset(COLOR_PAIR(GREEN_TEXT));
-			addstr(" in contacts");
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
-
-			Contact *contact = _contacts->GetContact(
+			statusAttr = COLOR_PAIR(GREEN_TEXT);
+			statusString = "my account";
+		} else {
+			bool alreadyInContacts = _contacts->HasContact(
 				_contactList.Data[i].Name);
 
-			if (!contact->IsKeyVerified(_contactList.Data[i].Key)) {
-				addstr(", unverified key");
+			if (alreadyInContacts) {
+				statusAttr = COLOR_PAIR(GREEN_TEXT);
+				statusString = "in contacts";
+
+				Contact *contact = _contacts->GetContact(
+					_contactList.Data[i].Name);
+
+				if (!contact->IsKeyVerified(
+					_contactList.Data[i].Key))
+				{
+					statusAttr = COLOR_PAIR(YELLOW_TEXT);
+					statusString += ", unverified key";
+				}
+
+				if (contact->GetBlockStatus() !=
+					Contact::BlockStatus::Allowed)
+				{
+					statusAttr = COLOR_PAIR(RED_TEXT);
+					statusString += ", blocked";
+				}
+			} else {
+				statusAttr = COLOR_PAIR(YELLOW_TEXT);
+				statusString = "not in contacts";
+			}
+		}
+
+		int widthLimit = _columns - 6;
+
+		int nameLimit = nameString.Length();
+		int statusLimit = statusString.Length();
+
+		if (nameLimit + statusLimit + 3 > widthLimit) {
+			if (statusLimit > widthLimit / 4) {
+				statusLimit = widthLimit / 4;
 			}
 
-			if (contact->GetBlockStatus() !=
-				Contact::BlockStatus::Allowed)
-			{
-				addstr(", ");
-				attrset(COLOR_PAIR(RED_TEXT));
-				addstr("blocked");
-				attrset(COLOR_PAIR(DEFAULT_TEXT));
-			}
-		} else {
-			attrset(COLOR_PAIR(YELLOW_TEXT));
-			addstr(" not in contacts");
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
+			nameLimit = widthLimit - statusLimit - 3;
+		}
+
+		if (nameAttr) {
+			attrset(nameAttr);
+		}
+
+		bool running = UiHelpers::DrawRunningLine(
+			nameString,
+			nameLimit);
+		attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+		if (running) {
+			_root->Ui->RequestRunningLine();
+		}
+
+		addstr(" | ");
+
+		if (statusAttr) {
+			attrset(statusAttr);
+		}
+
+		running = UiHelpers::DrawRunningLine(
+			statusString,
+			statusLimit);
+		attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+		if (running) {
+			_root->Ui->RequestRunningLine();
 		}
 	}
 
@@ -209,16 +255,31 @@ void ContactListScreen::DrawNotification(String caption, String message)
 
 	int offsetX = message.Length() / 2 + 1;
 
+	if (offsetX * 2 > _columns - 6) {
+		offsetX = _columns / 2 - 3;
+	}
+
+	bool running;
 	UiHelpers::DrawFrame(
 		baseY - 2,
 		baseY + 2,
 		baseX - offsetX - 1,
 		baseX + offsetX + 1,
 		caption,
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	move(baseY, baseX - offsetX + 1);
-	addstr(message.CStr());
+
+	running = UiHelpers::DrawRunningLine(message, _columns - 8);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 }
 
 Screen *ContactListScreen::ProcessListEvent(int event)
@@ -356,46 +417,92 @@ void ContactListScreen::DrawManageWindow()
 		0,
 		_columns - 1);
 
+	bool running;
 	UiHelpers::DrawFrame(
 		baseY - 3,
 		baseY + 4,
 		1,
 		_columns - 2,
 		"Manage contact " + _contactList.Data[_currentContact].Name,
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	String currentContactName = _contactList.Data[_currentContact].Name;
 	Crypto::X25519::PublicKeyContainer currentContactKey =
 		_contactList.Data[_currentContact].Key;
 
-	move(baseY - 1, baseX - 10);
+	int xPos = baseX - 10;
+
+	if (xPos < 3) {
+		xPos = 3;
+	}
+
+	move(baseY - 1, xPos);
+
+	running = false;
+	int widthLimit = _columns - 6;
 
 	if (!_contacts->HasContact(currentContactName)) {
-		addstr("Add to contact list");
+		running |= UiHelpers::DrawRunningLine(
+			"Add to contact list",
+			widthLimit);
 		_manageMode = ManageMode::AddContact;
 	} else {
-		addstr("Already in contact list");
+		running |= UiHelpers::DrawRunningLine(
+			"Already in contact list",
+			widthLimit);
 
-		move(baseY + 1, baseX - 34);
-		addstr("Key: ");
-		addstr(DataToHex(
-			currentContactKey.Key,
-			Crypto::X25519::KEY_SIZE).CStr());
+		xPos = baseX - 34;
 
-		move(baseY + 2, baseX - 10);
+		if (xPos < 3) {
+			xPos = 3;
+		}
+
+		move(baseY + 1, xPos);
+		running |= UiHelpers::DrawRunningLine(
+			"Key: " + DataToHex(
+				currentContactKey.Key,
+				Crypto::X25519::KEY_SIZE),
+			widthLimit);
+
+		xPos = baseX - 10;
+
+		if (xPos < 3) {
+			xPos = 3;
+		}
+
+		move(baseY + 2, xPos);
 		Contact *contact = _contacts->GetContact(currentContactName);
 
 		if (contact->IsKeyVerified(currentContactKey)) {
-			addstr("Key is verified");
+			running |= UiHelpers::DrawRunningLine(
+				"Key is verified",
+				widthLimit);
 		} else {
-			addstr("Add key to verified");
+			running |= UiHelpers::DrawRunningLine(
+				"Add key to verified",
+				widthLimit);
 		}
 	}
 
+	xPos = baseX - 11;
+
+	if (xPos < 2) {
+		xPos = 2;
+	}
+
 	if (_manageMode == ManageMode::AddContact) {
-		move(baseY - 1, baseX - 11);
+		move(baseY - 1, xPos);
 	} else if (_manageMode == ManageMode::ValidateKey) {
-		move(baseY + 2, baseX - 11);
+		move(baseY + 2, xPos);
+	}
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
 	}
 }
 

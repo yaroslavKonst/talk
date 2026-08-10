@@ -199,6 +199,8 @@ void WorkScreen::RedrawChatList()
 	int currentChatPosition = fromY;
 
 	for (int i = fromY; i <= toY; i++) {
+		bool thisChatIsCurrent = upName == currentName;
+
 		if (_root->Messages->HasUnread(upName)) {
 			attrset(COLOR_PAIR(YELLOW_TEXT));
 			move(i, 0);
@@ -207,7 +209,16 @@ void WorkScreen::RedrawChatList()
 
 		move(i, 1);
 
+		if (thisChatIsCurrent) {
+			addstr("-> ");
+		}
+
 		int widthLimit = _columns / 4 - 2;
+
+		if (thisChatIsCurrent) {
+			widthLimit -= 3;
+		}
+
 		bool running = UiHelpers::DrawRunningLine(
 			upName,
 			widthLimit);
@@ -218,7 +229,7 @@ void WorkScreen::RedrawChatList()
 
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 
-		if (upName == currentName) {
+		if (thisChatIsCurrent) {
 			currentChatPosition = i;
 		}
 
@@ -406,7 +417,9 @@ bool WorkScreen::RedrawConversationStart(
 		currentLinePosition,
 		skipLines,
 		0,
-		"");
+		"",
+		false,
+		-1);
 
 	if (!success) {
 		return false;
@@ -432,7 +445,9 @@ bool WorkScreen::RedrawMessageBody(
 			currentLinePosition,
 			skipLines,
 			0,
-			"Corrupt");
+			"Corrupt",
+			false,
+			0);
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 		return success;
 	}
@@ -447,7 +462,9 @@ bool WorkScreen::RedrawMessageBody(
 			currentLinePosition,
 			skipLines,
 			0,
-			"Decryption in progress...");
+			"Decryption in progress...",
+			false,
+			0);
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 		return success;
 	}
@@ -502,7 +519,9 @@ bool WorkScreen::RedrawTextContentsEntry(
 			currentLinePosition,
 			skipLines,
 			ACS_VLINE,
-			lines[i]);
+			lines[i],
+			false,
+			-1);
 
 		if (!success) {
 			return false;
@@ -707,7 +726,9 @@ bool WorkScreen::RedrawMessageHeader(
 			currentLinePosition,
 			skipLines,
 			0,
-			"You");
+			"You",
+			false,
+			-1);
 		attrset(COLOR_PAIR(DEFAULT_TEXT));
 	}
 
@@ -722,7 +743,9 @@ bool WorkScreen::RedrawMessageDelimiter(
 		currentLinePosition,
 		skipLines,
 		0,
-		"");
+		"",
+		false,
+		-1);
 
 	if (!success) {
 		return false;
@@ -739,14 +762,22 @@ bool WorkScreen::RedrawMessageDelimiter(
 		currentLinePosition,
 		skipLines,
 		0,
-		text);
+		text,
+		false,
+		-1);
 	attrset(COLOR_PAIR(DEFAULT_TEXT));
 
 	if (!success) {
 		return false;
 	}
 
-	success = AddLineToChatScreen(currentLinePosition, skipLines, 0, "");
+	success = AddLineToChatScreen(
+		currentLinePosition,
+		skipLines,
+		0,
+		"",
+		false,
+		-1);
 
 	return success;
 }

@@ -30,13 +30,19 @@ void ContactScreen::Redraw()
 		addch(ACS_HLINE);
 	}
 
+	bool running;
 	UiHelpers::DrawFrame(
 		5,
 		_rows - 3,
 		1,
 		_columns - 2,
 		"Contacts",
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	RedrawContactList();
 
@@ -100,28 +106,60 @@ void ContactScreen::RedrawContactList()
 	for (unsigned int i = 0; i < names.Size(); i++) {
 		move(i + 6, 3);
 
-		if (names[i] == _currentContact) {
-			attrset(COLOR_PAIR(YELLOW_TEXT));
-			currentContactPosition = i + 6;
-		}
-
-		addstr(names[i].CStr());
-
-		if (names[i] == _currentContact) {
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
-		}
+		String nameString = names[i];
+		String blockStatusString;
 
 		Contact::BlockStatus blocked =
 			_contacts->GetContact(names[i])->GetBlockStatus();
 
 		if (blocked == Contact::BlockStatus::Blocked) {
-			attrset(COLOR_PAIR(RED_TEXT));
-			addstr(" Blocked");
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
+			blockStatusString = "Blocked";
 		} else if (blocked == Contact::BlockStatus::SilentlyBlocked) {
-			attrset(COLOR_PAIR(RED_TEXT));
-			addstr(" Silently Blocked");
+			blockStatusString = "Silently Blocked";
+		}
+
+		int widthLimit = _columns - 9;
+
+		int nameLimit = nameString.Length();
+		int blockLimit = blockStatusString.Length();
+
+		if (nameLimit + blockLimit > widthLimit) {
+			if (blockLimit > widthLimit / 4) {
+				blockLimit = widthLimit / 4;
+			}
+
+			nameLimit = widthLimit - blockLimit;
+		}
+
+		if (names[i] == _currentContact) {
+			attrset(COLOR_PAIR(YELLOW_TEXT));
+			currentContactPosition = i + 6;
+		}
+
+		bool running = UiHelpers::DrawRunningLine(
+			nameString,
+			nameLimit);
+
+		if (running) {
+			_root->Ui->RequestRunningLine();
+		}
+
+		if (names[i] == _currentContact) {
 			attrset(COLOR_PAIR(DEFAULT_TEXT));
+		}
+
+		if (blockStatusString.Length()) {
+			addstr(" | ");
+
+			attrset(COLOR_PAIR(RED_TEXT));
+			running = UiHelpers::DrawRunningLine(
+				blockStatusString,
+				blockLimit);
+			attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+			if (running) {
+				_root->Ui->RequestRunningLine();
+			}
 		}
 	}
 
@@ -233,21 +271,32 @@ void ContactScreen::DrawAddWindow()
 		_newContactName.Text.Length()) /
 		2;
 
+	if (xOffset > _columns / 2 - 3) {
+		xOffset = _columns / 2 - 3;
+	}
+
 	UiHelpers::ClearScreen(
 		baseY - 3,
 		baseY + 3,
 		baseX - xOffset - 3,
 		baseX + xOffset + 3);
 
+	bool running;
 	UiHelpers::DrawFrame(
 		baseY - 2,
 		baseY + 2,
 		baseX - xOffset - 2,
 		baseX + xOffset + 2,
 		"New contact",
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	_newContactName.SetCaptionPosition(baseY, baseX - xOffset);
+	_newContactName.SetWidthLimit(_columns - 6);
 	_newContactName.AlignTextToCaption();
 	_newContactName.Redraw();
 }

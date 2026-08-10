@@ -126,10 +126,19 @@ void NotificationSystem::Redraw()
 	getmaxyx(stdscr, rows, columns);
 
 	int messageSize = node->Message.Length();
+
+	if (messageSize > columns - 7) {
+		messageSize = columns - 7;
+	}
+
 	int frameSize = messageSize + 3;
 
 	if (frameSize < 30) {
 		frameSize = 30;
+	}
+
+	if (frameSize > columns - 5) {
+		frameSize = columns - 5;
 	}
 
 	int baseY = rows / 2 - 4;
@@ -140,23 +149,41 @@ void NotificationSystem::Redraw()
 
 	UiHelpers::ClearScreen(baseY, limitY, baseX, limitX);
 
+	bool running;
 	UiHelpers::DrawFrame(
 		baseY + 1,
 		limitY - 1,
 		baseX + 1,
 		limitX - 1,
 		node == _first ? "Notification" : "Please wait",
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	// Message.
 	move(baseY + 3, columns / 2 - messageSize / 2);
-	addstr(node->Message.CStr());
+	running = UiHelpers::DrawRunningLine(node->Message, frameSize - 3);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	if (node == _first) {
 		move(baseY + 5, columns / 2 - 10);
-		addstr(("Press " +
+		String controlLine = "Press " +
 			_root->Conf->NotificationConfirmName() +
-			" to close.").CStr());
+			" to close.";
+
+		running = UiHelpers::DrawRunningLine(
+			controlLine,
+			frameSize - 3);
+
+		if (running) {
+			_root->Ui->RequestRunningLine();
+		}
 	} else {
 		move(baseY + 5, columns / 2);
 	}

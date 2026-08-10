@@ -31,13 +31,19 @@ void ContactManageScreen::Redraw()
 		addch(ACS_HLINE);
 	}
 
+	bool running;
 	UiHelpers::DrawFrame(
 		5,
 		_rows - 3,
 		1,
 		_columns - 2,
 		"Manage " + _contactName,
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	RedrawKeyList();
 
@@ -145,32 +151,88 @@ void ContactManageScreen::RedrawKeyList()
 	for (int i = firstKey; i <= lastKey; i++) {
 		move(currentKeyPosition, 3);
 
+		String keyString = DataToHex(
+			keys[i].Key,
+			Crypto::X25519::KEY_SIZE);
+
+		String statusString;
+
+		if (contact->IsKeyBlocked(keys[i])) {
+			statusString += "blocked";
+		}
+
+		if (!contact->IsKeyVerified(keys[i])) {
+			if (statusString.Length()) {
+				statusString += ", ";
+			}
+
+			statusString += "unverified";
+		}
+
+		if (contact->HasDefaultKey()) {
+			if (contact->GetDefaultKey() == keys[i]) {
+				if (statusString.Length()) {
+					statusString += ", ";
+				}
+
+				statusString += "default";
+			}
+		}
+
+		int keyLength = keyString.Length();
+		int statusLength = statusString.Length();
+
+		if (statusLength) {
+			keyLength += 3;
+		}
+
+		int widthLimit = _columns - 7;
+
+		if (keyLength + statusLength > widthLimit) {
+			if (statusLength > widthLimit / 4) {
+				statusLength = widthLimit / 4;
+			}
+
+			keyLength = widthLimit - statusLength;
+
+			if (statusLength) {
+				keyLength -= 3;
+			}
+		}
 
 		if (i == _currentKey) {
 			attrset(COLOR_PAIR(YELLOW_TEXT));
 			selectedKeyPosition = currentKeyPosition;
 		}
 
-		addstr(DataToHex(keys[i].Key, Crypto::X25519::KEY_SIZE).CStr());
+		bool running = UiHelpers::DrawRunningLine(keyString, keyLength);
+
+		if (running) {
+			_root->Ui->RequestRunningLine();
+		}
 
 		if (i == _currentKey) {
 			attrset(COLOR_PAIR(DEFAULT_TEXT));
 		}
 
-		if (contact->IsKeyBlocked(keys[i])) {
-			attrset(COLOR_PAIR(RED_TEXT));
-			addstr(" blocked");
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
-		} else if (!contact->IsKeyVerified(keys[i])) {
-			attrset(COLOR_PAIR(YELLOW_TEXT));
-			addstr(" unver");
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
-		}
+		if (statusString.Length()) {
+			addstr(" | ");
 
-		if (contact->HasDefaultKey()) {
-			if (contact->GetDefaultKey() == keys[i]) {
-				addstr(" D");
+			if (contact->IsKeyBlocked(keys[i])) {
+				attrset(COLOR_PAIR(RED_TEXT));
+			} else if (!contact->IsKeyVerified(keys[i])) {
+				attrset(COLOR_PAIR(YELLOW_TEXT));
 			}
+
+			running = UiHelpers::DrawRunningLine(
+				statusString,
+				statusLength);
+
+			if (running) {
+				_root->Ui->RequestRunningLine();
+			}
+
+			attrset(COLOR_PAIR(DEFAULT_TEXT));
 		}
 
 		++currentKeyPosition;
@@ -224,21 +286,32 @@ void ContactManageScreen::DrawAddWindow()
 		_newKeyHex.Text.Length()) /
 		2;
 
+	if (xOffset > _columns / 2 - 4) {
+		xOffset = _columns / 2 - 4;
+	}
+
 	UiHelpers::ClearScreen(
 		baseY - 3,
 		baseY + 3,
 		baseX - xOffset - 3,
 		baseX + xOffset + 3);
 
+	bool running;
 	UiHelpers::DrawFrame(
 		baseY - 2,
 		baseY + 2,
 		baseX - xOffset - 2,
 		baseX + xOffset + 2,
 		"New key",
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	_newKeyHex.SetCaptionPosition(baseY, baseX - xOffset);
+	_newKeyHex.SetWidthLimit(xOffset * 2 + 1);
 	_newKeyHex.AlignTextToCaption();
 	_newKeyHex.Redraw();
 }
@@ -330,13 +403,19 @@ void ContactManageScreen::DrawManageKeyWindow()
 		keys[_currentKey].Key,
 		Crypto::X25519::KEY_SIZE);
 
+	bool running;
 	UiHelpers::DrawFrame(
 		baseY - 3,
 		baseY + 3,
 		1,
 		_columns - 2,
 		"Manage " + keyHex,
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	bool validated = contact->IsKeyVerified(keys[_currentKey]);
 	bool blocked = contact->IsKeyBlocked(keys[_currentKey]);

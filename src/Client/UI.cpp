@@ -76,7 +76,7 @@ bool UI::ProcessEvent()
 		return true;
 	}
 
-	if (_rows < 20 || _columns < 20) {
+	if (_rows < 20 || _columns < 26) {
 		return true;
 	}
 
@@ -144,7 +144,7 @@ void UI::Redraw()
 	bool hadRunningString = _needRunningString;
 	_needRunningString = false;
 
-	if (_rows < 20 || _columns < 20) {
+	if (_rows < 20 || _columns < 26) {
 		move(0, 0);
 		addstr("Terminal screen is too small.");
 		move(1, 0);
@@ -352,6 +352,10 @@ void UI::DrawControlHelp()
 
 			posX = 0;
 			--posY;
+
+			if (posY < _rows - 2) {
+				break;
+			}
 		}
 
 		move(posY, posX);

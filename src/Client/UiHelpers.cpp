@@ -25,7 +25,8 @@ void UiHelpers::DrawFrame(
 	int fromX,
 	int toX,
 	String caption,
-	int color)
+	int color,
+	bool &runningCaption)
 {
 	attrset(color);
 
@@ -55,7 +56,7 @@ void UiHelpers::DrawFrame(
 	addch(ACS_LRCORNER);
 
 	move(fromY, fromX + 1);
-	addstr(caption.CStr());
+	runningCaption = DrawRunningLine(caption, toX - fromX - 1);
 
 	attrset(COLOR_PAIR(DEFAULT_TEXT));
 }
@@ -221,6 +222,7 @@ TextBox::TextBox()
 	_cY = 0;
 	_tX = 0;
 	_tY = 0;
+	_widthLimit = -1;
 }
 
 void TextBox::SetCaptionPosition(int y, int x)
@@ -235,6 +237,11 @@ void TextBox::SetTextPosition(int y, int x)
 	_tX = x;
 }
 
+void TextBox::SetWidthLimit(int limit)
+{
+	_widthLimit = limit;
+}
+
 void TextBox::AlignTextToCaption()
 {
 	_tY = _cY;
@@ -246,12 +253,46 @@ void TextBox::Redraw()
 	move(_cY, _cX);
 	addstr(Caption.CStr());
 	move(_tY, _tX);
-	addstr(Text.CStr());
+
+	String text = Text;
+
+	int prefixSize = _tX - _cX;
+
+	if (prefixSize < 0) {
+		prefixSize = 0;
+	}
+
+	bool adjustStringWidth =
+		_widthLimit != -1 &&
+		text.Length() > _widthLimit - prefixSize;
+
+	if (adjustStringWidth) {
+		int offset = text.Length() - _widthLimit + prefixSize;
+		text = text.Substring(offset, text.Length() - offset);
+	}
+
+	addstr(text.CStr());
 }
 
 void TextBox::SetCursor()
 {
-	move(_tY, _tX + Text.Length());
+	int prefixSize = _tX - _cX;
+
+	if (prefixSize < 0) {
+		prefixSize = 0;
+	}
+
+	bool adjustPosition =
+		_widthLimit != -1 &&
+		Text.Length() > _widthLimit - prefixSize;
+
+	int textWidth = Text.Length();
+
+	if (adjustPosition) {
+		textWidth = _widthLimit - prefixSize;
+	}
+
+	move(_tY, _tX + textWidth);
 }
 
 void TextBox::ProcessChar(int event)

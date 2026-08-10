@@ -32,8 +32,8 @@ private:
 		int &skipLines,
 		int prefix,
 		String text,
-		bool centering = false,
-		int applyRunFrom = -1);
+		bool centering,
+		int applyRunFrom);
 	bool RedrawConversationStart(int &currentLinePosition, int &skipLines);
 	bool RedrawMessageBody(
 		int &currentLinePosition,

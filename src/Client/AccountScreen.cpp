@@ -52,40 +52,66 @@ void AccountScreen::Redraw()
 		addch(ACS_HLINE);
 	}
 
+	bool running;
 	UiHelpers::DrawFrame(
 		5,
 		_rows - 3,
 		1,
 		_columns - 2,
 		"Account settings",
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	_name.SetCaptionPosition(_rows / 2 - 2, 4);
+	_name.SetWidthLimit(_columns - 8);
 	_name.AlignTextToCaption();
 	_name.Redraw();
 
 	move(_rows / 2, 4);
 
 	if (!_receivedAccountSettingsFromServer) {
-		addstr("Other settings require connection to server.");
+		running = UiHelpers::DrawRunningLine(
+			"Other settings require connection to server.",
+			_columns - 8);
+
+		if (running) {
+			_root->Ui->RequestRunningLine();
+		}
+
 		_state = State::NameSetting;
 		_name.SetCursor();
 		return;
 	}
 
-	addstr("Ban all messages not from command list: ");
+	String paramString = "Ban all messages not from command list: ";
 	if (_onlyContactsCanWriteMessages) {
-		addstr("yes.");
+		paramString += "yes.";
 	} else {
-		addstr("no.");
+		paramString += "no.";
+	}
+
+	running = UiHelpers::DrawRunningLine(paramString, _columns - 8);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
 	}
 
 	move(_rows / 2 + 2, 4);
-	addstr("Ban all calls not from command list: ");
+	paramString = "Ban all calls not from command list: ";
 	if (_onlyContactsCanCall) {
-		addstr("yes.");
+		paramString += "yes.";
 	} else {
-		addstr("no.");
+		paramString += "no.";
+	}
+
+	running = UiHelpers::DrawRunningLine(paramString, _columns - 8);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
 	}
 
 	if (_state == State::NameSetting) {

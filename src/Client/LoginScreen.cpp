@@ -53,23 +53,32 @@ void LoginScreen::Redraw()
 		addch(ACS_HLINE);
 	}
 
+	bool running;
 	UiHelpers::DrawFrame(
 		5,
 		_rows - 3,
 		1,
 		_columns - 2,
 		"Login to server as " + _root->Conf->GetName(),
-		COLOR_PAIR(YELLOW_TEXT));
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		_root->Ui->RequestRunningLine();
+	}
 
 	_ip.SetCaptionPosition(_rows / 2 - 2, 4);
+	_ip.SetWidthLimit(_columns - 7);
 	_ip.AlignTextToCaption();
 	_ip.Redraw();
 
 	_port.SetCaptionPosition(_rows / 2, 4);
+	_port.SetWidthLimit(_columns - 7);
 	_port.AlignTextToCaption();
 	_port.Redraw();
 
 	_serverKeyHex.SetCaptionPosition(_rows / 2 + 2, 4);
+	_serverKeyHex.SetWidthLimit(_columns - 7);
 	_serverKeyHex.SetTextPosition(_rows / 2 + 3, 4);
 	_serverKeyHex.Redraw();
 
@@ -82,24 +91,21 @@ void LoginScreen::Redraw()
 	}
 }
 
-static bool LegalIpChar(int event)
+static bool ValidIpChar(int event)
 {
 	return
-		(event >= '0' && event <= '9') ||
-		(event >= 'a' && event <= 'z') ||
-		(event >= 'A' && event <= 'Z') ||
-		event == '.' ||
+		(event > ' ' && event <= '~') ||
 		event == '\b';
 }
 
-static bool LegalPortChar(int event)
+static bool ValidPortChar(int event)
 {
 	return
 		(event >= '0' && event <= '9') ||
 		event == '\b';
 }
 
-static bool LegalKeyChar(int event)
+static bool ValidKeyChar(int event)
 {
 	return
 		(event >= '0' && event <= '9') ||
@@ -152,7 +158,7 @@ Screen *LoginScreen::ProcessEvent(int event)
 	}
 
 	if (_writingIp) {
-		if (!LegalIpChar(event)) {
+		if (!ValidIpChar(event)) {
 			_root->Ui->Notify("Illegal character.");
 			return this;
 		}
@@ -160,7 +166,7 @@ Screen *LoginScreen::ProcessEvent(int event)
 		_ip.ProcessChar(event);
 		_modified = true;
 	} else if (_writingPort) {
-		if (!LegalPortChar(event)) {
+		if (!ValidPortChar(event)) {
 			_root->Ui->Notify("Illegal character.");
 			return this;
 		}
@@ -168,7 +174,7 @@ Screen *LoginScreen::ProcessEvent(int event)
 		_port.ProcessChar(event);
 		_modified = true;
 	} else if (_writingKey) {
-		if (!LegalKeyChar(event)) {
+		if (!ValidKeyChar(event)) {
 			_root->Ui->Notify("Illegal character.");
 			return this;
 		}
