@@ -13,6 +13,7 @@ public:
 
 	void Redraw() override;
 	Screen *ProcessEvent(int event) override;
+	void ProcessResizeScreen() override;
 
 	CowBuffer<String> GetControlHelp() override;
 
@@ -26,7 +27,7 @@ private:
 
 	void RedrawCurrentChat();
 
-	// Chat screen draw helpers.
+	// Chat screen line drawing helper.
 	bool AddLineToChatScreen(
 		int &currentLinePosition,
 		int &skipLines,
@@ -34,7 +35,17 @@ private:
 		String text,
 		bool centering,
 		int applyRunFrom);
+	bool _workAsLineCounter;
+	int _lineCounterValue;
+	int GetMessageHeight(
+		MessageEventProcessor::MessageDescriptorBase *md);
+
+	// Chat screen draw helpers.
 	bool RedrawConversationStart(int &currentLinePosition, int &skipLines);
+	bool RedrawMessage(
+		int &currentLinePosition,
+		int &skipLines,
+		MessageEventProcessor::MessageDescriptorBase *md);
 	bool RedrawMessageBody(
 		int &currentLinePosition,
 		int &skipLines,

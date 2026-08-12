@@ -15,6 +15,9 @@ WorkScreen::WorkScreen(Root *root)
 {
 	_root = root;
 	_chatStack = nullptr;
+
+	_workAsLineCounter = false;
+	_lineCounterValue = 0;
 }
 
 WorkScreen::~WorkScreen()
@@ -72,6 +75,28 @@ Screen *WorkScreen::ProcessEvent(int event)
 	return ProcessChatScreenEvent(event);
 }
 
+void WorkScreen::ProcessResizeScreen()
+{
+	if (!_chatStack || _chatStack->CurrentMessageID.IsZero()) {
+		return;
+	}
+
+	int currentMessageHeight = GetMessageHeight(
+		_root->Messages->GetMessageDescriptor(
+			_chatStack->CurrentMessageID));
+
+	bool applyLimit = _chatStack->LineOffset > currentMessageHeight - 5;
+
+	if (applyLimit) {
+		// Show sender and timestamp.
+		_chatStack->LineOffset = currentMessageHeight - 5;
+
+		if (_chatStack->LineOffset < 0) {
+			_chatStack->LineOffset = 0;
+		}
+	}
+}
+
 CowBuffer<String> WorkScreen::GetControlHelp()
 {
 #warning TODO: don't forget to finish control help.
@@ -95,7 +120,7 @@ void WorkScreen::RedrawFrames()
 	 *  ConnectionStatus
 	 *  VoiceStatus
 	 *  ----------------------------------
-	 *  CurrentContactName
+	 *  CurrentContactName, thread
 	 *  ----------------------------------
 	 *  ContactList | CurrentChatMessages
 	 *              |
@@ -282,9 +307,6 @@ void WorkScreen::RedrawCurrentChat()
 		_root->Ui->RequestRunningLine();
 	}
 
-	int currentLinePosition = _rows - 10;
-	int skipLines = _chatStack->LineOffset;
-
 	ObjectStorage::ID currentMessageID = _chatStack->CurrentMessageID;
 
 	if (_chatStack->AutoScroll) {
@@ -292,7 +314,11 @@ void WorkScreen::RedrawCurrentChat()
 			_chatStack->ThreadID);
 
 		_chatStack->CurrentMessageID = currentMessageID;
+		_chatStack->LineOffset = 0;
 	}
+
+	int currentLinePosition = _rows - 10;
+	int skipLines = _chatStack->LineOffset;
 
 	while (currentLinePosition >= 7) {
 		if (currentMessageID.IsZero()) {
@@ -303,27 +329,10 @@ void WorkScreen::RedrawCurrentChat()
 		MessageEventProcessor::MessageDescriptorBase *md =
 			_root->Messages->GetMessageDescriptor(currentMessageID);
 
-		bool success = RedrawMessageBody(
+		bool success = RedrawMessage(
 			currentLinePosition,
 			skipLines,
 			md);
-
-		if (!success) {
-			break;
-		}
-
-		success = RedrawMessageHeader(
-			currentLinePosition,
-			skipLines,
-			md);
-
-		if (!success) {
-			break;
-		}
-
-		success = RedrawMessageDelimiter(
-			currentLinePosition,
-			skipLines);
 
 		if (!success) {
 			break;
@@ -344,6 +353,11 @@ bool WorkScreen::AddLineToChatScreen(
 	bool centering,
 	int applyRunFrom)
 {
+	if (_workAsLineCounter) {
+		++_lineCounterValue;
+		return true;
+	}
+
 	if (currentLinePosition < 7) {
 		return false;
 	}
@@ -409,6 +423,23 @@ bool WorkScreen::AddLineToChatScreen(
 	return true;
 }
 
+int WorkScreen::GetMessageHeight(
+	MessageEventProcessor::MessageDescriptorBase *md)
+{
+	_workAsLineCounter = true;
+	_lineCounterValue = 0;
+
+	int lp = 0;
+	int sl = 0;
+
+	RedrawMessage(lp, sl, md);
+
+	int result = _lineCounterValue;
+	_workAsLineCounter = false;
+	_lineCounterValue = 0;
+	return result;
+}
+
 bool WorkScreen::RedrawConversationStart(
 	int &currentLinePosition,
 	int &skipLines)
@@ -432,6 +463,34 @@ bool WorkScreen::RedrawConversationStart(
 		"Conversation start",
 		true,
 		0);
+}
+
+bool WorkScreen::RedrawMessage(
+	int &currentLinePosition,
+	int &skipLines,
+	MessageEventProcessor::MessageDescriptorBase *md)
+{
+	bool success = RedrawMessageBody(
+		currentLinePosition,
+		skipLines,
+		md);
+
+	if (!success) {
+		return false;
+	}
+
+	success = RedrawMessageHeader(
+		currentLinePosition,
+		skipLines,
+		md);
+
+	if (!success) {
+		return false;
+	}
+
+	return RedrawMessageDelimiter(
+		currentLinePosition,
+		skipLines);
 }
 
 bool WorkScreen::RedrawMessageBody(
@@ -854,20 +913,67 @@ Screen *WorkScreen::ProcessChatScreenEvent(int event)
 	}
 
 	if (event == _root->Conf->WorkChatUpKey()) {
+		if (_chatStack->CurrentMessageID.IsZero()) {
+			_chatStack->LineOffset = 0;
+			_chatStack->AutoScroll = true;
+			return this;
+		}
+
 		_chatStack->LineOffset += 1;
 		_chatStack->AutoScroll = false;
+
+		ObjectStorage::ID prevMessageID =
+			_root->Messages->GetPreviousMessage(
+				_chatStack->CurrentMessageID);
+
+		bool hasPrevMessage = !prevMessageID.IsZero();
+
+		int currentMessageHeight = GetMessageHeight(
+			_root->Messages->GetMessageDescriptor(
+				_chatStack->CurrentMessageID));
+
+		bool applyLimit =
+			!hasPrevMessage &&
+			_chatStack->LineOffset >= currentMessageHeight;
+
+		bool overflowUp =
+			hasPrevMessage &&
+			_chatStack->LineOffset >= currentMessageHeight;
+
+		if (applyLimit) {
+			_chatStack->LineOffset = currentMessageHeight;
+		} else if (overflowUp) {
+			_chatStack->CurrentMessageID = prevMessageID;
+			_chatStack->LineOffset = 0;
+		}
+
 		return this;
 	}
 
 	if (event == _root->Conf->WorkChatDownKey()) {
-		_chatStack->LineOffset -= 1;
-
-		if (_chatStack->LineOffset == 0) {
+		if (_chatStack->CurrentMessageID.IsZero()) {
+			_chatStack->LineOffset = 0;
 			_chatStack->AutoScroll = true;
+			return this;
 		}
 
+		_chatStack->LineOffset -= 1;
+
 		if (_chatStack->LineOffset < 0) {
-			_chatStack->LineOffset = 0;
+			ObjectStorage::ID nextMessageID =
+				_root->Messages->GetNextMessage(
+					_chatStack->CurrentMessageID);
+
+			if (nextMessageID.IsZero()) {
+				_chatStack->LineOffset = 0;
+				_chatStack->AutoScroll = true;
+			} else {
+				_chatStack->CurrentMessageID = nextMessageID;
+
+				_chatStack->LineOffset = GetMessageHeight(
+					_root->Messages->GetMessageDescriptor(
+						nextMessageID)) - 1;
+			}
 		}
 
 		return this;

@@ -14,4 +14,5 @@ Screen::~Screen()
 void Screen::ProcessResize()
 {
 	getmaxyx(stdscr, _rows, _columns);
+	this->ProcessResizeScreen();
 }

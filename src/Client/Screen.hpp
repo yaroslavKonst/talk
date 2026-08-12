@@ -12,6 +12,8 @@ public:
 	virtual Screen *ProcessEvent(int event) = 0;
 	virtual void Redraw() = 0;
 	void ProcessResize();
+	virtual void ProcessResizeScreen()
+	{ }
 
 	virtual CowBuffer<String> GetControlHelp() = 0;
 

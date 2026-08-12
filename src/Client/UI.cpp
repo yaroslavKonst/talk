@@ -76,6 +76,12 @@ bool UI::ProcessEvent()
 		return true;
 	}
 
+	if (event == KEY_ENTER) {
+		event = '\n';
+	} else if (event == KEY_BACKSPACE) {
+		event = '\b';
+	}
+
 	if (_rows < 20 || _columns < 26) {
 		return true;
 	}
@@ -85,12 +91,6 @@ bool UI::ProcessEvent()
 	if (notificationProcessed) {
 		Redraw();
 		return true;
-	}
-
-	if (event == KEY_ENTER) {
-		event = '\n';
-	} else if (event == KEY_BACKSPACE) {
-		event = '\b';
 	}
 
 	Screen *newScreen = _screenStack->screen->ProcessEvent(event);
