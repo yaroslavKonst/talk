@@ -104,12 +104,25 @@ namespace Message
 
 	bool VerifyFullUserName(String name);
 	bool VerifyFullGroupName(String name);
+	bool VerifyShortName(String name);
 	bool VerifyFullHostName(String name);
+	bool VerifyHostName(String hostName);
+	bool VerifyPortName(String portName);
 
 	bool SplitFullUserName(
 		String fullName,
 		String &userName,
 		String &hostName);
+
+	bool SplitFullGroupName(
+		String fullName,
+		String &groupName,
+		String &hostName);
+
+	bool SplitFullHostName(
+		String fullName,
+		String &hostName,
+		String &portName);
 
 	// Accepts user and group names. Does less strict checks than
 	// VerifyFull*Name functions.

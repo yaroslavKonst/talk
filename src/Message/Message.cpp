@@ -371,71 +371,49 @@ CowBuffer<uint8_t> Message::BuildContents(
 
 bool Message::VerifyFullUserName(String name)
 {
-	CowBuffer<String> parts = name.Split('@', false);
-
-	if (parts.Size() != 2) {
+	if (!name.Length()) {
 		return false;
 	}
 
-	if (!parts[0].Length() || !parts[1].Length()) {
+	String userName;
+	String hostName;
+
+	bool res = SplitFullUserName(name, userName, hostName);
+
+	if (!res) {
 		return false;
 	}
 
-	String userName = parts[0];
-
-	for (int i = 0; i < userName.Length(); i++) {
-		uint8_t c = userName.CStr()[i];
-
-		bool validChar =
-			c > 0x20 &&
-			c != 0x2f &&
-			c != 0x40 &&
-			c != 0xff;
-
-		if (!validChar) {
-			return false;
-		}
+	if (!VerifyShortName(userName)) {
+		return false;
 	}
-
-	String hostName = parts[1];
 
 	return VerifyFullHostName(hostName);
 }
 
 bool Message::VerifyFullGroupName(String name)
 {
-	CowBuffer<String> parts = name.Split('@', false);
-
-	if (parts.Size() != 3) {
+	if (!name.Length()) {
 		return false;
 	}
 
-	if (!parts[0].Length() || parts[1].Length() || !parts[2].Length()) {
+	String groupName;
+	String hostName;
+
+	bool res = SplitFullGroupName(name, groupName, hostName);
+
+	if (!res) {
 		return false;
 	}
 
-	String groupName = parts[0];
-
-	for (int i = 0; i < groupName.Length(); i++) {
-		uint8_t c = groupName.CStr()[i];
-
-		bool validChar =
-			c > 0x20 &&
-			c != 0x2f &&
-			c != 0x40 &&
-			c != 0xff;
-
-		if (!validChar) {
-			return false;
-		}
+	if (!VerifyShortName(groupName)) {
+		return false;
 	}
-
-	String hostName = parts[2];
 
 	return VerifyFullHostName(hostName);
 }
 
-bool Message::VerifyFullHostName(String name)
+bool Message::VerifyShortName(String name)
 {
 	if (!name.Length()) {
 		return false;
@@ -448,51 +426,85 @@ bool Message::VerifyFullHostName(String name)
 			c > ' ' &&
 			c != '/' &&
 			c != '@' &&
-			c < 0xff; // No delete.
+			c != 0xff; // No delete.
 
 		if (!validChar) {
 			return false;
 		}
 	}
 
-	CowBuffer<String> parts = name.Split(':', false);
+	return true;
+}
 
-	// Empty name.
-	if (!parts.Size()) {
+bool Message::VerifyFullHostName(String name)
+{
+	if (!name.Length()) {
 		return false;
 	}
 
-	// One component.
-	if (parts.Size() == 1) {
-		// Empty name.
-		if (!parts[0].Length()) {
-			return false;
-		}
+	String hostName;
+	String portName;
 
-		IPAddress testAddr;
+	bool res = SplitFullHostName(
+		name,
+		hostName,
+		portName);
 
-		// One component IP name.
-		if (testAddr.ParseIPAddress(parts[0])) {
-			return false;
-		}
-
-		return true;
+	if (!res) {
+		return false;
 	}
 
-	String hostName = parts[0];
-
-	for (uint32_t i = 1; i < parts.Size() - 1; i++) {
-		hostName += ':';
-		hostName += parts[i];
+	if (!VerifyHostName(hostName)) {
+		return false;
 	}
 
+	IPAddress testAddr;
+	bool hostNameIsIP = testAddr.ParseIPAddress(hostName);
+
+	if (!portName.Length()) {
+		return !hostNameIsIP;
+	}
+
+	return VerifyPortName(portName);
+}
+
+bool Message::VerifyHostName(String hostName)
+{
 	if (!hostName.Length()) {
 		return false;
 	}
 
-	String portName = parts[parts.Size() - 1];
+	if (hostName.CStr()[hostName.Length() - 1] == ':') {
+		return false;
+	}
 
-	if (!portName.Length()) {
+	IPAddress testAddr;
+
+	if (testAddr.ParseIPAddress(hostName)) {
+		return true;
+	}
+
+	for (int i = 0; i < hostName.Length(); i++) {
+		uint8_t c = hostName.CStr()[i];
+
+		bool validChar =
+			c > ' ' &&
+			c != '/' &&
+			c != ':' &&
+			c != '@' &&
+			c < 0xff; // No delete or non-ASCII char.
+
+		if (!validChar) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool Message::VerifyPortName(String portName)
+{
+	if (!portName.Length() || portName.Length() > 5) {
 		return false;
 	}
 
@@ -504,13 +516,9 @@ bool Message::VerifyFullHostName(String name)
 		}
 	}
 
-	IPAddress testAddr;
+	int value = atoi(portName.CStr());
 
-	if (testAddr.ParseIPAddress(hostName)) {
-		return true;
-	}
-
-	if (parts.Size() > 2) {
+	if (value <= 0 || value > 65535) {
 		return false;
 	}
 
@@ -538,6 +546,66 @@ bool Message::SplitFullUserName(
 	return true;
 }
 
+bool Message::SplitFullGroupName(
+	String fullName,
+	String &groupName,
+	String &hostName)
+{
+	CowBuffer<String> parts = fullName.Split('@', false);
+
+	if (parts.Size() != 3) {
+		return false;
+	}
+
+	if (!parts[0].Length() || parts[1].Length() || !parts[2].Length()) {
+		return false;
+	}
+
+	groupName = parts[0];
+	hostName = parts[2];
+
+	return true;
+}
+
+bool Message::SplitFullHostName(
+	String fullName,
+	String &hostName,
+	String &portName)
+{
+	if (!fullName.Length()) {
+		return false;
+	}
+
+	CowBuffer<String> parts = fullName.Split(':', false);
+
+	if (!parts.Size()) {
+		return false;
+	}
+
+	hostName = parts[0];
+
+	if (parts.Size() == 1) {
+		portName = "";
+		return hostName.Length();
+	}
+
+	portName = parts[parts.Size() - 1];
+
+	if (!portName.Length()) {
+		return false;
+	}
+
+	for (uint32_t i = 1; i < parts.Size() - 1; i++) {
+		hostName += ":" + parts[i];
+	}
+
+	if (!hostName.Length()) {
+		return false;
+	}
+
+	return true;
+}
+
 bool Message::ExtractServerDataFromFullName(
 	String fullName,
 	String &hostName,
@@ -548,25 +616,17 @@ bool Message::ExtractServerDataFromFullName(
 	bool res = SplitFullUserName(fullName, userName, hostName);
 
 	if (!res) {
-		return false;
-	}
+		res = SplitFullGroupName(fullName, userName, hostName);
 
-	serviceName = String();
-
-	CowBuffer<String> parts = hostName.Split(':', false);
-
-	if (parts.Size() >= 2) {
-		hostName = parts[0];
-
-		for (uint32_t i = 1; i < parts.Size() - 1; i++) {
-			hostName += ":" + parts[i];
-		}
-
-		serviceName = parts[parts.Size() - 1];
-
-		if (!serviceName.Length()) {
+		if (!res) {
 			return false;
 		}
+	}
+
+	res = SplitFullHostName(hostName, hostName, serviceName);
+
+	if (!res) {
+		return false;
 	}
 
 	if (!hostName.Length()) {

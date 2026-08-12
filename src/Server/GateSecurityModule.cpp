@@ -82,7 +82,14 @@ void GateSecurityModule::SetKnownPeerIP(IPAddress ip)
 	}
 
 	if (_ipOnlyHostName && _srvReportedHostName.Length()) {
-		if (_srvReportedHostName != _knownPeerIP.ToString()) {
+		IPAddress address;
+
+		if (!address.ParseIPAddress(_srvReportedHostName)) {
+			_failure = true;
+			return;
+		}
+
+		if (address != _knownPeerIP) {
 			_failure = true;
 		}
 	}
@@ -90,7 +97,7 @@ void GateSecurityModule::SetKnownPeerIP(IPAddress ip)
 
 void GateSecurityModule::SetKnownPeerFullHostName(String fullHostName)
 {
-	if (!fullHostName.Length()) {
+	if (!Message::VerifyFullHostName(fullHostName)) {
 		_failure = true;
 		return;
 	}
@@ -104,28 +111,17 @@ void GateSecurityModule::SetKnownPeerFullHostName(String fullHostName)
 		}
 	}
 
-	CowBuffer<String> parts = fullHostName.Split(':', false);
+	bool res = Message::SplitFullHostName(
+		fullHostName,
+		_knownPeerHostName,
+		_knownPeerServiceName);
 
-	if (!parts.Size() || parts.Size() > 2) {
+	if (!res) {
 		_failure = true;
 		return;
 	}
 
-	_knownPeerHostName = parts[0];
-
-	if (!_knownPeerHostName.Length()) {
-		_failure = true;
-		return;
-	}
-
-	if (parts.Size() > 1) {
-		_knownPeerServiceName = parts[1];
-
-		if (!_knownPeerServiceName.Length()) {
-			_failure = true;
-			return;
-		}
-
+	if (_knownPeerHostName.Length() && _knownPeerServiceName.Length()) {
 		_srvReportedHostName = _knownPeerHostName;
 		_srvReportedServiceName = _knownPeerServiceName;
 	}
@@ -142,7 +138,14 @@ void GateSecurityModule::SetKnownPeerFullHostName(String fullHostName)
 	}
 
 	if (_ipOnlyHostName && _knownPeerIPAssigned) {
-		if (_srvReportedHostName != _knownPeerIP.ToString()) {
+		IPAddress address;
+
+		if (!address.ParseIPAddress(_srvReportedHostName)) {
+			_failure = true;
+			return;
+		}
+
+		if (address != _knownPeerIP) {
 			_failure = true;
 		}
 	}
@@ -150,7 +153,7 @@ void GateSecurityModule::SetKnownPeerFullHostName(String fullHostName)
 
 void GateSecurityModule::SetPeerReportedFullHostName(String fullHostName)
 {
-	if (!fullHostName.Length()) {
+	if (!Message::VerifyFullHostName(fullHostName)) {
 		_failure = true;
 		return;
 	}
@@ -164,28 +167,18 @@ void GateSecurityModule::SetPeerReportedFullHostName(String fullHostName)
 		}
 	}
 
-	CowBuffer<String> parts = fullHostName.Split(':', false);
+	bool res = Message::SplitFullHostName(
+		fullHostName,
+		_peerReportedHostName,
+		_peerReportedServiceName);
 
-	if (!parts.Size() || parts.Size() > 2) {
+	if (!res) {
 		_failure = true;
 		return;
 	}
 
-	_peerReportedHostName = parts[0];
-
-	if (!_peerReportedHostName.Length()) {
-		_failure = true;
-		return;
-	}
-
-	if (parts.Size() > 1) {
-		_peerReportedServiceName = parts[1];
-
-		if (!_peerReportedServiceName.Length()) {
-			_failure = true;
-			return;
-		}
-
+	if (_peerReportedHostName.Length() && _peerReportedServiceName.Length())
+	{
 		_srvReportedHostName = _peerReportedHostName;
 		_srvReportedServiceName = _peerReportedServiceName;
 	}
@@ -198,10 +191,18 @@ void GateSecurityModule::SetPeerReportedFullHostName(String fullHostName)
 
 	if (_ipOnlyHostName && !_peerReportedServiceName.Length()) {
 		_failure = true;
+		return;
 	}
 
 	if (_ipOnlyHostName && _knownPeerIPAssigned) {
-		if (_srvReportedHostName != _knownPeerIP.ToString()) {
+		IPAddress address;
+
+		if (!address.ParseIPAddress(_srvReportedHostName)) {
+			_failure = true;
+			return;
+		}
+
+		if (address != _knownPeerIP) {
 			_failure = true;
 		}
 	}
@@ -473,7 +474,14 @@ void GateSecurityModule::RunFullValidation()
 	}
 
 	if (_ipOnlyHostName) {
-		if (_peerReportedHostName != _knownPeerIP.ToString()) {
+		IPAddress address;
+
+		if (!address.ParseIPAddress(_srvReportedHostName)) {
+			_failure = true;
+			return;
+		}
+
+		if (address != _knownPeerIP) {
 			_failure = true;
 		}
 
