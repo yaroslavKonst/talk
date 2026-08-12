@@ -461,14 +461,7 @@ void GateSecurityModule::RunFullValidation()
 		return;
 	}
 
-	if (_srvReportedServiceName.Length() > 5) {
-		_failure = true;
-		return;
-	}
-
-	int res = atoi(_srvReportedServiceName.CStr());
-
-	if (!res || res > 65535) {
+	if (!Message::VerifyPortName(_srvReportedServiceName)) {
 		_failure = true;
 		return;
 	}

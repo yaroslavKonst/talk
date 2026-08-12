@@ -549,29 +549,13 @@ void OutboundGateSession::TryConnect()
 {
 	String portString = _securityModule.GetSRVReportedServiceName();
 
-	if (!portString.Length()) {
+	if (!Message::VerifyPortName(portString)) {
 		_task->ReportConnectionFailure();
 		_storage->MarkSessionForRemoval(this);
 		return;
-	}
-
-	for (int i = 0; i < portString.Length(); i++) {
-		char c = portString.CStr()[i];
-
-		if (c < '0' || c > '9') {
-			_task->ReportConnectionFailure();
-			_storage->MarkSessionForRemoval(this);
-			return;
-		}
 	}
 
 	int portNumber = atoi(portString.CStr());
-
-	if (portNumber <= 0 || portNumber > 65535) {
-		_task->ReportConnectionFailure();
-		_storage->MarkSessionForRemoval(this);
-		return;
-	}
 
 	int addrLen;
 	struct sockaddr_storage *addr =
