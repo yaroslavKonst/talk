@@ -35,7 +35,7 @@ public:
 	int GetUserCount();
 	CowBuffer<String> ListUsers() override;
 
-	void AddSession(int fd, int32_t ip);
+	void AddSession(int fd, IPAddress ip);
 	void MarkSessionForRemoval(ServerHandshake *session) override;
 
 	void ProcessQuant() override;

@@ -221,9 +221,8 @@ Screen *LoginScreen::ProcessConnection()
 	String hostName = _ip.Text;
 	String portName = _port.Text;
 
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
+	IPAddress address;
+	uint16_t portNumber;
 
 	if (!portName.Length()) {
 		Resolver::SRVResult *srv = resolver.ResolveSRV(
@@ -242,7 +241,7 @@ Screen *LoginScreen::ProcessConnection()
 		}
 
 		hostName = srv->Target;
-		addr.sin_port = srv->Port;
+		portNumber = srv->Port;
 
 		delete srv;
 	} else {
@@ -254,24 +253,21 @@ Screen *LoginScreen::ProcessConnection()
 			return this;
 		}
 
-		addr.sin_port = htons(port);
+		portNumber = htons(port);
 	}
 
-	if (!IsValidIPv4Address(hostName)) {
-		addr.sin_addr.s_addr = resolver.ResolveA(hostName);
+	if (!address.ParseIPAddress(hostName)) {
+		address = resolver.ResolveA(hostName);
 
 		if (resolver.GetResolveStatus()) {
-			_root->Ui->BlockCancel(blockHandle);
-			_root->Ui->Notify("Failed to resolve host address.");
-			return this;
-		}
-	} else {
-		int res = inet_aton(hostName.CStr(), &addr.sin_addr);
+			address = resolver.ResolveAAAA(hostName);
 
-		if (!res) {
-			_root->Ui->BlockCancel(blockHandle);
-			_root->Ui->Notify("Invalid host address.");
-			return this;
+			if (resolver.GetResolveStatus()) {
+				_root->Ui->BlockCancel(blockHandle);
+				_root->Ui->Notify(
+					"Failed to resolve host address.");
+				return this;
+			}
 		}
 	}
 
@@ -283,18 +279,22 @@ Screen *LoginScreen::ProcessConnection()
 		_modified = false;
 	}
 
-	int socketFd = socket(AF_INET, SOCK_STREAM, 0);
+	int addrLen;
+	struct sockaddr_storage *addr =
+		address.GetStructSockaddr(portNumber, addrLen);
+
+	int socketFd = socket(addr->ss_family, SOCK_STREAM, 0);
 
 	if (socketFd == -1) {
+		delete addr;
 		_root->Ui->BlockCancel(blockHandle);
 		_root->Ui->Notify("Failed to create socket.");
 		return this;
 	}
 
-	int res = connect(
-		socketFd,
-		(struct sockaddr*)&addr,
-		sizeof(addr));
+	int res = connect(socketFd, (struct sockaddr*)addr, addrLen);
+
+	delete addr;
 
 	if (res == -1) {
 		close(socketFd);

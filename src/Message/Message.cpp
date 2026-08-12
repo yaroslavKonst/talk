@@ -6,6 +6,7 @@
 #include "../Crypto/Crypto.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/Endianness.hpp"
+#include "../Common/Networking.hpp"
 #include "../ThirdParty/monocypher.h"
 
 using namespace Crypto::X25519;
@@ -397,31 +398,8 @@ bool Message::VerifyFullUserName(String name)
 	}
 
 	String hostName = parts[1];
-	int colonCount = 0;
 
-	for (int i = 0; i < hostName.Length(); i++) {
-		uint8_t c = hostName.CStr()[i];
-
-		bool validChar =
-			c > 0x20 &&
-			c != 0x2f &&
-			c != 0x40 &&
-			c < 0xff;
-
-		if (!validChar) {
-			return false;
-		}
-
-		if (c == ':') {
-			++colonCount;
-		}
-	}
-
-	if (colonCount > 1) {
-		return false;
-	}
-
-	return true;
+	return VerifyFullHostName(hostName);
 }
 
 bool Message::VerifyFullGroupName(String name)
@@ -453,27 +431,86 @@ bool Message::VerifyFullGroupName(String name)
 	}
 
 	String hostName = parts[2];
-	int colonCount = 0;
 
-	for (int i = 0; i < hostName.Length(); i++) {
-		uint8_t c = hostName.CStr()[i];
+	return VerifyFullHostName(hostName);
+}
+
+bool Message::VerifyFullHostName(String name)
+{
+	if (!name.Length()) {
+		return false;
+	}
+
+	for (int i = 0; i < name.Length(); i++) {
+		uint8_t c = name.CStr()[i];
 
 		bool validChar =
-			c > 0x20 &&
-			c != 0x2f &&
-			c != 0x40 &&
-			c < 0xff;
+			c > ' ' &&
+			c != '/' &&
+			c != '@' &&
+			c < 0xff; // No delete.
 
 		if (!validChar) {
 			return false;
 		}
+	}
 
-		if (c == ':') {
-			++colonCount;
+	CowBuffer<String> parts = name.Split(':', false);
+
+	// Empty name.
+	if (!parts.Size()) {
+		return false;
+	}
+
+	// One component.
+	if (parts.Size() == 1) {
+		// Empty name.
+		if (!parts[0].Length()) {
+			return false;
+		}
+
+		IPAddress testAddr;
+
+		// One component IP name.
+		if (testAddr.ParseIPAddress(parts[0])) {
+			return false;
+		}
+
+		return true;
+	}
+
+	String hostName = parts[0];
+
+	for (uint32_t i = 1; i < parts.Size() - 1; i++) {
+		hostName += ':';
+		hostName += parts[i];
+	}
+
+	if (!hostName.Length()) {
+		return false;
+	}
+
+	String portName = parts[parts.Size() - 1];
+
+	if (!portName.Length()) {
+		return false;
+	}
+
+	for (int i = 0; i < portName.Length(); i++) {
+		uint8_t c = portName.CStr()[i];
+
+		if (c < '0' || c > '9') {
+			return false;
 		}
 	}
 
-	if (colonCount > 1) {
+	IPAddress testAddr;
+
+	if (testAddr.ParseIPAddress(hostName)) {
+		return true;
+	}
+
+	if (parts.Size() > 2) {
 		return false;
 	}
 
@@ -506,26 +543,30 @@ bool Message::ExtractServerDataFromFullName(
 	String &hostName,
 	String &serviceName)
 {
-	CowBuffer<String> parts = fullName.Split('@', false);
+	String userName;
 
-	if (parts.Size() < 2) {
-		return false;
-	}
+	bool res = SplitFullUserName(fullName, userName, hostName);
 
-	hostName = parts[parts.Size() - 1];
-
-	if (!hostName.Length()) {
+	if (!res) {
 		return false;
 	}
 
 	serviceName = String();
-	parts = hostName.Split(':', false);
 
-	if (parts.Size() == 2) {
+	CowBuffer<String> parts = hostName.Split(':', false);
+
+	if (parts.Size() >= 2) {
 		hostName = parts[0];
-		serviceName = parts[1];
-	} else if (parts.Size() > 2) {
-		return false;
+
+		for (uint32_t i = 1; i < parts.Size() - 1; i++) {
+			hostName += ":" + parts[i];
+		}
+
+		serviceName = parts[parts.Size() - 1];
+
+		if (!serviceName.Length()) {
+			return false;
+		}
 	}
 
 	if (!hostName.Length()) {

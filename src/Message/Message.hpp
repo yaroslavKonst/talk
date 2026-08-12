@@ -104,6 +104,7 @@ namespace Message
 
 	bool VerifyFullUserName(String name);
 	bool VerifyFullGroupName(String name);
+	bool VerifyFullHostName(String name);
 
 	bool SplitFullUserName(
 		String fullName,

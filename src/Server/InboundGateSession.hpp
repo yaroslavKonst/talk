@@ -81,7 +81,7 @@ class InboundGateSession :
 public:
 	InboundGateSession(
 		int fd,
-		uint32_t ipv4,
+		IPAddress ip,
 		InboundGateSessionStorage *storage,
 		EventDispatcher *dispatcher,
 		UserDB *users,
@@ -107,7 +107,7 @@ private:
 	RateLimiter *_rateLimiter;
 
 	int _fd;
-	uint32_t _ipv4;
+	IPAddress _ip;
 
 	StreamReader *_reader;
 	StreamWriter *_writer;

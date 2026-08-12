@@ -38,7 +38,7 @@ void ListeningSocket::ReloadConfig()
 
 void ListeningSocket::ProcessRead()
 {
-	struct sockaddr_in addr;
+	struct sockaddr_storage addr;
 	unsigned int addrSize = sizeof(addr);
 
 	int fd = accept(_socketFd, (struct sockaddr*)&addr, &addrSize);
@@ -47,7 +47,20 @@ void ListeningSocket::ProcessRead()
 		return;
 	}
 
-	bool allowed = _failBan->IsAllowed(addr.sin_addr.s_addr);
+	if (addrSize > sizeof(addr)) {
+		shutdown(fd, SHUT_RDWR);
+		close(fd);
+		THROW("Insufficient storage space for accept.");
+	}
+
+	IPAddress address;
+	bool allowed;
+
+	if (!address.LoadStructSockaddr(&addr)) {
+		allowed = false;
+	} else {
+		allowed = _failBan->IsAllowed(address);
+	}
 
 	if (!allowed) {
 		shutdown(fd, SHUT_RDWR);
@@ -57,7 +70,7 @@ void ListeningSocket::ProcessRead()
 
 	MakeNonblocking(fd);
 
-	_users->AddSession(fd, addr.sin_addr.s_addr);
+	_users->AddSession(fd, address);
 }
 
 void ListeningSocket::ProcessWrite()
@@ -69,15 +82,16 @@ void ListeningSocket::OpenSocket()
 {
 	uint16_t port = _config->GetListeningPort();
 
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	addr.sin_addr.s_addr = _config->GetListeningAddress();
+	int addrLen;
+	struct sockaddr_storage *addr =
+		_config->GetListeningAddress().GetStructSockaddr(
+			htons(port),
+			addrLen);
 
-	_socketFd = socket(AF_INET, SOCK_STREAM, 0);
+	_socketFd = socket(addr->ss_family, SOCK_STREAM, 0);
 
 	if (_socketFd == -1) {
+		delete addr;
 		THROW("Failed to create listening socket.");
 	}
 
@@ -90,11 +104,14 @@ void ListeningSocket::OpenSocket()
 		sizeof(reuseAddr));
 
 	if (res == -1) {
+		delete addr;
 		CloseSocket();
 		THROW("Failed to set REUSEADDR on listening socket.");
 	}
 
-	res = bind(_socketFd, (struct sockaddr*)&addr, sizeof(addr));
+	res = bind(_socketFd, (struct sockaddr*)addr, addrLen);
+
+	delete addr;
 
 	if (res == -1) {
 		CloseSocket();

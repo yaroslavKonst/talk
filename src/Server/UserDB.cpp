@@ -122,7 +122,7 @@ CowBuffer<String> UserDB::ListUsers()
 	return data;
 }
 
-void UserDB::AddSession(int fd, int32_t ip)
+void UserDB::AddSession(int fd, IPAddress ip)
 {
 	StartupSession *s = new StartupSession;
 

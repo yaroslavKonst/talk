@@ -145,7 +145,7 @@ static int ProcessListBannedIP(CowBuffer<uint8_t> response)
 	}
 
 	for (unsigned int i = 0; i < resp.BannedIPList.Size(); i++) {
-		printf("%s\n", IPToString(resp.BannedIPList[i]).CStr());
+		printf("%s\n", resp.BannedIPList[i].ToString().CStr());
 	}
 
 	return 0;

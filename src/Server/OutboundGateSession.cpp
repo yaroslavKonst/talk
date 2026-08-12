@@ -236,6 +236,7 @@ OutboundGateSession::OutboundGateSession(
 	}
 
 	_state = State::WaitingForDestinationResolve;
+	_requestedAResolve = false;
 
 	_reader = nullptr;
 	_writer = nullptr;
@@ -456,6 +457,13 @@ void OutboundGateSession::ResolveCompleted()
 		THROW("Invalid state in ResolveCompleted.");
 	}
 
+	// If A record type request ended with failure AAAA must be tried.
+	// Resolve call with _requestedAResolve == true will try AAAA
+	// request. Clearing possible error from A request.
+	if (_requestedAResolve) {
+		_securityModule.ClearFailure();
+	}
+
 	Resolve();
 }
 
@@ -494,9 +502,18 @@ void OutboundGateSession::Resolve()
 		return;
 	}
 
-	if (_securityModule.NeedA()) {
+	if (_securityModule.NeedA() && !_requestedAResolve) {
+		_requestedAResolve = true;
 		_state = State::WaitingForDestinationResolve;
 		_securityModule.RunA();
+		return;
+	}
+
+	_requestedAResolve = false;
+
+	if (_securityModule.NeedAAAA()) {
+		_state = State::WaitingForDestinationResolve;
+		_securityModule.RunAAAA();
 		return;
 	}
 
@@ -517,7 +534,7 @@ void OutboundGateSession::Resolve()
 		}
 	}
 
-	_securityModule.SetKnownPeerIP(_securityModule.GetDNSReportedIPv4());
+	_securityModule.SetKnownPeerIP(_securityModule.GetDNSReportedIP());
 
 	if (_securityModule.Failure()) {
 		_task->ReportConnectionFailure();
@@ -556,15 +573,16 @@ void OutboundGateSession::TryConnect()
 		return;
 	}
 
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(portNumber);
-	addr.sin_addr.s_addr = _securityModule.GetDNSReportedIPv4();
+	int addrLen;
+	struct sockaddr_storage *addr =
+		_securityModule.GetDNSReportedIP().GetStructSockaddr(
+			htons(portNumber),
+			addrLen);
 
-	_fd = socket(AF_INET, SOCK_STREAM, 0);
+	_fd = socket(addr->ss_family, SOCK_STREAM, 0);
 
 	if (_fd == -1) {
+		delete addr;
 		OutboundGateLog("Failed to create socket.");
 		_task->ReportConnectionFailure();
 		_storage->MarkSessionForRemoval(this);
@@ -573,7 +591,9 @@ void OutboundGateSession::TryConnect()
 
 	MakeNonblocking(_fd);
 
-	int res = connect(_fd, (struct sockaddr*)&addr, sizeof(addr));
+	int res = connect(_fd, (struct sockaddr*)addr, addrLen);
+
+	delete addr;
 
 	if (res == -1) {
 		if (errno == EINPROGRESS) {

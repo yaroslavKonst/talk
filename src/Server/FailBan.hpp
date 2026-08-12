@@ -7,7 +7,6 @@
 #include "../Common/CowBuffer.hpp"
 #include "../Common/Tree.hpp"
 
-// All IPv4 addresses are stored and processed in network byte order.
 class FailBan :
 	public ConfigUser,
 	public TimeEventProcessor,
@@ -17,13 +16,13 @@ public:
 	FailBan(EventDispatcher *dispatcher, Config *config);
 	~FailBan();
 
-	void RecordFailure(uint32_t ipv4);
+	void RecordFailure(IPAddress ip);
 
-	bool IsAllowed(uint32_t ipv4);
-	bool Ban(uint32_t ipv4);
-	bool Unban(uint32_t ipv4);
+	bool IsAllowed(IPAddress ip);
+	bool Ban(IPAddress ip);
+	bool Unban(IPAddress ip);
 
-	CowBuffer<uint32_t> ListBanned();
+	CowBuffer<IPAddress> ListBanned();
 
 	void ProcessTimeEvent() override;
 	void ProcessQuant() override;
@@ -37,60 +36,58 @@ private:
 
 	struct BannedEntry
 	{
-		uint32_t IPv4;
+		IPAddress IP;
 		int64_t UnbanTime;
 
 		BannedEntry()
 		{
-			IPv4 = 0;
 			UnbanTime = 0;
 		}
 
-		BannedEntry(uint32_t ipv4)
+		BannedEntry(IPAddress ip)
 		{
-			IPv4 = ipv4;
+			IP = ip;
 			UnbanTime = 0;
 		}
 
 		bool operator==(const BannedEntry &e) const
 		{
-			return IPv4 == e.IPv4;
+			return IP == e.IP;
 		}
 
 		bool operator<(const BannedEntry &e) const
 		{
-			return IPv4 < e.IPv4;
+			return IP < e.IP;
 		}
 	};
 
 	struct SuspiciousEntry
 	{
-		uint32_t IPv4;
+		IPAddress IP;
 		int32_t FailCount;
 		int64_t ActionTime;
 
 		SuspiciousEntry()
 		{
-			IPv4 = 0;
 			FailCount = 0;
 			ActionTime = 0;
 		}
 
-		SuspiciousEntry(uint32_t ipv4)
+		SuspiciousEntry(IPAddress ip)
 		{
-			IPv4 = ipv4;
+			IP = ip;
 			FailCount = 0;
 			ActionTime = 0;
 		}
 
 		bool operator==(const SuspiciousEntry &e) const
 		{
-			return IPv4 == e.IPv4;
+			return IP == e.IP;
 		}
 
 		bool operator<(const SuspiciousEntry &e) const
 		{
-			return IPv4 < e.IPv4;
+			return IP < e.IP;
 		}
 	};
 

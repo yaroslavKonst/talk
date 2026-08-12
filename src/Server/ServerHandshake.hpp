@@ -18,7 +18,7 @@ class ServerHandshake :
 public:
 	ServerHandshake(
 		int fd,
-		int32_t ip,
+		IPAddress ip,
 		ServerHandshakeStorage *storage,
 		EventDispatcher *dispatcher,
 		FailBan *failBan,
@@ -53,7 +53,7 @@ private:
 
 	State _state;
 	int _fd;
-	int32_t _ip;
+	IPAddress _ip;
 	ServerHandshakeStorage *_storage;
 	const Crypto::X25519::PrivateKeyContainer &_privateKey;
 	const Crypto::X25519::PublicKeyContainer &_publicKey;

@@ -3,6 +3,7 @@
 
 #include "../Common/IniFile.hpp"
 #include "../Common/EventDispatcher.hpp"
+#include "../Common/Networking.hpp"
 
 class ConfigUser
 {
@@ -26,10 +27,10 @@ public:
 	void RegisterConfigUser(ConfigUser *user);
 	void UnregisterConfigUser(ConfigUser *user);
 
-	uint32_t GetListeningAddress();
+	IPAddress GetListeningAddress();
 	uint16_t GetListeningPort();
 
-	uint32_t GetGateAddress();
+	IPAddress GetGateAddress();
 	uint16_t GetGatePort();
 
 	uint64_t GetMessageSizeLimit();
@@ -56,10 +57,10 @@ private:
 	void Init();
 	void Validate();
 
-	uint32_t _listeningAddress;
+	IPAddress _listeningAddress;
 	uint16_t _listeningPort;
 
-	uint32_t _gateAddress;
+	IPAddress _gateAddress;
 	uint16_t _gatePort;
 
 	uint64_t _messageSizeLimit;

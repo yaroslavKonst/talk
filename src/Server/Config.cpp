@@ -12,12 +12,12 @@
 static const char *NetworkSection = "Network";
 static const char *HostNameSetting = "HostName";
 static const char *HostNameSettingValue = "localhost";
-static const char *IPv4Setting = "ClientIPv4";
-static const char *IPv4SettingValue = "0.0.0.0";
+static const char *IPSetting = "ClientIP";
+static const char *IPSettingValue = "0.0.0.0";
 static const char *PortSetting = "ClientPort";
 static const char *PortSettingValue = "6524";
-static const char *GateIPv4Setting = "GateIPv4";
-static const char *GateIPv4SettingValue = "0.0.0.0";
+static const char *GateIPSetting = "GateIP";
+static const char *GateIPSettingValue = "0.0.0.0";
 static const char *GatePortSetting = "GatePort";
 static const char *GatePortSettingValue = "6525";
 
@@ -53,9 +53,7 @@ Config::Config(EventDispatcher *dispatcher) : _configFile("talkd.conf")
 {
 	_dispatcher = dispatcher;
 
-	_listeningAddress = 0;
 	_listeningPort = 0;
-	_gateAddress = 0;
 	_gatePort = 0;
 	_messageSizeLimit = 0;
 
@@ -122,7 +120,7 @@ void Config::UnregisterConfigUser(ConfigUser *user)
 	}
 }
 
-uint32_t Config::GetListeningAddress()
+IPAddress Config::GetListeningAddress()
 {
 	return _listeningAddress;
 }
@@ -132,7 +130,7 @@ uint16_t Config::GetListeningPort()
 	return _listeningPort;
 }
 
-uint32_t Config::GetGateAddress()
+IPAddress Config::GetGateAddress()
 {
 	return _gateAddress;
 }
@@ -207,12 +205,12 @@ void Config::Init()
 			NetworkSection,
 			HostNameSetting,
 			HostNameSettingValue);
-		_configFile.Set(NetworkSection, IPv4Setting, IPv4SettingValue);
+		_configFile.Set(NetworkSection, IPSetting, IPSettingValue);
 		_configFile.Set(NetworkSection, PortSetting, PortSettingValue);
 		_configFile.Set(
 			NetworkSection,
-			GateIPv4Setting,
-			GateIPv4SettingValue);
+			GateIPSetting,
+			GateIPSettingValue);
 		_configFile.Set(
 			NetworkSection,
 			GatePortSetting,
@@ -428,13 +426,12 @@ void Config::Validate()
 	}
 
 	// Address.
-	struct in_addr addr;
-	int res = inet_aton(
-		_configFile.Get(NetworkSection, IPv4Setting).CStr(),
-		&addr);
+	IPAddress addr;
+	bool ipParseSuccess = addr.ParseIPAddress(
+		_configFile.Get(NetworkSection, IPSetting));
 
-	if (!res) {
-		THROW("Invalid IPv4 address.");
+	if (!ipParseSuccess) {
+		THROW("Invalid IP address.");
 	}
 
 	// Gate port.
@@ -447,13 +444,12 @@ void Config::Validate()
 	}
 
 	// Gate address.
-	struct in_addr gateAddr;
-	res = inet_aton(
-		_configFile.Get(NetworkSection, GateIPv4Setting).CStr(),
-		&gateAddr);
+	IPAddress gateAddr;
+	ipParseSuccess = gateAddr.ParseIPAddress(
+		_configFile.Get(NetworkSection, GateIPSetting));
 
-	if (!res) {
-		THROW("Invalid gate IPv4 address.");
+	if (!ipParseSuccess) {
+		THROW("Invalid gate IP address.");
 	}
 
 	// MessageSizeLimit.
@@ -575,14 +571,14 @@ void Config::Validate()
 	}
 
 	// Writing new parameters.
-	_listeningAddress = addr.s_addr;
+	_listeningAddress = addr;
 	_listeningPort = port;
-	ConfigLog("Client socket IP: " + IPToString(_listeningAddress) + ".");
+	ConfigLog("Client socket IP: " + _listeningAddress.ToString() + ".");
 	ConfigLog("Client socket port: " + ToString(_listeningPort) + ".");
 
-	_gateAddress = gateAddr.s_addr;
+	_gateAddress = gateAddr;
 	_gatePort = gatePort;
-	ConfigLog("Gate socket IP: " + IPToString(_gateAddress) + ".");
+	ConfigLog("Gate socket IP: " + _gateAddress.ToString() + ".");
 	ConfigLog("Gate socket port: " + ToString(_gatePort) + ".");
 
 	_messageSizeLimit = messageSize;

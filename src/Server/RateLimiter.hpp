@@ -14,9 +14,9 @@ public:
 	RateLimiter(EventDispatcher *dispatcher, Config *config);
 	~RateLimiter();
 
-	bool IsAllowed(uint32_t ipv4);
-	void RecordRequest(uint32_t ipv4);
-	void RecordSessionTimeout(uint32_t ipv4);
+	bool IsAllowed(IPAddress ip);
+	void RecordRequest(IPAddress ip);
+	void RecordSessionTimeout(IPAddress ip);
 
 	void ReloadConfig() override;
 
@@ -32,12 +32,12 @@ private:
 
 	struct RequesterEntry
 	{
-		uint32_t IPv4;
+		IPAddress IP;
 		int64_t PreviousActionTimestamp; // Measured in milliseconds.
 		uint64_t Requests; // Holds request number multiplied by 1000.
 
 		RequesterEntry();
-		RequesterEntry(uint32_t ipv4);
+		RequesterEntry(IPAddress ip);
 
 		bool operator==(const RequesterEntry &e) const;
 		bool operator<(const RequesterEntry &e) const;

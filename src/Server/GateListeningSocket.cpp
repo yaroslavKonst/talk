@@ -48,15 +48,16 @@ void GateListeningSocket::OpenSocket()
 {
 	uint16_t port = _config->GetGatePort();
 
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	addr.sin_addr.s_addr = _config->GetGateAddress();
+	int addrLen;
+	struct sockaddr_storage *addr =
+		_config->GetGateAddress().GetStructSockaddr(
+			htons(port),
+			addrLen);
 
-	_socketFd = socket(AF_INET, SOCK_STREAM, 0);
+	_socketFd = socket(addr->ss_family, SOCK_STREAM, 0);
 
 	if (_socketFd == -1) {
+		delete addr;
 		THROW("Failed to create listening socket.");
 	}
 
@@ -69,11 +70,14 @@ void GateListeningSocket::OpenSocket()
 		sizeof(reuseAddr));
 
 	if (res == -1) {
+		delete addr;
 		CloseSocket();
 		THROW("Failed to set REUSEADDR on listening socket.");
 	}
 
-	res = bind(_socketFd, (struct sockaddr*)&addr, sizeof(addr));
+	res = bind(_socketFd, (struct sockaddr*)addr, addrLen);
+
+	delete addr;
 
 	if (res == -1) {
 		CloseSocket();
@@ -122,7 +126,7 @@ bool GateListeningSocket::RequestWrite()
 
 void GateListeningSocket::ProcessRead()
 {
-	struct sockaddr_in addr;
+	struct sockaddr_storage addr;
 	unsigned int addrSize = sizeof(addr);
 
 	int fd = accept(_socketFd, (struct sockaddr*)&addr, &addrSize);
@@ -131,12 +135,26 @@ void GateListeningSocket::ProcessRead()
 		return;
 	}
 
+	if (addrSize > sizeof(addr)) {
+		shutdown(fd, SHUT_RDWR);
+		close(fd);
+		THROW("Insufficient storage space for accept.");
+	}
+
 	MakeNonblocking(fd);
+
+	IPAddress address;
+
+	if (!address.LoadStructSockaddr(&addr)) {
+		shutdown(fd, SHUT_RDWR);
+		close(fd);
+		return;
+	}
 
 	InboundGateSession *session =
 		new InboundGateSession(
 			fd,
-			addr.sin_addr.s_addr,
+			address,
 			this,
 			_dispatcher,
 			_users,

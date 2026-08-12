@@ -151,6 +151,7 @@ private:
 
 	State _state;
 	GateSecurityModule _securityModule;
+	bool _requestedAResolve;
 
 	uint8_t _inScramblerInit;
 	uint8_t _outScramblerInit;

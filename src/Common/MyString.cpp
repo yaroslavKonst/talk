@@ -418,18 +418,3 @@ void String::MakeExclusive()
 		_data = data;
 	}
 }
-
-// Helpers.
-String IPToString(int32_t ip)
-{
-	char ipStr[INET_ADDRSTRLEN];
-
-	struct in_addr addr;
-	addr.s_addr = ip;
-
-	if (!inet_ntop(AF_INET, &addr, ipStr, INET_ADDRSTRLEN)) {
-		return "";
-	}
-
-	return ipStr;
-}

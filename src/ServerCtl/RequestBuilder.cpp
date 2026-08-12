@@ -154,15 +154,12 @@ static CowBuffer<uint8_t> RequestBanIP(const CowBuffer<String> args)
 		THROW("Invalid number of arguments.");
 	}
 
-	struct in_addr addr;
-	int res = inet_aton(args[3].CStr(), &addr);
+	CommandFailBanBan::Request request;
+	bool res = request.IP.ParseIPAddress(args[3]);
 
 	if (!res) {
 		THROW("Invalid IP address format.");
 	}
-
-	CommandFailBanBan::Request request;
-	request.IP = addr.s_addr;
 
 	return CommandFailBanBan::BuildRequest(request);
 }
@@ -174,15 +171,12 @@ static CowBuffer<uint8_t> RequestUnbanIP(const CowBuffer<String> args)
 		THROW("Invalid number of arguments.");
 	}
 
-	struct in_addr addr;
-	int res = inet_aton(args[3].CStr(), &addr);
+	CommandFailBanUnban::Request request;
+	bool res = request.IP.ParseIPAddress(args[3]);
 
 	if (!res) {
 		THROW("Invalid IP address format.");
 	}
-
-	CommandFailBanUnban::Request request;
-	request.IP = addr.s_addr;
 
 	return CommandFailBanUnban::BuildRequest(request);
 }

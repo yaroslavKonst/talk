@@ -34,24 +34,24 @@ FailBan::~FailBan()
 	_dispatcher->UnregisterTimeProcessor(this);
 }
 
-void FailBan::RecordFailure(uint32_t ipv4)
+void FailBan::RecordFailure(IPAddress ip)
 {
 	if (!_enabled) {
 		return;
 	}
 
 	Tree<SuspiciousEntry>::Entry *entry =
-		_suspiciousAddresses.FindEntry(ipv4);
+		_suspiciousAddresses.FindEntry(ip);
 
 	if (!entry) {
-		_suspiciousAddresses.AddEntry(ipv4);
-		entry = _suspiciousAddresses.FindEntry(ipv4);
+		_suspiciousAddresses.AddEntry(ip);
+		entry = _suspiciousAddresses.FindEntry(ip);
 	}
 
 	entry->Key.FailCount += 1;
 	entry->Key.ActionTime = GetUnixTime();
 
-	FailBanLog("Login failure from " + IPToString(ipv4) +
+	FailBanLog("Login failure from " + ip.ToString() +
 		". Fails: " + ToString(entry->Key.FailCount) + ".");
 
 	if (entry->Key.FailCount < _tries) {
@@ -65,43 +65,43 @@ void FailBan::RecordFailure(uint32_t ipv4)
 
 	_suspiciousAddresses.RemoveEntry(entry);
 
-	Ban(ipv4);
+	Ban(ip);
 }
 
-bool FailBan::IsAllowed(uint32_t ipv4)
+bool FailBan::IsAllowed(IPAddress ip)
 {
-	return !_enabled || !_bannedAddresses.FindEntry(ipv4);
+	return !_enabled || !_bannedAddresses.FindEntry(ip);
 }
 
-bool FailBan::Ban(uint32_t ipv4)
+bool FailBan::Ban(IPAddress ip)
 {
 	BannedEntry entry;
-	entry.IPv4 = ipv4;
+	entry.IP = ip;
 	entry.UnbanTime = GetUnixTime() + _banTime;
 
 	if (_bannedAddresses.FindEntry(entry)) {
 		return false;
 	}
 
-	BinaryFile file(_rootPath + "/" + IPToString(ipv4), true);
+	BinaryFile file(_rootPath + "/" + ip.ToString(), true);
 	file.Write<int64_t>(&entry.UnbanTime, 1, 0);
 
 	_bannedAddresses.AddEntry(entry);
 
-	FailBanLog(IPToString(ipv4) + " is banned.");
+	FailBanLog(ip.ToString() + " is banned.");
 
 	return true;
 }
 
-bool FailBan::Unban(uint32_t ipv4)
+bool FailBan::Unban(IPAddress ip)
 {
-	Tree<BannedEntry>::Entry *entry = _bannedAddresses.FindEntry(ipv4);
+	Tree<BannedEntry>::Entry *entry = _bannedAddresses.FindEntry(ip);
 
 	if (!entry) {
 		return false;
 	}
 
-	DeleteFile(_rootPath + "/" + IPToString(ipv4));
+	DeleteFile(_rootPath + "/" + ip.ToString());
 
 	if (_traverseBannedEntry == entry) {
 		_traverseBannedEntry =
@@ -110,12 +110,12 @@ bool FailBan::Unban(uint32_t ipv4)
 
 	_bannedAddresses.RemoveEntry(entry);
 
-	FailBanLog(IPToString(ipv4) + " is unbanned.");
+	FailBanLog(ip.ToString() + " is unbanned.");
 
 	return true;
 }
 
-CowBuffer<uint32_t> FailBan::ListBanned()
+CowBuffer<IPAddress> FailBan::ListBanned()
 {
 	int bannedCount = 0;
 
@@ -126,7 +126,7 @@ CowBuffer<uint32_t> FailBan::ListBanned()
 		++bannedCount;
 	}
 
-	CowBuffer<uint32_t> result(bannedCount);
+	CowBuffer<IPAddress> result(bannedCount);
 
 	int index = 0;
 
@@ -134,7 +134,7 @@ CowBuffer<uint32_t> FailBan::ListBanned()
 		entry;
 		entry = _bannedAddresses.Next(entry))
 	{
-		result[index] = entry->Key.IPv4;
+		result[index] = entry->Key.IP;
 		++index;
 	}
 
@@ -184,16 +184,11 @@ void FailBan::Load()
 	for (unsigned int i = 0; i < ipStrings.Size(); i++) {
 		BannedEntry entry;
 
-		struct in_addr addr;
-		int res = inet_aton(
-			ipStrings[i].CStr(),
-			&addr);
+		bool res = entry.IP.ParseIPAddress(ipStrings[i]);
 
 		if (!res) {
-			THROW("Invalid IPv4 address in FailBan DB.");
+			THROW("Invalid IP address in FailBan DB.");
 		}
-
-		entry.IPv4 = addr.s_addr;
 
 		BinaryFile file(_rootPath + "/" + ipStrings[i], false);
 		file.Read<int64_t>(&entry.UnbanTime, 1, 0);
@@ -226,7 +221,7 @@ void FailBan::CheckBanned()
 	_traverseBannedEntry = _bannedAddresses.Next(_traverseBannedEntry);
 
 	if (entry->Key.UnbanTime <= GetUnixTime()) {
-		uint32_t ip = entry->Key.IPv4;
+		IPAddress ip = entry->Key.IP;
 		Unban(ip);
 	}
 }
@@ -251,12 +246,12 @@ void FailBan::CheckSuspicious()
 		entry->Key.ActionTime = GetUnixTime();
 
 		FailBanLog("Cooldown for " +
-			IPToString(entry->Key.IPv4) +
+			entry->Key.IP.ToString() +
 			". Fails: " +
 			ToString(entry->Key.FailCount) + ".");
 	} else {
 		FailBanLog("Cooldown for " +
-			IPToString(entry->Key.IPv4) +
+			entry->Key.IP.ToString() +
 			". Address is clear.");
 
 		_suspiciousAddresses.RemoveEntry(entry);

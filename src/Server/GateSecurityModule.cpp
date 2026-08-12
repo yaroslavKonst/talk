@@ -15,9 +15,7 @@ GateSecurityModule::GateSecurityModule(EventDispatcher *dispatcher) :
 
 	_ipOnlyHostName = false;
 
-	_knownPeerIP = 0;
 	_knownPeerIPAssigned = false;
-	_dnsReportedPeerIP = 0;
 	_dnsReportedPeerIPAssigned = false;
 	_hasTXT = false;
 
@@ -41,6 +39,11 @@ bool GateSecurityModule::Failure()
 	return _failure;
 }
 
+void GateSecurityModule::ClearFailure()
+{
+	_failure = false;
+}
+
 void GateSecurityModule::ResolveCompleted()
 {
 	for (uint32_t i = 0; i < _requests.Size(); i++) {
@@ -50,6 +53,8 @@ void GateSecurityModule::ResolveCompleted()
 			ProcessSRVResult(i);
 		} else if (t == Resolver::RequestBase::Type::A) {
 			ProcessAResult(i);
+		} else if (t == Resolver::RequestBase::Type::AAAA) {
+			ProcessAAAAResult(i);
 		} else if (t == Resolver::RequestBase::Type::RDNS) {
 			ProcessRDNSResult(i);
 		} else if (t == Resolver::RequestBase::Type::TXT) {
@@ -66,9 +71,9 @@ void GateSecurityModule::ResolveCompleted()
 	}
 }
 
-void GateSecurityModule::SetKnownPeerIP(uint32_t ipv4)
+void GateSecurityModule::SetKnownPeerIP(IPAddress ip)
 {
-	_knownPeerIP = ipv4;
+	_knownPeerIP = ip;
 	_knownPeerIPAssigned = true;
 
 	if (_dnsReportedPeerIPAssigned && _knownPeerIP != _dnsReportedPeerIP) {
@@ -77,7 +82,7 @@ void GateSecurityModule::SetKnownPeerIP(uint32_t ipv4)
 	}
 
 	if (_ipOnlyHostName && _srvReportedHostName.Length()) {
-		if (_srvReportedHostName != IPToString(_knownPeerIP)) {
+		if (_srvReportedHostName != _knownPeerIP.ToString()) {
 			_failure = true;
 		}
 	}
@@ -125,7 +130,9 @@ void GateSecurityModule::SetKnownPeerFullHostName(String fullHostName)
 		_srvReportedServiceName = _knownPeerServiceName;
 	}
 
-	if (IsValidIPv4Address(_knownPeerHostName)) {
+	IPAddress testAddr;
+
+	if (testAddr.ParseIPAddress(_knownPeerHostName)) {
 		_ipOnlyHostName = true;
 	}
 
@@ -135,7 +142,7 @@ void GateSecurityModule::SetKnownPeerFullHostName(String fullHostName)
 	}
 
 	if (_ipOnlyHostName && _knownPeerIPAssigned) {
-		if (_srvReportedHostName != IPToString(_knownPeerIP)) {
+		if (_srvReportedHostName != _knownPeerIP.ToString()) {
 			_failure = true;
 		}
 	}
@@ -183,7 +190,9 @@ void GateSecurityModule::SetPeerReportedFullHostName(String fullHostName)
 		_srvReportedServiceName = _peerReportedServiceName;
 	}
 
-	if (IsValidIPv4Address(_peerReportedHostName)) {
+	IPAddress testAddr;
+
+	if (testAddr.ParseIPAddress(_peerReportedHostName)) {
 		_ipOnlyHostName = true;
 	}
 
@@ -192,7 +201,7 @@ void GateSecurityModule::SetPeerReportedFullHostName(String fullHostName)
 	}
 
 	if (_ipOnlyHostName && _knownPeerIPAssigned) {
-		if (_srvReportedHostName != IPToString(_knownPeerIP)) {
+		if (_srvReportedHostName != _knownPeerIP.ToString()) {
 			_failure = true;
 		}
 	}
@@ -220,7 +229,7 @@ String GateSecurityModule::GetSRVReportedServiceName()
 	return _srvReportedServiceName;
 }
 
-uint32_t GateSecurityModule::GetDNSReportedIPv4()
+IPAddress GateSecurityModule::GetDNSReportedIP()
 {
 	if (!_dnsReportedPeerIPAssigned) {
 		THROW("DNS address is unknown.");
@@ -240,15 +249,16 @@ void GateSecurityModule::AcceptHostNameAsIP()
 		THROW("Forbidden in DNS mode.");
 	}
 
-	struct in_addr addr;
-	int res = inet_aton(_srvReportedHostName.CStr(), &addr);
+	IPAddress address;
+
+	bool res = address.ParseIPAddress(_srvReportedHostName);
 
 	if (!res) {
 		_failure = true;
 		return;
 	}
 
-	_dnsReportedPeerIP = addr.s_addr;
+	_dnsReportedPeerIP = address;
 	_dnsReportedPeerIPAssigned = true;
 }
 
@@ -293,6 +303,12 @@ bool GateSecurityModule::NeedA()
 		return false;
 	}
 
+	if (_knownPeerIPAssigned) {
+		if (_knownPeerIP.Type == IPAddress::AddressType::IPv6) {
+			return false;
+		}
+	}
+
 	return !_dnsReportedPeerIPAssigned;
 }
 
@@ -307,6 +323,36 @@ void GateSecurityModule::RunA()
 
 	_requests.Resize(1);
 	_requests[0] = a;
+
+	_resolver.StartAsyncResolve(_requests);
+}
+
+bool GateSecurityModule::NeedAAAA()
+{
+	if (_ipOnlyHostName) {
+		return false;
+	}
+
+	if (_knownPeerIPAssigned) {
+		if (_knownPeerIP.Type == IPAddress::AddressType::IPv4) {
+			return false;
+		}
+	}
+
+	return !_dnsReportedPeerIPAssigned;
+}
+
+void GateSecurityModule::RunAAAA()
+{
+	if (!_srvReportedHostName.Length()) {
+		THROW("No input for AAAA request.");
+	}
+
+	Resolver::RequestAAAA *aaaa = new Resolver::RequestAAAA;
+	aaaa->DNSName = _srvReportedHostName;
+
+	_requests.Resize(1);
+	_requests[0] = aaaa;
 
 	_resolver.StartAsyncResolve(_requests);
 }
@@ -334,7 +380,7 @@ void GateSecurityModule::RunParams()
 	Resolver::RequestRDNS *rdns = new Resolver::RequestRDNS;
 	Resolver::RequestTXT *txt = new Resolver::RequestTXT;
 
-	rdns->IPv4 = _knownPeerIPAssigned ? _knownPeerIP : _dnsReportedPeerIP;
+	rdns->IP = _knownPeerIPAssigned ? _knownPeerIP : _dnsReportedPeerIP;
 	txt->DNSName = _srvReportedHostName;
 
 	_requests.Resize(2);
@@ -427,14 +473,14 @@ void GateSecurityModule::RunFullValidation()
 	}
 
 	if (_ipOnlyHostName) {
-		if (_peerReportedHostName != IPToString(_knownPeerIP)) {
+		if (_peerReportedHostName != _knownPeerIP.ToString()) {
 			_failure = true;
 		}
 
 		return;
 	}
 
-	if (NeedSRV() || NeedA() || NeedParams()) {
+	if (NeedSRV() || NeedA() || NeedAAAA() || NeedParams()) {
 		_failure = true;
 		return;
 	}
@@ -484,7 +530,28 @@ void GateSecurityModule::ProcessAResult(int index)
 		return;
 	}
 
-	_dnsReportedPeerIP = a->ResultIPv4;
+	_dnsReportedPeerIP = a->ResultIP;
+	_dnsReportedPeerIPAssigned = true;
+
+	if (_knownPeerIPAssigned) {
+		if (_knownPeerIP != _dnsReportedPeerIP) {
+			_failure = true;
+			return;
+		}
+	}
+}
+
+void GateSecurityModule::ProcessAAAAResult(int index)
+{
+	Resolver::RequestAAAA *aaaa = static_cast<Resolver::RequestAAAA*>(
+		_requests[index]);
+
+	if (aaaa->Status) {
+		_failure = true;
+		return;
+	}
+
+	_dnsReportedPeerIP = aaaa->ResultIP;
 	_dnsReportedPeerIPAssigned = true;
 
 	if (_knownPeerIPAssigned) {

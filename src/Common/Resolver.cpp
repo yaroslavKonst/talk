@@ -32,6 +32,16 @@ void Resolver::RequestA::Detach()
 	DNSName.Detach();
 }
 
+Resolver::RequestAAAA::RequestAAAA()
+{
+	T = Type::AAAA;
+}
+
+void Resolver::RequestAAAA::Detach()
+{
+	DNSName.Detach();
+}
+
 Resolver::RequestRDNS::RequestRDNS()
 {
 	T = Type::RDNS;
@@ -128,7 +138,7 @@ void Resolver::PassOwnership()
 	_hasOwnership = true;
 }
 
-uint32_t Resolver::ResolveA(String dnsName)
+IPAddress Resolver::ResolveA(String dnsName)
 {
 	ResolverLog("Resolve A: " + dnsName + ".");
 	CowBuffer<unsigned char> response = RunQuery(dnsName, C_IN, T_A);
@@ -136,7 +146,7 @@ uint32_t Resolver::ResolveA(String dnsName)
 
 	if (!response.Size()) {
 		_status = 1;
-		return 0;
+		return IPAddress();
 	}
 
 	ns_msg handle;
@@ -144,7 +154,7 @@ uint32_t Resolver::ResolveA(String dnsName)
 
 	if (res) {
 		_status = 1;
-		return 0;
+		return IPAddress();
 	}
 
 	int entryCount = ns_msg_count(handle, ns_s_an);
@@ -161,31 +171,117 @@ uint32_t Resolver::ResolveA(String dnsName)
 			ns_rr_rdlen(rr) == sizeof(uint32_t);
 
 		if (isRequiredEntry) {
-			uint32_t ipv4;
-			memcpy(&ipv4, ns_rr_rdata(rr), sizeof(ipv4));
+			IPAddress ipv4;
+			ipv4.Type = IPAddress::AddressType::IPv4;
+			memcpy(
+				&ipv4.Address.IPv4,
+				ns_rr_rdata(rr),
+				sizeof(uint32_t));
 			_status = 0;
 
-			ResolverLog("Result: " + IPToString(ipv4) + ".");
+			ResolverLog("Result: " + ipv4.ToString() + ".");
 			return ipv4;
 		}
 	}
 
 	_status = 1;
-	return 0;
+	return IPAddress();
 }
 
-String Resolver::ResolveRDNS(uint32_t ipv4)
+IPAddress Resolver::ResolveAAAA(String dnsName)
 {
-	String dnsName;
-	uint8_t bytes[sizeof(ipv4)];
+	ResolverLog("Resolve AAAA: " + dnsName + ".");
+	CowBuffer<unsigned char> response = RunQuery(dnsName, C_IN, T_AAAA);
+	ResolverLog("Parsing.");
 
-	memcpy(bytes, &ipv4, sizeof(ipv4));
-
-	for (int i = sizeof(ipv4) - 1; i >= 0; i--) {
-		dnsName += ToString(bytes[i]) + ".";
+	if (!response.Size()) {
+		_status = 1;
+		return IPAddress();
 	}
 
-	dnsName += "in-addr.arpa";
+	ns_msg handle;
+	int res = ns_initparse(response.Pointer(), response.Size(), &handle);
+
+	if (res) {
+		_status = 1;
+		return IPAddress();
+	}
+
+	int entryCount = ns_msg_count(handle, ns_s_an);
+
+	for (int i = 0; i < entryCount; i++) {
+		ns_rr rr;
+
+		if (ns_parserr(&handle, ns_s_an, i, &rr)) {
+			continue;
+		}
+
+		bool isRequiredEntry =
+			ns_rr_type(rr) == ns_t_aaaa &&
+			ns_rr_rdlen(rr) == 16;
+
+		if (isRequiredEntry) {
+			IPAddress ipv6;
+			ipv6.Type = IPAddress::AddressType::IPv6;
+			memcpy(
+				ipv6.Address.IPv6,
+				ns_rr_rdata(rr),
+				16);
+			_status = 0;
+
+			ResolverLog("Result: " + ipv6.ToString() + ".");
+			return ipv6;
+		}
+	}
+
+	_status = 1;
+	return IPAddress();
+}
+
+String Resolver::ResolveRDNS(IPAddress ip)
+{
+	String dnsName;
+
+	if (ip.Type == IPAddress::AddressType::IPv4) {
+		uint8_t bytes[sizeof(uint32_t)];
+
+		memcpy(bytes, &ip.Address.IPv4, sizeof(uint32_t));
+
+		for (int i = sizeof(uint32_t) - 1; i >= 0; i--) {
+			dnsName += ToString(bytes[i]) + ".";
+		}
+
+		dnsName += "in-addr.arpa";
+	} else {
+		uint8_t bytes[16];
+
+		memcpy(bytes, ip.Address.IPv6, 16);
+
+		for (int i = 15; i >= 0; i--) {
+			uint8_t octet = bytes[i];
+
+			uint8_t lp = octet & 0xf;
+			uint8_t up = octet >> 4;
+
+			if (lp < 10) {
+				dnsName += char(lp + '0');
+			} else {
+				dnsName += char(lp + 'a' - 10);
+			}
+
+			dnsName += '.';
+
+			if (up < 10) {
+				dnsName += char(up + '0');
+			} else {
+				dnsName += char(up + 'a' - 10);
+			}
+
+			dnsName += '.';
+		}
+
+		dnsName += "ip6.arpa";
+	}
 
 	return ResolvePTR(dnsName);
 }
@@ -614,7 +710,14 @@ void *Resolver::ThreadFunction(void *data)
 			ResolverLog("Thread type: A.");
 			RequestA *req = static_cast<RequestA*>(r);
 
-			req->ResultIPv4 = params->Object->ResolveA(
+			req->ResultIP = params->Object->ResolveA(
+				req->DNSName);
+			req->Status = params->Object->GetResolveStatus();
+		} else if (r->T == RequestBase::Type::AAAA) {
+			ResolverLog("Thread type: AAAA.");
+			RequestAAAA *req = static_cast<RequestAAAA*>(r);
+
+			req->ResultIP = params->Object->ResolveAAAA(
 				req->DNSName);
 			req->Status = params->Object->GetResolveStatus();
 		} else if (r->T == RequestBase::Type::RDNS) {
@@ -622,7 +725,7 @@ void *Resolver::ThreadFunction(void *data)
 			RequestRDNS *req = static_cast<RequestRDNS*>(r);
 
 			req->ResultName = params->Object->ResolveRDNS(
-				req->IPv4);
+				req->IP);
 			req->Status = params->Object->GetResolveStatus();
 		} else if (r->T == RequestBase::Type::PTR) {
 			ResolverLog("Thread type: PTR.");

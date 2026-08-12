@@ -2,6 +2,7 @@
 #define _GATE_SECURITY_MODULE_HPP
 
 #include "../Common/Resolver.hpp"
+#include "../Common/Networking.hpp"
 
 class GateSecurityModule : public ResolverUser
 {
@@ -12,16 +13,17 @@ public:
 	void SetUser(ResolverUser *user);
 
 	bool Failure();
+	void ClearFailure();
 
 	void ResolveCompleted() override;
 
-	void SetKnownPeerIP(uint32_t ipv4);
+	void SetKnownPeerIP(IPAddress ip);
 	void SetKnownPeerFullHostName(String fullHostName);
 	void SetPeerReportedFullHostName(String fullHostName);
 
 	String GetFullHostName();
 	String GetSRVReportedServiceName();
-	uint32_t GetDNSReportedIPv4();
+	IPAddress GetDNSReportedIP();
 	bool IsIPOnlyHost();
 	void AcceptHostNameAsIP();
 
@@ -30,6 +32,9 @@ public:
 
 	bool NeedA();
 	void RunA();
+
+	bool NeedAAAA();
+	void RunAAAA();
 
 	bool NeedParams();
 	void RunParams();
@@ -49,7 +54,7 @@ private:
 
 	bool _ipOnlyHostName;
 
-	uint32_t _knownPeerIP;
+	IPAddress _knownPeerIP;
 	bool _knownPeerIPAssigned;
 
 	// Pre SRV.
@@ -57,7 +62,7 @@ private:
 	String _knownPeerHostName;
 	String _knownPeerServiceName;
 
-	uint32_t _dnsReportedPeerIP;
+	IPAddress _dnsReportedPeerIP;
 	bool _dnsReportedPeerIPAssigned;
 	String _rdnsReportedPeerHostName;
 	String _srvReportedHostName; // SRV or directly assigned if available.
@@ -72,6 +77,7 @@ private:
 
 	void ProcessSRVResult(int index);
 	void ProcessAResult(int index);
+	void ProcessAAAAResult(int index);
 	void ProcessRDNSResult(int index);
 	void ProcessTXTResult(int index);
 };

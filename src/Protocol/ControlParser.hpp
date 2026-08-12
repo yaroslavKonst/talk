@@ -3,6 +3,7 @@
 
 #include "../Common/CowBuffer.hpp"
 #include "../Common/MyString.hpp"
+#include "../Common/Networking.hpp"
 #include "../Crypto/Crypto.hpp"
 
 #define TALKD_SOCKET_NAME "talkd.socket"
@@ -108,7 +109,7 @@ namespace CommandFailBanListBanned
 	struct Response
 	{
 		int32_t Code;
-		CowBuffer<uint32_t> BannedIPList;
+		CowBuffer<IPAddress> BannedIPList;
 	};
 
 	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &response);
@@ -119,7 +120,7 @@ namespace CommandFailBanBan
 {
 	struct Request
 	{
-		uint32_t IP;
+		IPAddress IP;
 	};
 
 	struct Response
@@ -138,7 +139,7 @@ namespace CommandFailBanUnban
 {
 	struct Request
 	{
-		uint32_t IP;
+		IPAddress IP;
 	};
 
 	struct Response

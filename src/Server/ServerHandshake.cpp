@@ -12,7 +12,7 @@
 
 ServerHandshake::ServerHandshake(
 	int fd,
-	int32_t ip,
+	IPAddress ip,
 	ServerHandshakeStorage *storage,
 	EventDispatcher *dispatcher,
 	FailBan *failBan,
@@ -499,7 +499,7 @@ void ServerHandshake::ProcessAck(CowBuffer<uint8_t> buffer)
 
 void ServerHandshake::HandshakeLog(String name, String message)
 {
-	String text = "Login from " + IPToString(_ip);
+	String text = "Login from " + _ip.ToString();
 
 	if (name.Length()) {
 		text += ", " + name;

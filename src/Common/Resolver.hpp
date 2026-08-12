@@ -8,6 +8,7 @@
 
 #include "MyString.hpp"
 #include "EventDispatcher.hpp"
+#include "Networking.hpp"
 
 class ResolverUser
 {
@@ -43,6 +44,7 @@ public:
 		enum class Type
 		{
 			A,
+			AAAA,
 			RDNS,
 			PTR,
 			TXT,
@@ -61,16 +63,27 @@ public:
 	{
 		String DNSName;
 
-		uint32_t ResultIPv4;
+		IPAddress ResultIP;
 
 		RequestA();
 
 		void Detach() override;
 	};
 
+	struct RequestAAAA : public RequestBase
+	{
+		String DNSName;
+
+		IPAddress ResultIP;
+
+		RequestAAAA();
+
+		void Detach() override;
+	};
+
 	struct RequestRDNS : public RequestBase
 	{
-		uint32_t IPv4;
+		IPAddress IP;
 
 		String ResultName;
 
@@ -123,8 +136,9 @@ public:
 
 	void PassOwnership();
 
-	uint32_t ResolveA(String dnsName);
-	String ResolveRDNS(uint32_t ipv4);
+	IPAddress ResolveA(String dnsName);
+	IPAddress ResolveAAAA(String dnsName);
+	String ResolveRDNS(IPAddress ip);
 	String ResolvePTR(String dnsName);
 	String ResolveTXT(String dnsName);
 	SRVResult *ResolveSRV(String dnsName, String serviceName, bool tcp);

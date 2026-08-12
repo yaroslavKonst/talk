@@ -36,6 +36,7 @@ SERVER_MODULES =\
 	Common/SignalHandling.o \
 	Common/CommandLineParser.o \
 	Common/Resolver.o \
+	Common/Networking.o \
 	Common/Version.o \
 	Common/StreamReader.o \
 	Common/StreamWriter.o \
@@ -53,6 +54,7 @@ SERVERCTL_MODULES=\
 	Common/UnixTime.o \
 	Common/MyString.o \
 	Common/Version.o \
+	Common/Networking.o \
 	Common/StreamReader.o \
 	Common/StreamWriter.o \
 	Common/CommandLineParser.o \
@@ -96,6 +98,7 @@ CLIENT_MODULES=\
 	Common/IniFile.o \
 	Common/BinaryFile.o \
 	Common/File.o \
+	Common/Networking.o \
 	Common/EventDispatcher.o \
 	Common/UnixTime.o \
 	Common/StreamReader.o \

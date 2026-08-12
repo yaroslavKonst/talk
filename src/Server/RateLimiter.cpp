@@ -25,9 +25,9 @@ RateLimiter::~RateLimiter()
 	_dispatcher->UnregisterTimeProcessor(this);
 }
 
-bool RateLimiter::IsAllowed(uint32_t ipv4)
+bool RateLimiter::IsAllowed(IPAddress ip)
 {
-	Tree<RequesterEntry>::Entry *entry = _requests.FindEntry(ipv4);
+	Tree<RequesterEntry>::Entry *entry = _requests.FindEntry(ip);
 
 	if (!entry) {
 		return true;
@@ -42,25 +42,25 @@ bool RateLimiter::IsAllowed(uint32_t ipv4)
 	return false;
 }
 
-void RateLimiter::RecordRequest(uint32_t ipv4)
+void RateLimiter::RecordRequest(IPAddress ip)
 {
-	Tree<RequesterEntry>::Entry *entry = _requests.FindEntry(ipv4);
+	Tree<RequesterEntry>::Entry *entry = _requests.FindEntry(ip);
 
 	if (!entry) {
-		_requests.AddEntry(ipv4);
-		entry = _requests.FindEntry(ipv4);
+		_requests.AddEntry(ip);
+		entry = _requests.FindEntry(ip);
 	}
 
 	entry->Key.Requests += 1000;
 }
 
-void RateLimiter::RecordSessionTimeout(uint32_t ipv4)
+void RateLimiter::RecordSessionTimeout(IPAddress ip)
 {
-	Tree<RequesterEntry>::Entry *entry = _requests.FindEntry(ipv4);
+	Tree<RequesterEntry>::Entry *entry = _requests.FindEntry(ip);
 
 	if (!entry) {
-		_requests.AddEntry(ipv4);
-		entry = _requests.FindEntry(ipv4);
+		_requests.AddEntry(ip);
+		entry = _requests.FindEntry(ip);
 	}
 
 	entry->Key.Requests +=
@@ -108,26 +108,25 @@ void RateLimiter::ProcessTimeEvent()
 
 RateLimiter::RequesterEntry::RequesterEntry()
 {
-	IPv4 = 0;
 	PreviousActionTimestamp = GetMonotonicMillisecondTime();
 	Requests = 0;
 }
 
-RateLimiter::RequesterEntry::RequesterEntry(uint32_t ipv4)
+RateLimiter::RequesterEntry::RequesterEntry(IPAddress ip)
 {
-	IPv4 = ipv4;
+	IP = ip;
 	PreviousActionTimestamp = GetMonotonicMillisecondTime();
 	Requests = 0;
 }
 
 bool RateLimiter::RequesterEntry::operator==(const RequesterEntry &e) const
 {
-	return IPv4 == e.IPv4;
+	return IP == e.IP;
 }
 
 bool RateLimiter::RequesterEntry::operator<(const RequesterEntry &e) const
 {
-	return IPv4 < e.IPv4;
+	return IP < e.IP;
 }
 
 void RateLimiter::ProcessTimeFlowInEntry(RequesterEntry &entry)

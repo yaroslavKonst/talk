@@ -187,7 +187,7 @@ void InboundTaskReceiveMessage::SendVerificationCode(int32_t code)
 
 InboundGateSession::InboundGateSession(
 	int fd,
-	uint32_t ipv4,
+	IPAddress ip,
 	InboundGateSessionStorage *storage,
 	EventDispatcher *dispatcher,
 	UserDB *users,
@@ -199,7 +199,7 @@ InboundGateSession::InboundGateSession(
 	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_fd = fd;
-	_ipv4 = ipv4;
+	_ip = ip;
 	_storage = storage;
 	_dispatcher = dispatcher;
 	_users = users;
@@ -218,7 +218,7 @@ InboundGateSession::InboundGateSession(
 	_dispatcher->RegisterDescriptorProcessor(this);
 
 	_securityModule.SetUser(this);
-	_securityModule.SetKnownPeerIP(_ipv4);
+	_securityModule.SetKnownPeerIP(_ip);
 
 	InboundGateLog("Session opened.");
 
@@ -401,7 +401,7 @@ void InboundGateSession::ProcessTimeEvent()
 		return;
 	}
 
-	_rateLimiter->RecordSessionTimeout(_ipv4);
+	_rateLimiter->RecordSessionTimeout(_ip);
 	InboundGateLog("Timeout.");
 	_storage->MarkSessionForRemoval(this);
 }
@@ -417,12 +417,12 @@ void InboundGateSession::ResolveCompleted()
 
 void InboundGateSession::SendInit()
 {
-	bool allowed = _rateLimiter->IsAllowed(_ipv4);
+	bool allowed = _rateLimiter->IsAllowed(_ip);
 
 	GateHandshakeStatus::Data data;
 
 	if (allowed) {
-		_rateLimiter->RecordRequest(_ipv4);
+		_rateLimiter->RecordRequest(_ip);
 		data.Status = GATE_HANDSHAKE_INIT_PROCEED;
 		_state = State::HandshakeWaitSynSize;
 		_reader = new StreamReader(_fd, sizeof(uint32_t) + 1);
@@ -594,6 +594,12 @@ void InboundGateSession::VerifyPeer()
 	if (_securityModule.NeedA()) {
 		_state = State::HandshakeWaitPeerResolving;
 		_securityModule.RunA();
+		return;
+	}
+
+	if (_securityModule.NeedAAAA()) {
+		_state = State::HandshakeWaitPeerResolving;
+		_securityModule.RunAAAA();
 		return;
 	}
 
@@ -769,6 +775,6 @@ void InboundGateSession::CreateSizePrefixAndSend(CowBuffer<uint8_t> buffer)
 void InboundGateSession::InboundGateLog(String message)
 {
 	Log(LogLevel::Info,
-		"Inbound gate from " + IPToString(_ipv4),
+		"Inbound gate from " + _ip.ToString(),
 		message);
 }

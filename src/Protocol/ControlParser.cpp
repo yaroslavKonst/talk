@@ -277,7 +277,7 @@ bool CommandFailBanListBanned::ParseResponse(
 
 	if (code != OK) {
 		response.Code = code;
-		response.BannedIPList = CowBuffer<uint32_t>();
+		response.BannedIPList = CowBuffer<IPAddress>();
 		return true;
 	}
 
@@ -295,15 +295,15 @@ bool CommandFailBanListBanned::ParseResponse(
 		return false;
 	}
 
-	if (buffer.Size() != baseSize + ipCount * sizeof(uint32_t)) {
+	if (buffer.Size() != baseSize + ipCount * sizeof(IPAddress)) {
 		return false;
 	}
 
-	CowBuffer<uint32_t> ipList(ipCount);
+	CowBuffer<IPAddress> ipList(ipCount);
 
 	for (int32_t i = 0; i < ipCount; i++) {
-		ipList[i] = *buffer.SwitchType<uint32_t>(
-			baseSize + i * sizeof(uint32_t));
+		ipList[i] = *buffer.SwitchType<IPAddress>(
+			baseSize + i * sizeof(IPAddress));
 	}
 
 	response.Code = code;
@@ -318,7 +318,7 @@ CowBuffer<uint8_t> CommandFailBanListBanned::BuildResponse(
 	int32_t ipCount = response.BannedIPList.Size();
 
 	uint64_t bufferSize = sizeof(response.Code) + sizeof(ipCount) +
-		ipCount * sizeof(uint32_t);
+		ipCount * sizeof(IPAddress);
 
 	CowBuffer<uint8_t> buffer(bufferSize);
 
@@ -328,9 +328,9 @@ CowBuffer<uint8_t> CommandFailBanListBanned::BuildResponse(
 	uint64_t offset = sizeof(response.Code) + sizeof(ipCount);
 
 	for (int32_t i = 0; i < ipCount; i++) {
-		*buffer.SwitchType<uint32_t>(offset) =
+		*buffer.SwitchType<IPAddress>(offset) =
 			response.BannedIPList[i];
-		offset += sizeof(uint32_t);
+		offset += sizeof(IPAddress);
 	}
 
 	return buffer;
@@ -352,7 +352,7 @@ bool CommandFailBanBan::ParseRequest(
 		return false;
 	}
 
-	request.IP = *buffer.SwitchType<uint32_t>(sizeof(command));
+	request.IP = *buffer.SwitchType<IPAddress>(sizeof(command));
 
 	return true;
 }
@@ -364,7 +364,7 @@ CowBuffer<uint8_t> CommandFailBanBan::BuildRequest(const Request &request)
 	CowBuffer<uint8_t> buffer(sizeof(command) + sizeof(request.IP));
 
 	*buffer.SwitchType<int32_t>() = command;
-	*buffer.SwitchType<uint32_t>(sizeof(command)) = request.IP;
+	*buffer.SwitchType<IPAddress>(sizeof(command)) = request.IP;
 
 	return buffer;
 }
@@ -404,7 +404,7 @@ bool CommandFailBanUnban::ParseRequest(
 		return false;
 	}
 
-	request.IP = *buffer.SwitchType<uint32_t>(sizeof(command));
+	request.IP = *buffer.SwitchType<IPAddress>(sizeof(command));
 
 	return true;
 }
@@ -416,7 +416,7 @@ CowBuffer<uint8_t> CommandFailBanUnban::BuildRequest(const Request &request)
 	CowBuffer<uint8_t> buffer(sizeof(command) + sizeof(request.IP));
 
 	*buffer.SwitchType<int32_t>() = command;
-	*buffer.SwitchType<uint32_t>(sizeof(command)) = request.IP;
+	*buffer.SwitchType<IPAddress>(sizeof(command)) = request.IP;
 
 	return buffer;
 }
