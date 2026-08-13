@@ -315,6 +315,14 @@ void WorkScreen::RedrawCurrentChat()
 
 		_chatStack->CurrentMessageID = currentMessageID;
 		_chatStack->LineOffset = 0;
+	} else if (!currentMessageID.IsZero()) {
+		int messageHeight = GetMessageHeight(
+			_root->Messages->GetMessageDescriptor(
+				currentMessageID));
+
+		if (_chatStack->LineOffset >= messageHeight) {
+			_chatStack->LineOffset = messageHeight - 1;
+		}
 	}
 
 	int currentLinePosition = _rows - 10;
@@ -650,6 +658,40 @@ bool WorkScreen::RedrawMessageHeader(
 	const Message::X25519::HeaderPointToPoint &header = md->GetHeader();
 	bool inbound = md->HasAttribute(Message::Attribute::Inbound);
 
+	if (inbound) {
+		String warningString;
+
+		ContactStorage *contactStorage =
+			_root->Messages->GetContactStorage();
+
+		if (!contactStorage->HasContact(header.Source)) {
+			warningString = "Not in contact list.";
+		} else {
+			Contact *contact = contactStorage->GetContact(
+				header.Source);
+
+			if (!contact->IsKeyVerified(header.SourceKey)) {
+				warningString = "Key is not verified.";
+			}
+		}
+
+		if (warningString.Length()) {
+			attrset(COLOR_PAIR(RED_TEXT));
+			bool success = AddLineToChatScreen(
+				currentLinePosition,
+				skipLines,
+				0,
+				warningString,
+				false,
+				0);
+			attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+			if (!success) {
+				return false;
+			}
+		}
+	}
+
 	String flagString;
 
 	if (inbound) {
@@ -708,6 +750,7 @@ bool WorkScreen::RedrawMessageHeader(
 	}
 
 	if (flagString.Length()) {
+		attrset(COLOR_PAIR(YELLOW_TEXT));
 		bool success = AddLineToChatScreen(
 			currentLinePosition,
 			skipLines,
@@ -715,43 +758,10 @@ bool WorkScreen::RedrawMessageHeader(
 			flagString + ".",
 			false,
 			0);
+		attrset(COLOR_PAIR(DEFAULT_TEXT));
 
 		if (!success) {
 			return false;
-		}
-	}
-
-	if (inbound) {
-		String warningString;
-
-		ContactStorage *contactStorage =
-			_root->Messages->GetContactStorage();
-
-		if (!contactStorage->HasContact(header.Source)) {
-			warningString = "Not in contact list.";
-		} else {
-			Contact *contact = contactStorage->GetContact(
-				header.Source);
-
-			if (!contact->IsKeyVerified(header.SourceKey)) {
-				warningString = "Key is not verified.";
-			}
-		}
-
-		if (warningString.Length()) {
-			attrset(COLOR_PAIR(RED_TEXT));
-			bool success = AddLineToChatScreen(
-				currentLinePosition,
-				skipLines,
-				0,
-				warningString,
-				false,
-				0);
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
-
-			if (!success) {
-				return false;
-			}
 		}
 	}
 
@@ -941,7 +951,7 @@ Screen *WorkScreen::ProcessChatScreenEvent(int event)
 			_chatStack->LineOffset >= currentMessageHeight;
 
 		if (applyLimit) {
-			_chatStack->LineOffset = currentMessageHeight;
+			_chatStack->LineOffset = currentMessageHeight - 1;
 		} else if (overflowUp) {
 			_chatStack->CurrentMessageID = prevMessageID;
 			_chatStack->LineOffset = 0;
