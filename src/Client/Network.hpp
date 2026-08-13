@@ -52,6 +52,11 @@ public:
 	bool SetContactListProcessor(ContactListProcessor *processor);
 
 	bool SendMessage(const CowBuffer<uint8_t> message);
+	bool UpdateMessage(
+		String peerName,
+		const ObjectStorage::ID &messageID,
+		Message::Attribute attr,
+		bool value) override;
 
 	bool RequestAccountSettings() override;
 	bool SetAccountSettings(

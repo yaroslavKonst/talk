@@ -72,6 +72,7 @@ private:
 	bool ProcessRemoveContact(const CowBuffer<uint8_t> buffer);
 	bool ProcessListContacts();
 	bool ProcessSendMessage(const CowBuffer<uint8_t> buffer);
+	bool ProcessUpdateMessage(const CowBuffer<uint8_t> buffer);
 	bool ProcessOfferMessage(const CowBuffer<uint8_t> buffer);
 
 	bool _objectTransmissionActive;
@@ -129,6 +130,11 @@ public:
 		String peerName,
 		const ObjectStorage::ID &messageID,
 		Message::Attribute &attr) = 0;
+	virtual bool ProcessUpdateMessageRequest(
+		String peerName,
+		const ObjectStorage::ID &messageID,
+		Message::Attribute attr,
+		bool value) = 0;
 };
 
 #endif

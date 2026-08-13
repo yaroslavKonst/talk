@@ -155,6 +155,21 @@ void ClientSession::SendMessage(const CowBuffer<uint8_t> message)
 	_protocol->Send(CommandSendMessage::BuildCommand(command), 1);
 }
 
+void ClientSession::UpdateMessage(
+	String peerName,
+	const ObjectStorage::ID &messageID,
+	Message::Attribute attr,
+	bool value)
+{
+	CommandUpdateMessage::Command command;
+	command.PeerName = peerName;
+	command.HeaderHash = messageID.GetValue();
+	command.Attr = attr;
+	command.AttrValue = value;
+
+	_protocol->Send(CommandUpdateMessage::BuildCommand(command), 1);
+}
+
 void ClientSession::GetAccountSettings()
 {
 	_protocol->Send(CommandGetAccountSettings::BuildCommand(), 0);

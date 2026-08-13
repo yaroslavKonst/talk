@@ -101,6 +101,12 @@ public:
 		Message::Attribute attr,
 		bool value);
 
+	bool ProcessUpdateMessageRequest(
+		String peerName,
+		const ObjectStorage::ID &messageID,
+		Message::Attribute attr,
+		bool value) override;
+
 private:
 	EventDispatcher *_dispatcher;
 	Config *_config;

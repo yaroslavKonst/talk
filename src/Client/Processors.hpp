@@ -156,6 +156,11 @@ public:
 		ContactListProcessor *processor) = 0;
 
 	virtual bool SendMessage(const CowBuffer<uint8_t> message) = 0;
+	virtual bool UpdateMessage(
+		String peerName,
+		const ObjectStorage::ID &messageID,
+		Message::Attribute attr,
+		bool value) = 0;
 
 	virtual bool RequestAccountSettings() = 0;
 	virtual bool SetAccountSettings(

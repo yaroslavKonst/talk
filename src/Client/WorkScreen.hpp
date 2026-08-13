@@ -75,6 +75,8 @@ private:
 	Screen *ProcessChatScreenEvent(int event);
 	Screen *ProcessChatTypeEvent(int event);
 
+	void MarkMessageAsRead();
+
 	struct ChatState
 	{
 		ChatState *Next;

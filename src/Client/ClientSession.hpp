@@ -40,6 +40,11 @@ public:
 		NetworkEventProcessor::ContactListProcessor *processor);
 
 	void SendMessage(const CowBuffer<uint8_t> message);
+	void UpdateMessage(
+		String peerName,
+		const ObjectStorage::ID &messageID,
+		Message::Attribute attr,
+		bool value);
 
 	void GetAccountSettings();
 	void SetAccountSettings(bool allowMessages, bool allowCalls);

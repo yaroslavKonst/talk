@@ -267,6 +267,20 @@ bool Network::SendMessage(const CowBuffer<uint8_t> message)
 	return true;
 }
 
+bool Network::UpdateMessage(
+	String peerName,
+	const ObjectStorage::ID &messageID,
+	Message::Attribute attr,
+	bool value)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->UpdateMessage(peerName, messageID, attr, value);
+	return true;
+}
+
 bool Network::RequestAccountSettings()
 {
 	if (!_session) {

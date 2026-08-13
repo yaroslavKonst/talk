@@ -947,6 +947,8 @@ Screen *WorkScreen::ProcessChatScreenEvent(int event)
 			_chatStack->LineOffset = 0;
 		}
 
+		MarkMessageAsRead();
+
 		return this;
 	}
 
@@ -975,6 +977,8 @@ Screen *WorkScreen::ProcessChatScreenEvent(int event)
 						nextMessageID)) - 1;
 			}
 		}
+
+		MarkMessageAsRead();
 
 		return this;
 	}
@@ -1042,6 +1046,45 @@ Screen *WorkScreen::ProcessChatTypeEvent(int event)
 	e->Editor.AddChar(event);
 
 	return this;
+}
+
+void WorkScreen::MarkMessageAsRead()
+{
+	if (!_chatStack) {
+		return;
+	}
+
+	const ObjectStorage::ID &messageID = _chatStack->CurrentMessageID;
+
+	if (messageID.IsZero()) {
+		return;
+	}
+
+	MessageEventProcessor::MessageDescriptorBase *md =
+		_root->Messages->GetMessageDescriptor(messageID);
+
+	if (!md->HasAttribute(Message::Attribute::Inbound)) {
+		return;
+	}
+
+	if (!md->HasAttribute(Message::Attribute::Unread)) {
+		return;
+	}
+
+	int messageHeight = GetMessageHeight(md);
+
+	// Mark the message as read on the first message body line.
+	bool markAsRead = _chatStack->LineOffset == messageHeight - 7;
+
+	if (!markAsRead) {
+		return;
+	}
+
+	_root->Network->UpdateMessage(
+		_chatStack->PeerName,
+		messageID,
+		Message::Attribute::Unread,
+		false);
 }
 
 void WorkScreen::PushChat(const ObjectStorage::ID &threadID)

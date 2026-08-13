@@ -318,6 +318,19 @@ bool User::SendMessage(
 		return false;
 	}
 
+	// Allow only 'unread' and 'local' attributes.
+	Message::Attribute checkAttr = attr;
+	checkAttr = Message::AttributeAction::Clear(
+		checkAttr,
+		Message::Attribute::Unread);
+	checkAttr = Message::AttributeAction::Clear(
+		checkAttr,
+		Message::Attribute::Local);
+
+	if ((int32_t)checkAttr) {
+		return false;
+	}
+
 	RegisterNewMessage(header, message, attr, false);
 
 	return true;
@@ -487,6 +500,20 @@ void User::UpdateMessage(
 	data.Value = value;
 
 	AddNewObject(UpdateMessageObject::BuildData(data));
+}
+
+bool User::ProcessUpdateMessageRequest(
+	String peerName,
+	const ObjectStorage::ID &messageID,
+	Message::Attribute attr,
+	bool value)
+{
+	if (attr != Message::Attribute::Unread) {
+		return false;
+	}
+
+	UpdateMessage(peerName, messageID, attr, value);
+	return true;
 }
 
 void User::LoadPublicKey()

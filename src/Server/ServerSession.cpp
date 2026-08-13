@@ -167,6 +167,8 @@ bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessListContacts();
 	case SESSION_COMMAND_SEND_MESSAGE:
 		return ProcessSendMessage(buffer);
+	case SESSION_COMMAND_UPDATE_MESSAGE:
+		return ProcessUpdateMessage(buffer);
 	case SESSION_COMMAND_OFFER_MESSAGE:
 		return ProcessOfferMessage(buffer);
 	default:
@@ -346,6 +348,28 @@ bool ServerSession::ProcessSendMessage(const CowBuffer<uint8_t> buffer)
 	bool sendStatus = _storage->SendMessage(command.Message, command.Attr);
 
 	return sendStatus;
+}
+
+bool ServerSession::ProcessUpdateMessage(const CowBuffer<uint8_t> buffer)
+{
+	CommandUpdateMessage::Command command;
+	bool parseResult = CommandUpdateMessage::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	if (!Message::VerifyFullUserName(command.PeerName)) {
+		return false;
+	}
+
+	bool updateStatus = _storage->ProcessUpdateMessageRequest(
+		command.PeerName,
+		command.HeaderHash.Pointer(),
+		command.Attr,
+		command.AttrValue);
+
+	return updateStatus;
 }
 
 bool ServerSession::ProcessOfferMessage(const CowBuffer<uint8_t> buffer)
