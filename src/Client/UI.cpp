@@ -16,36 +16,43 @@
 UI::UI(Root *root) :
 	_notifier(root)
 {
-	_root = root;
+	try {
+		_root = root;
 
-	setlocale(LC_ALL, "");
+		setlocale(LC_ALL, "");
 
-	initscr();
-	raw();
-	noecho();
-	wtimeout(stdscr, 100);
-	keypad(stdscr, 1);
-	start_color();
+		initscr();
+		raw();
+		noecho();
+		wtimeout(stdscr, 100);
+		keypad(stdscr, 1);
+		start_color();
 
-	init_pair(GREEN_TEXT, COLOR_GREEN, COLOR_BLACK);
-	init_pair(YELLOW_TEXT, COLOR_YELLOW, COLOR_BLACK);
-	init_pair(RED_TEXT, COLOR_RED, COLOR_BLACK);
+		init_pair(GREEN_TEXT, COLOR_GREEN, COLOR_BLACK);
+		init_pair(YELLOW_TEXT, COLOR_YELLOW, COLOR_BLACK);
+		init_pair(RED_TEXT, COLOR_RED, COLOR_BLACK);
 
-	_needRunningString = false;
+		_needRunningString = false;
+		_autoConnectStatus = false;
 
-	_screenStack = new ScreenStackEntry(nullptr);
-	_screenStack->screen = new WorkScreen(_root);
+		_screenStack = new ScreenStackEntry(nullptr);
+		_screenStack->screen = new WorkScreen(_root);
 
-	_root->Dispatcher->RegisterDescriptorProcessor(this);
-	_root->Dispatcher->RegisterSignalProcessor(this, SIGWINCH);
+		_root->Dispatcher->RegisterDescriptorProcessor(this);
+		_root->Dispatcher->RegisterSignalProcessor(this, SIGWINCH);
+
+		if (_root->Conf->GetAutoconnect()) {
+			_root->Dispatcher->RegisterQuantProcessor(this);
+		}
+	} catch (...) {
+		Cleanup();
+		throw;
+	}
 }
 
 UI::~UI()
 {
-	_root->Dispatcher->UnregisterSignalProcessor(this, SIGWINCH);
-	_root->Dispatcher->UnregisterDescriptorProcessor(this);
-	_root->Dispatcher->UnregisterTimeProcessor(this);
-	endwin();
+	Cleanup();
 }
 
 void UI::ProcessRead()
@@ -197,6 +204,30 @@ void UI::ProcessTimeEvent()
 {
 	UiHelpers::UpdateRunningLineSeed();
 	_root->Ui->Redraw();
+}
+
+void UI::ProcessQuant()
+{
+	if (!_autoConnectStatus) {
+		ungetch(_root->Conf->WorkConnectKey());
+		ProcessEvent();
+		_root->Dispatcher->RegisterQuantProcessor(this);
+		_autoConnectStatus = true;
+		return;
+	}
+
+	ungetch(_root->Conf->LoginConnectKey());
+	ProcessEvent();
+	_autoConnectStatus = false;
+}
+
+void UI::Cleanup()
+{
+	_root->Dispatcher->UnregisterSignalProcessor(this, SIGWINCH);
+	_root->Dispatcher->UnregisterDescriptorProcessor(this);
+	_root->Dispatcher->UnregisterTimeProcessor(this);
+	_root->Dispatcher->UnregisterQuantProcessor(this);
+	endwin();
 }
 
 void UI::DrawUserData()

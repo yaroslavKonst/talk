@@ -29,6 +29,9 @@ namespace Connection
 
 	static const char *Key = "Server Key";
 	static const char *KeyValue = "";
+
+	static const char *Autoconnect = "Connect Automatically";
+	static const char *AutoconnectValue = "Yes";
 }
 
 namespace WorkScreenControls
@@ -383,6 +386,34 @@ void Config::SetServerKeyHex(String value)
 	_configFile.Set(Connection::Section, Connection::Key, value);
 }
 
+bool Config::GetAutoconnect()
+{
+	String rawValue = _configFile.Get(
+		Connection::Section,
+		Connection::Autoconnect);
+
+	rawValue = rawValue.ToLowerCase();
+
+	if (rawValue == "yes") {
+		return true;
+	}
+
+	if (rawValue == "no") {
+		return false;
+	}
+
+	THROW(String("Invalid config: ") + Connection::Autoconnect +
+		" must be 'Yes' or 'No'.");
+}
+
+void Config::SetAutoconnect(bool value)
+{
+	_configFile.Set(
+		Connection::Section,
+		Connection::Autoconnect,
+		value ? "Yes" : "No");
+}
+
 void Config::Init()
 {
 	if (!FileExists(_configFile.GetPath())) {
@@ -402,6 +433,7 @@ void Config::Init()
 			_configFile.Set(Section, Address, AddressValue);
 			_configFile.Set(Section, Port, PortValue);
 			_configFile.Set(Section, Key, KeyValue);
+			_configFile.Set(Section, Autoconnect, AutoconnectValue);
 		}
 
 		{

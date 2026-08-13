@@ -26,6 +26,9 @@ public:
 	String GetServerKeyHex();
 	void SetServerKeyHex(String value);
 
+	bool GetAutoconnect();
+	void SetAutoconnect(bool value);
+
 	// Controls.
 	int WorkExitKey()
 	{

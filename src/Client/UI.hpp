@@ -10,7 +10,8 @@ class UI :
 	public UIEventProcessor,
 	public DescriptorEventProcessor,
 	public SignalEventProcessor,
-	public TimeEventProcessor
+	public TimeEventProcessor,
+	public QuantEventProcessor
 {
 public:
 	UI(Root *root);
@@ -52,6 +53,8 @@ public:
 
 	void ProcessTimeEvent() override;
 
+	void ProcessQuant() override;
+
 private:
 	Root *_root;
 
@@ -59,6 +62,8 @@ private:
 
 	int _rows;
 	int _columns;
+
+	void Cleanup();
 
 	void DrawUserData();
 	void DrawConnectionState();
@@ -80,6 +85,7 @@ private:
 	ScreenStackEntry *_screenStack;
 
 	bool _needRunningString;
+	bool _autoConnectStatus;
 };
 
 #endif
