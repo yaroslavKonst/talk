@@ -3,8 +3,6 @@
 
 #include "Root.hpp"
 #include "../Audio/Audio.hpp"
-#include "../Crypto/Crypto.hpp"
-#include "../Common/IniFile.hpp"
 
 class VoiceChat : public VoiceEventProcessor
 {
@@ -12,74 +10,82 @@ public:
 	VoiceChat(Root *root);
 	~VoiceChat();
 
-	void SetConfigFile(IniFile *configFile);
-
-	// Process microphone input.
-	void ProcessInput();
-
-	// Control.
-	bool Active();
-	void Prepare(
-		String name,
-		const uint8_t *peerKey,
-		int64_t timestamp,
-		bool invert,
-		const uint8_t *privateKey,
-		const uint8_t *publicKey);
-	void Ask();
-	void Wait();
-	void Start();
-	void Stop();
-
-	bool ReceiveVoiceFrame(CowBuffer<uint8_t> frame);
-
-	int GetSoundReadFileDescriptor();
-
+	State GetState() override;
 	String GetPeerName() override;
-	bool IsMuted() override;
-	bool IsSilent() override;
-	VoiceState GetState() override;
+	Crypto::X25519::PublicKeyContainer GetPeerPublicKey() override;
 
-	void ToggleMute() override;
+	void InitCall(
+		String peerName,
+		const Crypto::X25519::PublicKeyContainer &peerPublicKey)
+		override;
+	void EndCall() override;
 
-	int GetVolume();
-	void IncreaseVolume();
-	void DecreaseVolume();
+	void StreamEnd() override;
 
-	int GetSilenceLevel();
-	void IncreaseSilenceLevel();
-	void DecreaseSilenceLevel();
+	void ProcessInitResponse(int32_t status) override;
 
-	bool GetFilterEnabled();
-	void EnableFilter();
-	void DisableFilter();
+	// Inbound call.
+	void ProcessInit(const CowBuffer<uint8_t> buffer) override;
+	void RespondToInboundCall(bool answer) override;
+
+	// Peer response for outbound call.
+	void ProcessPeerResponse(const CowBuffer<uint8_t> buffer) override;
 
 private:
 	Root *_root;
 
-	IniFile *_configFile;
-	void LoadConfigFile();
-	void UpdateConfigFile();
-
-	VoiceState _state;
-
-	Audio _audio;
+	State _state;
 
 	String _peerName;
+	Crypto::X25519::PublicKeyContainer _peerPublicKey;
+	Crypto::X25519::PublicKeyContainer _peerEphemeralPublicKey;
 
-	EncryptedStream _outES;
-	EncryptedStream _inES;
+	Crypto::X25519::EncryptedStream _initInES;
+	Crypto::X25519::EncryptedStream _initOutES;
 
-	CowBuffer<uint8_t> EncryptSoundFrame(CowBuffer<int16_t> frame);
-	CowBuffer<int16_t> DecryptSoundFrame(CowBuffer<uint8_t> frame);
+	CowBuffer<uint8_t> _salt1;
+	CowBuffer<uint8_t> _salt2;
+	CowBuffer<uint8_t> _challenge;
 
-	bool _silence;
-	int _silenceSlope;
-	bool _mute;
+	Crypto::X25519::PrivateKeyContainer _ephemeralPrivateKey;
+	Crypto::X25519::PublicKeyContainer _ephemeralPublicKey;
 
-	int _volume;
-	bool _applyFilter;
-	int _silenceLevel;
+	Crypto::X25519::EncryptedStream _inES;
+	Crypto::X25519::EncryptedStream _outES;
+
+	void StartMainSession();
+
+	enum class LineType
+	{
+		Audio,
+		Video,
+		Custom
+	};
+
+	struct OutboundLineBase
+	{
+		LineType Type;
+	};
+
+	struct OutboundAudioLine : public OutboundLineBase
+	{
+	};
+
+	CowBuffer<OutboundLineBase*> _outboundLines;
+
+	struct InboundLineBase
+	{
+		LineType Type;
+	};
+
+	struct InboundAudioLine : public InboundLineBase
+	{
+	};
+
+	CowBuffer<InboundLineBase*> _inboundLines;
+
+	void RequestNewLine(LineType type);
+	void CloseLine(uint32_t index);
 };
 
 #endif

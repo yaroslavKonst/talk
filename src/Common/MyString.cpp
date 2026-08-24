@@ -395,7 +395,7 @@ void String::FreeRef()
 	}
 
 	_data->RefCount -= 1;
-	
+
 	if (_data->RefCount == 0) {
 		delete[] _data->Data;
 		delete _data;

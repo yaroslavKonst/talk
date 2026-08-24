@@ -18,6 +18,7 @@ ServerSession::ServerSession(
 	ServerSessionStorage *storage,
 	Config *config,
 	EventDispatcher *dispatcher,
+	StreamProcessorBase *streamProcessor,
 	const Crypto::X25519::EncryptedStream &outES,
 	const Crypto::X25519::EncryptedStream &inES,
 	uint8_t outScramblerInit,
@@ -30,6 +31,7 @@ ServerSession::ServerSession(
 	_fd = fd;
 	_storage = storage;
 	_config = config;
+	_streamProcessor = streamProcessor;
 
 	_inES = inES;
 	_outES = outES;
@@ -51,12 +53,16 @@ ServerSession::ServerSession(
 
 	SessionLog("Start session.");
 
+	_streamProcessor->CheckNewSession(this);
+
 	SendObjects();
 }
 
 ServerSession::~ServerSession()
 {
 	SessionLog("End session.");
+
+	_streamProcessor->NotifyUserSessionClosed(this);
 
 	_config->UnregisterConfigUser(this);
 	_dispatcher->UnregisterDescriptorProcessor(this);
@@ -133,6 +139,35 @@ void ServerSession::SendObjects()
 	}
 }
 
+void ServerSession::SendStreamInit(int32_t responseCode)
+{
+	CommandStreamInit::Response response;
+	response.Status = responseCode;
+
+	_protocol->Send(CommandStreamInit::BuildResponse(response), 0);
+}
+
+void ServerSession::SendStreamEnd()
+{
+	_protocol->Send(CommandStreamEnd::BuildCommand(), 0);
+}
+
+void ServerSession::SendStreamRequest(const CowBuffer<uint8_t> initRequest)
+{
+	CommandStreamRequest::Command command;
+	command.InitRequest = initRequest;
+
+	_protocol->Send(CommandStreamRequest::BuildCommand(command), 0);
+}
+
+void ServerSession::SendStreamResponse(const CowBuffer<uint8_t> initResponse)
+{
+	CommandStreamResponse::Command response;
+	response.InitResponse = initResponse;
+
+	_protocol->Send(CommandStreamResponse::BuildCommand(response), 0);
+}
+
 bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 {
 	if (buffer.Size() < sizeof(int32_t)) {
@@ -171,6 +206,12 @@ bool ServerSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessUpdateMessage(buffer);
 	case SESSION_COMMAND_OFFER_MESSAGE:
 		return ProcessOfferMessage(buffer);
+	case SESSION_COMMAND_STREAM_INIT:
+		return ProcessStreamInit(buffer);
+	case SESSION_COMMAND_STREAM_REQUEST:
+		return ProcessStreamRequest(buffer);
+	case SESSION_COMMAND_STREAM_END:
+		return ProcessStreamEnd();
 	default:
 		SessionLog("Unknown command.");
 		return false;
@@ -398,6 +439,42 @@ bool ServerSession::ProcessOfferMessage(const CowBuffer<uint8_t> buffer)
 	return true;
 }
 
+bool ServerSession::ProcessStreamInit(const CowBuffer<uint8_t> buffer)
+{
+	CommandStreamInit::Command command;
+	bool parseResult = CommandStreamInit::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	return _streamProcessor->ProcessUserStreamInit(
+		command.InitRequest,
+		this);
+}
+
+bool ServerSession::ProcessStreamRequest(const CowBuffer<uint8_t> buffer)
+{
+	CommandStreamRequest::Response response;
+	bool parseResult = CommandStreamRequest::ParseResponse(
+		buffer,
+		response);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	return _streamProcessor->ProcessUserStreamResponse(
+		response.InitResponse,
+		this);
+}
+
+bool ServerSession::ProcessStreamEnd()
+{
+	_streamProcessor->EndStream(this);
+	return true;
+}
+
 void ServerSession::InitObjectTransmission()
 {
 	if (_objectTransmissionActive) {
@@ -455,7 +532,7 @@ void ServerSession::SendID(const ObjectStorage::ID &id)
 bool ServerSession::ProcessRequestID(const CowBuffer<uint8_t> buffer)
 {
 	SessionLog("Received ID.");
-	
+
 	if (!_objectTransmissionActive) {
 		return false;
 	}

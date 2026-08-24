@@ -100,6 +100,13 @@ bool UI::ProcessEvent()
 		return true;
 	}
 
+	bool voiceEventProcessed = ProcessVoiceEvent(event);
+
+	if (voiceEventProcessed) {
+		Redraw();
+		return true;
+	}
+
 	Screen *newScreen = _screenStack->screen->ProcessEvent(event);
 
 	if (newScreen != _screenStack->screen) {
@@ -165,6 +172,7 @@ void UI::Redraw()
 			_screenStack->screen->Redraw();
 		}
 
+		DrawVoiceInterface();
 		_notifier.Redraw();
 	}
 
@@ -313,49 +321,149 @@ void UI::DrawVoiceState()
 	move(3, 0);
 	addstr("Voice status: ");
 
-/*	VoiceEventProcessor::VoiceState state = _root->Voice->GetState();
+	VoiceEventProcessor::State state = _root->Voice->GetState();
+
+	String stateString;
 
 	switch (state) {
-	case VoiceEventProcessor::VoiceStateOff:
-		addstr("not connected.");
-		return;
-	case VoiceEventProcessor::VoiceStateInit:
-		attrset(COLOR_PAIR(YELLOW_TEXT));
-		addstr("initializing connection");
+	case VoiceEventProcessor::State::Closed:
+		stateString = "not connected.";
 		break;
-	case VoiceEventProcessor::VoiceStateAsk:
+	case VoiceEventProcessor::State::InitSent:
 		attrset(COLOR_PAIR(YELLOW_TEXT));
-		addstr("please respond");
+		stateString = "initializing connection";
 		break;
-	case VoiceEventProcessor::VoiceStateWait:
+	case VoiceEventProcessor::State::WaitingForUserAnswer:
 		attrset(COLOR_PAIR(YELLOW_TEXT));
-		addstr("waiting for answer");
+		stateString = "please respond";
 		break;
-	case VoiceEventProcessor::VoiceStateActive:
+	case VoiceEventProcessor::State::WaitingForPeerAnswer:
+		attrset(COLOR_PAIR(YELLOW_TEXT));
+		stateString = "waiting for answer";
+		break;
+	case VoiceEventProcessor::State::ActiveSession:
 		attrset(COLOR_PAIR(GREEN_TEXT));
-		addstr("active");
+		stateString = "active";
 		break;
 	}
 
-	String name = _root->Voice->GetPeerName();
+	if (state != VoiceEventProcessor::State::Closed) {
+		stateString += " (" + _root->Voice->GetPeerName() + ")";
 
-	if (name.Length() > 30) {
-		name = name.Substring(0, 30) + "...";
+		/*if (state == VoiceEventProcessor::VoiceStateActive) {
+			if (_root->Voice->IsMuted()) {
+				attrset(COLOR_PAIR(RED_TEXT));
+				stateString += " (mute)";
+			} else if (_root->Voice->IsSilent()) {
+				stateString += " (silence)";
+			}
+		}*/
 	}
 
-	addstr((" (" + name + ")").CStr());
+	bool running = UiHelpers::DrawRunningLine(stateString, _columns - 14);
 
-	if (state == VoiceEventProcessor::VoiceStateActive) {
-		if (_root->Voice->IsMuted()) {
-			attrset(COLOR_PAIR(RED_TEXT));
-			addstr(" (mute)");
-		} else if (_root->Voice->IsSilent()) {
-			addstr(" (silence)");
+	if (running) {
+		RequestRunningLine();
+	}
+
+	attrset(COLOR_PAIR(DEFAULT_TEXT));
+}
+
+void UI::DrawVoiceInterface()
+{
+	VoiceEventProcessor::State state = _root->Voice->GetState();
+
+	if (state != VoiceEventProcessor::State::WaitingForUserAnswer) {
+		return;
+	}
+
+	int baseY = _rows / 2;
+
+	String peerName = _root->Voice->GetPeerName();
+	Crypto::X25519::PublicKeyContainer peerKey =
+		_root->Voice->GetPeerPublicKey();
+
+	UiHelpers::ClearScreen(baseY - 4, baseY + 4, 0, _columns - 1);
+
+	bool running;
+	UiHelpers::DrawFrame(
+		baseY - 3,
+		baseY + 3,
+		1,
+		_columns - 2,
+		"Inbound call from " + peerName,
+		COLOR_PAIR(YELLOW_TEXT),
+		running);
+
+	if (running) {
+		RequestRunningLine();
+	}
+
+	int posY = baseY - 2;
+	int posX = (_columns - peerName.Length()) / 2;
+
+	if (posX < 3) {
+		posX = 3;
+	}
+
+	move(posY, posX);
+	running = UiHelpers::DrawRunningLine(peerName, _columns - 6);
+
+	if (running) {
+		RequestRunningLine();
+	}
+
+	posY += 2;
+
+	Contact *contact = _root->Messages->GetContactStorage()->GetContact(
+		peerName);
+
+	String message;
+
+	if (!contact) {
+		attrset(COLOR_PAIR(RED_TEXT));
+		message = "Not in contacts.";
+	} else {
+		if (!contact->IsKeyVerified(peerKey)) {
+			attrset(COLOR_PAIR(YELLOW_TEXT));
+			message = "In contacts, unverified key.";
+		} else {
+			attrset(COLOR_PAIR(GREEN_TEXT));
+			message = "In contacts, verified key.";
 		}
 	}
 
-	attrset(COLOR_PAIR(DEFAULT_TEXT));*/
-	addch('.');
+	posX = (_columns - message.Length()) / 2;
+
+	if (posX < 3) {
+		posX = 3;
+	}
+
+	move(posY, posX);
+	running = UiHelpers::DrawRunningLine(message, _columns - 6);
+	attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+	if (running) {
+		RequestRunningLine();
+	}
+
+	posY += 2;
+
+	message = "Press " + _root->Conf->VoiceAcceptName() + " to answer, " +
+		_root->Conf->VoiceDeclineName() + " to decline call.";
+
+	posX = (_columns - message.Length()) / 2;
+
+	if (posX < 3) {
+		posX = 3;
+	}
+
+	move(posY, posX);
+	running = UiHelpers::DrawRunningLine(message, _columns - 6);
+
+	if (running) {
+		RequestRunningLine();
+	}
 }
 
 void UI::DrawControlHelp()
@@ -399,4 +507,30 @@ void UI::DrawControlHelp()
 
 		posX += totalLength;
 	}
+}
+
+bool UI::ProcessVoiceEvent(int event)
+{
+	VoiceEventProcessor::State state = _root->Voice->GetState();
+
+	if (state == VoiceEventProcessor::State::WaitingForUserAnswer) {
+		if (event == _root->Conf->VoiceAcceptKey()) {
+			_root->Voice->RespondToInboundCall(true);
+		} else if (event == _root->Conf->VoiceDeclineKey()) {
+			_root->Voice->RespondToInboundCall(false);
+		}
+
+		return true;
+	}
+
+	if (state != VoiceEventProcessor::State::Closed) {
+		if (event == _root->Conf->VoiceEndKey()) {
+			_root->Voice->EndCall();
+			return true;
+		}
+
+		return false;
+	}
+
+	return false;
 }

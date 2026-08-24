@@ -12,7 +12,8 @@ namespace Handshake
 {
 	enum
 	{
-		ChallengeSize = 64
+		ChallengeSize = 64,
+		SaltSize = 32
 	};
 }
 

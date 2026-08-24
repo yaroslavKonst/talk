@@ -51,6 +51,10 @@ public:
 	void SetAccountSettingsProcessor(
 		NetworkEventProcessor::AccountSettingsProcessor *processor);
 
+	void SendStreamInit(const CowBuffer<uint8_t> buffer);
+	void SendStreamEnd();
+	void SendStreamRequest(const CowBuffer<uint8_t> buffer);
+
 private:
 	Root *_root;
 
@@ -87,6 +91,11 @@ private:
 	bool ProcessOfferMessage(const CowBuffer<uint8_t> buffer);
 	bool ProcessSendMessage(const CowBuffer<uint8_t> buffer);
 	bool ProcessUpdateMessage(const CowBuffer<uint8_t> buffer);
+
+	bool ProcessStreamInit(const CowBuffer<uint8_t> buffer);
+	bool ProcessStreamEnd();
+	bool ProcessStreamRequest(const CowBuffer<uint8_t> buffer);
+	bool ProcessStreamResponse(const CowBuffer<uint8_t> buffer);
 };
 
 #endif

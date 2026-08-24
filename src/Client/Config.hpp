@@ -370,6 +370,46 @@ public:
 		return _keyNames[(int)Keys::ContactListContacts];
 	}
 
+	int VoiceStartKey()
+	{
+		return _keys[(int)Keys::VoiceStart];
+	}
+
+	String VoiceStartName()
+	{
+		return _keyNames[(int)Keys::VoiceStart];
+	}
+
+	int VoiceEndKey()
+	{
+		return _keys[(int)Keys::VoiceEnd];
+	}
+
+	String VoiceEndName()
+	{
+		return _keyNames[(int)Keys::VoiceEnd];
+	}
+
+	int VoiceAcceptKey()
+	{
+		return _keys[(int)Keys::VoiceAccept];
+	}
+
+	String VoiceAcceptName()
+	{
+		return _keyNames[(int)Keys::VoiceAccept];
+	}
+
+	int VoiceDeclineKey()
+	{
+		return _keys[(int)Keys::VoiceDecline];
+	}
+
+	String VoiceDeclineName()
+	{
+		return _keyNames[(int)Keys::VoiceDecline];
+	}
+
 	int NotificationConfirmKey()
 	{
 		return _keys[(int)Keys::NotificationConfirm];
@@ -434,6 +474,8 @@ private:
 
 		VoiceStart,
 		VoiceEnd,
+		VoiceAccept,
+		VoiceDecline,
 		VoiceMute,
 		VoiceEnterSettings,
 		VoiceExitSettings,
@@ -443,8 +485,6 @@ private:
 		VoiceSilenceDec,
 		VoiceFilterUp,
 		VoiceFilterDown,
-		VoiceAccept,
-		VoiceDecline,
 
 		AttachBack,
 		AttachClear,

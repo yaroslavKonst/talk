@@ -1,8 +1,10 @@
 #ifndef _OUTBOUND_GATE_SESSION_HPP
 #define _OUTBOUND_GATE_SESSION_HPP
 
+#include "OutboundTaskBase.hpp"
 #include "Config.hpp"
 #include "GateSecurityModule.hpp"
+#include "User.hpp"
 #include "../Protocol/GateProtocol.hpp"
 #include "../Message/Message.hpp"
 #include "../Common/EventDispatcher.hpp"
@@ -10,46 +12,6 @@
 #include "../Common/StreamReader.hpp"
 #include "../Common/StreamWriter.hpp"
 #include "../Crypto/Crypto.hpp"
-
-enum class TaskType
-{
-	ProcessChannel
-};
-
-enum class TaskResult
-{
-	RequestLimitOverflow,
-	ConnectionFailure
-};
-
-class TaskBase
-{
-public:
-	TaskType Type;
-
-	TaskBase();
-	virtual ~TaskBase()
-	{ }
-
-	virtual String GetConnectionDestination() = 0;
-	virtual void ReportConnectionFailure() = 0;
-	virtual void ReportRequestRateLimit() = 0;
-
-	// Has data to write.
-	virtual bool HasData() = 0;
-	// Get data. Returned empty buffer must close the session.
-	virtual CowBuffer<uint8_t> GetData() = 0;
-	// Process data. Returned false must close the session.
-	virtual bool ProcessData(const CowBuffer<uint8_t> buffer) = 0;
-
-protected:
-	bool MustReportFailure();
-	void MarkFailureReport();
-	void AllowFailureReport();
-
-private:
-	bool _reportedFailure;
-};
 
 class TaskProcessChannelReportTarget
 {
@@ -67,7 +29,7 @@ public:
 	virtual CowBuffer<uint8_t> GetMessageForChannel() = 0;
 };
 
-class TaskProcessChannel : public TaskBase
+class TaskProcessChannel : public OutboundTaskBase
 {
 public:
 	String Source;
@@ -113,8 +75,10 @@ public:
 		EventDispatcher *dispatcher,
 		Config *config,
 		OutboundGateSessionStorage *storage,
-		TaskBase *task);
+		OutboundTaskBase *task);
 	~OutboundGateSession();
+
+	void CompleteInitialization();
 
 	int GetDescriptor() override;
 	bool RequestRead() override;
@@ -136,7 +100,7 @@ private:
 
 	int _fd;
 
-	TaskBase *_task;
+	OutboundTaskBase *_task;
 
 	enum class State
 	{

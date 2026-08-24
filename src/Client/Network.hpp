@@ -65,6 +65,10 @@ public:
 	bool SetAccountSettingsProcessor(
 		AccountSettingsProcessor *processor) override;
 
+	bool SendStreamInit(const CowBuffer<uint8_t> buffer) override;
+	bool SendStreamEnd() override;
+	bool SendStreamRequest(const CowBuffer<uint8_t> buffer) override;
+
 private:
 	int _fd;
 	Root *_root;

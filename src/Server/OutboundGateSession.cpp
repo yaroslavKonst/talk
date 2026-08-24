@@ -7,6 +7,7 @@
 
 #include "../Message/Message.hpp"
 #include "../Protocol/GateParser.hpp"
+#include "../Protocol/StreamParser.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/File.hpp"
 #include "../Common/UnixTime.hpp"
@@ -14,29 +15,8 @@
 #include "../Common/Log.hpp"
 #include "../Common/Endianness.hpp"
 
-TaskBase::TaskBase()
-{
-	_reportedFailure = false;
-}
-
-bool TaskBase::MustReportFailure()
-{
-	return !_reportedFailure;
-}
-
-void TaskBase::MarkFailureReport()
-{
-	_reportedFailure = true;
-}
-
-void TaskBase::AllowFailureReport()
-{
-	_reportedFailure = false;
-}
-
 TaskProcessChannel::TaskProcessChannel()
 {
-	Type = TaskType::ProcessChannel;
 	ReportTarget = nullptr;
 	_state = State::Init;
 	_hasOutput = false;
@@ -219,10 +199,10 @@ OutboundGateSession::OutboundGateSession(
 	EventDispatcher *dispatcher,
 	Config *config,
 	OutboundGateSessionStorage *storage,
-	TaskBase *task) :
+	OutboundTaskBase *task) :
 	_securityModule(dispatcher)
 {
-	SetInterval(60000);
+	SetInterval(task->GetTimeoutInterval());
 	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_fd = -1;
@@ -249,8 +229,6 @@ OutboundGateSession::OutboundGateSession(
 	_dispatcher->RegisterTimeProcessor(this);
 
 	OutboundGateLog("Session opened.");
-
-	StartConnection();
 }
 
 OutboundGateSession::~OutboundGateSession()
@@ -275,7 +253,12 @@ OutboundGateSession::~OutboundGateSession()
 			OutboundGateLog("Task error: " + ex.Message());
 		}
 
-		delete _task;
+		_task->NotifyGateSessionClosed();
+
+		if (_task->MustBeDeleted()) {
+			delete _task;
+		}
+
 		_task = nullptr;
 	}
 
@@ -293,6 +276,11 @@ OutboundGateSession::~OutboundGateSession()
 		delete _writer;
 		_writer = nullptr;
 	}
+}
+
+void OutboundGateSession::CompleteInitialization()
+{
+	StartConnection();
 }
 
 int OutboundGateSession::GetDescriptor()
@@ -447,6 +435,10 @@ void OutboundGateSession::ProcessTimeEvent()
 		return;
 	}
 
+	if (_task->TimeoutAction()) {
+		return;
+	}
+
 	OutboundGateLog("Timeout.");
 	_storage->MarkSessionForRemoval(this);
 }
@@ -581,6 +573,7 @@ void OutboundGateSession::TryConnect()
 
 	if (res == -1) {
 		if (errno == EINPROGRESS) {
+			OutboundGateLog("Connection in progress.");
 			_state = State::WaitingForConnect;
 			_dispatcher->RegisterDescriptorProcessor(this);
 			return;
@@ -622,6 +615,7 @@ void OutboundGateSession::ProcessConnect()
 	}
 
 	if (success) {
+		OutboundGateLog("Connection established.");
 		SetupHandshakeWaitInit();
 		return;
 	}

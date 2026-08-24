@@ -621,31 +621,36 @@ client                                     server
 |  +-----------------------------------------+  |
 |                                               |
 | <-------------------------------------------- |
-|         | STREAM_INIT | peer response |       |
+|      | STREAM_RESPONSE | peer response |      |
 
 Request structure:
-| source name | source key | destination name | destination key | MAC | nonce |
-| timestamp | encrypted one time challenge |
+| source name | source key | destination name | destination key |...
+...| salt 1 | MAC | nonce | session public key | challenge |
+                          \--------------------------------/
+                                      encrypted
 
 "status" is a 32 bit unsigned integer.
 
 Status types:
 WAITING_FOR_ANSWER
 ERROR
+YOU_ARE_IN_CALL
 SERVER_OFFLINE
 USER_OFFLINE
 USER_BUSY
 USER_NONEXISTENT
+INVALID_DESTINATION_KEY
 CALL_PROHIBITED
 YOU_ARE_BANNED
-REJECT_SPAM
+YOUR_KEY_IS_BANNED
+PARSING_FAILURE
 
 If the status is not WAITING_FOR_ANSWER then stream is not started.
 
 Peer response structure:
-| MAC | nonce | response | challenge response |
-              \-------------------------------/
-                         encrypted
+| MAC | nonce | response | salt 2 | session public key | challenge response |
+              \-------------------------------------------------------------/
+                                        encrypted
 
 "response": 32 bit unsigned integer.
 
@@ -671,12 +676,12 @@ DECLINE
 Active stream session:
 client                                     server
 | <-------------------------------------------> |
-|              | STREAM | payload |             |
+|           | STREAM_DATA | payload |           |
 |                                               |
-|                 - - - - - - -                 |
+|                - - - - - - -                  |
 |                                               |
 | <-------------------------------------------> |
-|              | STREAM | payload |             |
+|           | STREAM_DATA | payload |           |
 |                                               |
 | <-------------------------------------------> |
 |                 | STREAM_END |                |

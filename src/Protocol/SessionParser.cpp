@@ -5,6 +5,8 @@
 #include "ParserHelpers.hpp"
 #include "../Common/Endianness.hpp"
 
+static const uint64_t StreamCommandSizeLimit = 4 * 1024;
+
 bool CommandKeepAlive::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)
@@ -794,143 +796,38 @@ CowBuffer<uint8_t> CommandUpdateMessage::BuildCommand(const Command &data)
 	return buffer;
 }
 
-/*CowBuffer<uint8_t> CommandListUsers::BuildCommand()
-{
-	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
-	*commandBuffer.SwitchType<int32_t>() = SESSION_COMMAND_LIST_USERS;
-	return commandBuffer;
-}
-
-bool CommandListUsers::ParseResponse(
+bool CommandStreamInit::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
-	Response &result)
+	Command &result)
 {
-	int nameLength = 55;
-
-	if (buffer.Size() < sizeof(int32_t) * 2) {
-		return false;
-	}
-
-	int32_t command = *buffer.SwitchType<int32_t>();
-
-	if (command != SESSION_COMMAND_LIST_USERS) {
-		return false;
-	}
-
-	int32_t userCount = *buffer.SwitchType<int32_t>(sizeof(command));
-
-	if (buffer.Size() !=
-		sizeof(int32_t) * 2 + (KEY_SIZE + nameLength) * userCount)
+	if (buffer.Size() <= sizeof(int32_t) ||
+		buffer.Size() > StreamCommandSizeLimit)
 	{
 		return false;
 	}
 
-	result.Data.Resize(userCount);
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
-	for (int i = 0; i < userCount; i++) {
-		result.Data[i].Key = buffer.Pointer(
-			sizeof(int32_t) * 2 + i * (KEY_SIZE + nameLength));
-		result.Data[i].Name = buffer.SwitchType<char>(
-			sizeof(int32_t) * 2 + i * (KEY_SIZE + nameLength) +
-			KEY_SIZE);
+	if (command != SESSION_COMMAND_STREAM_INIT) {
+		return false;
 	}
+
+	result.InitRequest = buffer.Slice(
+		sizeof(command),
+		buffer.Size() - sizeof(command));
 
 	return true;
 }
 
-CowBuffer<uint8_t> CommandListUsers::BuildResponse(const Response &data)
+CowBuffer<uint8_t> CommandStreamInit::BuildCommand(const Command &data)
 {
-	int nameLength = 55;
-
-	CowBuffer<uint8_t> result(sizeof(int32_t) * 2 +
-		(KEY_SIZE + nameLength) * data.Data.Size());
-
-	*result.SwitchType<int32_t>() = SESSION_COMMAND_LIST_USERS;
-	*result.SwitchType<int32_t>(sizeof(int32_t)) = data.Data.Size();
-
-	memset(
-		result.Pointer(sizeof(int32_t) * 2),
-		0,
-		result.Size() - sizeof(int32_t) * 2);
-
-	for (unsigned int i = 0; i < data.Data.Size(); i++) {
-		memcpy(
-			result.Pointer(sizeof(int32_t) * 2 +
-				i * (KEY_SIZE + nameLength)),
-			data.Data[i].Key,
-			KEY_SIZE);
-
-		memcpy(
-			result.Pointer(sizeof(int32_t) * 2 +
-				i * (KEY_SIZE + nameLength) + KEY_SIZE),
-			data.Data[i].Name.CStr(),
-			data.Data[i].Name.Length() + 1);
-	}
-
-	return result;
+	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
+	*commandBuffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_STREAM_INIT);
+	return commandBuffer.Concat(data.InitRequest);
 }
 
-bool CommandGetMessages::ParseCommand(
-	const CowBuffer<uint8_t> buffer,
-	Command &result)
-{
-	if (buffer.Size() != sizeof(int32_t) + sizeof(result.Timestamp)) {
-		return false;
-	}
-
-	int32_t command = *buffer.SwitchType<int32_t>();
-
-	if (command != SESSION_COMMAND_GET_MESSAGES) {
-		return false;
-	}
-
-	result.Timestamp = *buffer.SwitchType<int64_t>(sizeof(command));
-	return true;
-}
-
-CowBuffer<uint8_t> CommandGetMessages::BuildCommand(const Command &data)
-{
-	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(data.Timestamp));
-	*result.SwitchType<int32_t>() = SESSION_COMMAND_GET_MESSAGES;
-	*result.SwitchType<int64_t>(sizeof(int32_t)) = data.Timestamp;
-	return result;
-}
-
-bool CommandVoiceInit::ParseCommand(
-	const CowBuffer<uint8_t> buffer,
-	Command &result)
-{
-	if (buffer.Size() != sizeof(int32_t) + KEY_SIZE + sizeof(int64_t)) {
-		return false;
-	}
-
-	int32_t command = *buffer.SwitchType<int32_t>();
-
-	if (command != SESSION_COMMAND_VOICE_INIT) {
-		return false;
-	}
-
-	result.Key = buffer.Pointer(sizeof(command));
-	result.Timestamp = *buffer.SwitchType<int64_t>(
-		sizeof(command) + KEY_SIZE);
-
-	return true;
-}
-
-CowBuffer<uint8_t> CommandVoiceInit::BuildCommand(const Command &data)
-{
-	CowBuffer<uint8_t> result(
-		sizeof(int32_t) + KEY_SIZE + sizeof(data.Timestamp));
-
-	*result.SwitchType<int32_t>() = SESSION_COMMAND_VOICE_INIT;
-	memcpy(result.Pointer(sizeof(int32_t)), data.Key, KEY_SIZE);
-	*result.SwitchType<int64_t>(sizeof(int32_t) + KEY_SIZE) =
-		data.Timestamp;
-
-	return result;
-}
-
-bool CommandVoiceInit::ParseResponse(
+bool CommandStreamInit::ParseResponse(
 	const CowBuffer<uint8_t> buffer,
 	Response &result)
 {
@@ -938,102 +835,144 @@ bool CommandVoiceInit::ParseResponse(
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
-	if (command != SESSION_COMMAND_VOICE_INIT) {
+	if (command != SESSION_COMMAND_STREAM_INIT) {
 		return false;
 	}
 
-	result.Status = *buffer.SwitchType<int32_t>(sizeof(command));
+	result.Status =
+		SetProtoEndian(*buffer.SwitchType<int32_t>(sizeof(command)));
+
 	return true;
 }
 
-CowBuffer<uint8_t> CommandVoiceInit::BuildResponse(const Response &data)
+CowBuffer<uint8_t> CommandStreamInit::BuildResponse(const Response &data)
 {
-	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(data.Status));
-	*result.SwitchType<int32_t>() = SESSION_COMMAND_VOICE_INIT;
-	*result.SwitchType<int32_t>(sizeof(int32_t)) = data.Status;
-	return result;
+	CowBuffer<uint8_t> buffer(sizeof(int32_t) + sizeof(data.Status));
+
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_STREAM_INIT);
+	*buffer.SwitchType<int32_t>(sizeof(int32_t)) =
+		SetProtoEndian(data.Status);
+
+	return buffer;
 }
 
-bool CommandVoiceRequest::ParseCommand(
+bool CommandStreamResponse::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)
 {
-	if (buffer.Size() != sizeof(int32_t) + KEY_SIZE + sizeof(int64_t)) {
+	if (buffer.Size() <= sizeof(int32_t) ||
+		buffer.Size() > StreamCommandSizeLimit)
+	{
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
-	if (command != SESSION_COMMAND_VOICE_REQUEST) {
+	if (command != SESSION_COMMAND_STREAM_RESPONSE) {
 		return false;
 	}
 
-	result.Key = buffer.Pointer(sizeof(command));
-	result.Timestamp = *buffer.SwitchType<int64_t>(
-		sizeof(command) + KEY_SIZE);
+	result.InitResponse = buffer.Slice(
+		sizeof(command),
+		buffer.Size() - sizeof(command));
 
 	return true;
 }
 
-CowBuffer<uint8_t> CommandVoiceRequest::BuildCommand(const Command &data)
+CowBuffer<uint8_t> CommandStreamResponse::BuildCommand(const Command &data)
 {
-	CowBuffer<uint8_t> result(
-		sizeof(int32_t) + KEY_SIZE + sizeof(data.Timestamp));
-
-	*result.SwitchType<int32_t>() = SESSION_COMMAND_VOICE_REQUEST;
-	memcpy(result.Pointer(sizeof(int32_t)), data.Key, KEY_SIZE);
-	*result.SwitchType<int64_t>(sizeof(int32_t) + KEY_SIZE) =
-		data.Timestamp;
-
-	return result;
+	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
+	*commandBuffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_STREAM_RESPONSE);
+	return commandBuffer.Concat(data.InitResponse);
 }
 
-bool CommandVoiceRequest::ParseResponse(
+bool CommandStreamRequest::ParseCommand(
+	const CowBuffer<uint8_t> buffer,
+	Command &result)
+{
+	if (buffer.Size() <= sizeof(int32_t) ||
+		buffer.Size() > StreamCommandSizeLimit)
+	{
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != SESSION_COMMAND_STREAM_REQUEST) {
+		return false;
+	}
+
+	result.InitRequest = buffer.Slice(
+		sizeof(command),
+		buffer.Size() - sizeof(command));
+
+	return true;
+}
+
+CowBuffer<uint8_t> CommandStreamRequest::BuildCommand(const Command &data)
+{
+	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
+	*commandBuffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_STREAM_REQUEST);
+	return commandBuffer.Concat(data.InitRequest);
+}
+
+bool CommandStreamRequest::ParseResponse(
 	const CowBuffer<uint8_t> buffer,
 	Response &result)
 {
-	if (buffer.Size() != sizeof(int32_t) + sizeof(result.Status)) {
+	if (buffer.Size() <= sizeof(int32_t) ||
+		buffer.Size() > StreamCommandSizeLimit)
+	{
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
-	if (command != SESSION_COMMAND_VOICE_REQUEST) {
+	if (command != SESSION_COMMAND_STREAM_REQUEST) {
 		return false;
 	}
 
-	result.Status = *buffer.SwitchType<int32_t>(sizeof(command));
+	result.InitResponse = buffer.Slice(
+		sizeof(command),
+		buffer.Size() - sizeof(command));
+
 	return true;
 }
 
-CowBuffer<uint8_t> CommandVoiceRequest::BuildResponse(const Response &data)
+CowBuffer<uint8_t> CommandStreamRequest::BuildResponse(const Response &data)
 {
-	CowBuffer<uint8_t> result(sizeof(int32_t) + sizeof(data.Status));
-	*result.SwitchType<int32_t>() = SESSION_COMMAND_VOICE_REQUEST;
-	*result.SwitchType<int32_t>(sizeof(int32_t)) = data.Status;
-	return result;
+	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
+	*commandBuffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_STREAM_REQUEST);
+	return commandBuffer.Concat(data.InitResponse);
 }
 
-CowBuffer<uint8_t> CommandVoiceEnd::BuildCommand()
+CowBuffer<uint8_t> CommandStreamEnd::BuildCommand()
 {
-	CowBuffer<uint8_t> result(sizeof(int32_t));
-	*result.SwitchType<int32_t>() = SESSION_COMMAND_VOICE_END;
-	return result;
+	CowBuffer<uint8_t> buffer(sizeof(int32_t));
+	*buffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_STREAM_END);
+	return buffer;
 }
 
-bool CommandVoiceData::ParseCommand(
+bool CommandStreamData::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)
 {
-	if (buffer.Size() <= sizeof(int32_t)) {
+	if (buffer.Size() <= sizeof(int32_t) ||
+		buffer.Size() > StreamCommandSizeLimit)
+	{
 		return false;
 	}
 
-	int32_t command = *buffer.SwitchType<int32_t>();
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
 
-	if (command != SESSION_COMMAND_VOICE_DATA) {
+	if (command != SESSION_COMMAND_STREAM_DATA) {
 		return false;
 	}
 
@@ -1044,9 +983,10 @@ bool CommandVoiceData::ParseCommand(
 	return true;
 }
 
-CowBuffer<uint8_t> CommandVoiceData::BuildCommand(const Command &data)
+CowBuffer<uint8_t> CommandStreamData::BuildCommand(const Command &data)
 {
 	CowBuffer<uint8_t> commandBuffer(sizeof(int32_t));
-	*commandBuffer.SwitchType<int32_t>() = SESSION_COMMAND_VOICE_DATA;
+	*commandBuffer.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(SESSION_COMMAND_STREAM_DATA);
 	return commandBuffer.Concat(data.VoiceData);
-}*/
+}

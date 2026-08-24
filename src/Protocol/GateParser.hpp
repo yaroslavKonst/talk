@@ -102,4 +102,40 @@ namespace GateCommandMessage
 	CowBuffer<uint8_t> BuildCode(const VerificationCode &data);
 }
 
+#define GATE_COMMAND_STREAM_REQUEST 2
+#define GATE_STREAM_FRAME 0
+#define GATE_STREAM_END 1
+#define GATE_STREAM_KEEP_ALIVE 2
+
+namespace GateCommandStream
+{
+	struct InitRequest
+	{
+		CowBuffer<uint8_t> Request;
+	};
+
+	struct InitResponse
+	{
+		int32_t Code;
+	};
+
+	struct Frame
+	{
+		CowBuffer<uint8_t> Payload;
+	};
+
+	bool ParseInitRequest(
+		const CowBuffer<uint8_t> buffer,
+		InitRequest &data);
+	CowBuffer<uint8_t> BuildInitRequest(const InitRequest &data);
+
+	bool ParseInitResponse(
+		const CowBuffer<uint8_t> buffer,
+		InitResponse &data);
+	CowBuffer<uint8_t> BuildInitResponse(const InitResponse &data);
+
+	bool ParseFrame(const CowBuffer<uint8_t> buffer, Frame &data);
+	CowBuffer<uint8_t> BuildFrame(const Frame &data);
+}
+
 #endif

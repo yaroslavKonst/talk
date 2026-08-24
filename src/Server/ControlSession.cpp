@@ -328,7 +328,11 @@ void ControlSession::ProcessRemoveUserCommand(CowBuffer<uint8_t> buffer)
 		response.Code = ERROR_INVALID_USER;
 	} else {
 		response.Code = OK;
-		_users->RemoveUser(request.Name);
+		bool result = _users->RemoveUser(request.Name);
+
+		if (!result) {
+			response.Code = ERROR_USER_BUSY;
+		}
 	}
 
 	SendResponse(CommandRemoveUser::BuildResponse(response));

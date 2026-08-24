@@ -23,20 +23,6 @@
 #define SESSION_COMMAND_UPDATE_MESSAGE 15
 #define SESSION_COMMAND_DELETE_MESSAGE 16
 
-#define SESSION_COMMAND_STREAM_INIT 500
-#define SESSION_COMMAND_STREAM_REQUEST 501
-#define SESSION_COMMAND_STREAM_END 502
-#define SESSION_COMMAND_STREAM_DATA 503
-#define SESSION_COMMAND_STREAM_LINE_DATA 503
-#define SESSION_COMMAND_STREAM_LINE_INIT 504
-#define SESSION_COMMAND_STREAM_LINE_END 505
-
-#define SESSION_RESPONSE_STREAM_RINGING 510
-#define SESSION_RESPONSE_STREAM_ACCEPT 511
-#define SESSION_RESPONSE_STREAM_DECLINE 512
-#define SESSION_RESPONSE_STREAM_LINE_ACCEPT 513
-#define SESSION_RESPONSE_STREAM_LINE_DECLINE 514
-
 namespace CommandKeepAlive
 {
 	struct Command
@@ -238,23 +224,17 @@ namespace CommandUpdateMessage
 	CowBuffer<uint8_t> BuildCommand(const Command &data);
 }
 
-/*namespace CommandGetMessages
+#define SESSION_COMMAND_STREAM_INIT 100
+#define SESSION_COMMAND_STREAM_RESPONSE 101
+#define SESSION_COMMAND_STREAM_REQUEST 102
+#define SESSION_COMMAND_STREAM_END 103
+#define SESSION_COMMAND_STREAM_DATA 104
+
+namespace CommandStreamInit
 {
 	struct Command
 	{
-		int64_t Timestamp;
-	};
-
-	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
-	CowBuffer<uint8_t> BuildCommand(const Command &data);
-}
-
-namespace CommandVoiceInit
-{
-	struct Command
-	{
-		const uint8_t *Key;
-		int64_t Timestamp;
+		CowBuffer<uint8_t> InitRequest;
 	};
 
 	struct Response
@@ -264,35 +244,47 @@ namespace CommandVoiceInit
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
 	CowBuffer<uint8_t> BuildCommand(const Command &data);
+
 	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
 	CowBuffer<uint8_t> BuildResponse(const Response &data);
 }
 
-namespace CommandVoiceRequest
+namespace CommandStreamResponse
 {
 	struct Command
 	{
-		const uint8_t *Key;
-		int64_t Timestamp;
-	};
-
-	struct Response
-	{
-		int32_t Status;
+		CowBuffer<uint8_t> InitResponse;
 	};
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
 	CowBuffer<uint8_t> BuildCommand(const Command &data);
+};
+
+namespace CommandStreamRequest
+{
+	struct Command
+	{
+		CowBuffer<uint8_t> InitRequest;
+	};
+
+	struct Response
+	{
+		CowBuffer<uint8_t> InitResponse;
+	};
+
+	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
+	CowBuffer<uint8_t> BuildCommand(const Command &data);
+
 	bool ParseResponse(const CowBuffer<uint8_t> buffer, Response &result);
 	CowBuffer<uint8_t> BuildResponse(const Response &data);
 }
 
-namespace CommandVoiceEnd
+namespace CommandStreamEnd
 {
 	CowBuffer<uint8_t> BuildCommand();
 }
 
-namespace CommandVoiceData
+namespace CommandStreamData
 {
 	struct Command
 	{
@@ -301,6 +293,6 @@ namespace CommandVoiceData
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);
 	CowBuffer<uint8_t> BuildCommand(const Command &data);
-}*/
+}
 
 #endif

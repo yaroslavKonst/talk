@@ -922,6 +922,29 @@ Screen *WorkScreen::ProcessChatScreenEvent(int event)
 		return this;
 	}
 
+	if (event == _root->Conf->VoiceStartKey()) {
+		Contact *contact = _root->Messages->GetContactStorage()->
+			GetContact(_chatStack->PeerName);
+
+		if (!contact) {
+			_root->Ui->Notify("Failed to start call. "
+				"Peer is not in contacts.");
+			return this;
+		}
+
+		if (!contact->HasDefaultKey()) {
+			_root->Ui->Notify("Failed to start call. "
+				"Peer does not have default key.");
+			return this;
+		}
+
+		_root->Voice->InitCall(
+			_chatStack->PeerName,
+			contact->GetDefaultKey());
+
+		return this;
+	}
+
 	if (event == _root->Conf->WorkChatUpKey()) {
 		if (_chatStack->CurrentMessageID.IsZero()) {
 			_chatStack->LineOffset = 0;

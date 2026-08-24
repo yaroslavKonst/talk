@@ -68,7 +68,10 @@ private:
 	void DrawUserData();
 	void DrawConnectionState();
 	void DrawVoiceState();
+	void DrawVoiceInterface();
 	void DrawControlHelp();
+
+	bool ProcessVoiceEvent(int event);
 
 	struct ScreenStackEntry
 	{

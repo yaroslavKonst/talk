@@ -12,6 +12,7 @@
 #include "../Crypto/Crypto.hpp"
 
 class ServerSessionStorage;
+class StreamProcessorBase;
 
 class ServerSession :
 	public DescriptorEventProcessor,
@@ -24,6 +25,7 @@ public:
 		ServerSessionStorage *storage,
 		Config* config,
 		EventDispatcher *dispatcher,
+		StreamProcessorBase *streamProcessor,
 		const Crypto::X25519::EncryptedStream &outES,
 		const Crypto::X25519::EncryptedStream &inES,
 		uint8_t outScramblerInit,
@@ -47,11 +49,17 @@ public:
 
 	void SendObjects();
 
+	void SendStreamInit(int32_t responseCode);
+	void SendStreamEnd();
+	void SendStreamRequest(const CowBuffer<uint8_t> initRequest);
+	void SendStreamResponse(const CowBuffer<uint8_t> initResponse);
+
 private:
 	EventDispatcher *_dispatcher;
 
 	int _fd;
 	ServerSessionStorage *_storage;
+	StreamProcessorBase *_streamProcessor;
 	Config *_config;
 
 	Crypto::X25519::EncryptedStream _inES;
@@ -74,6 +82,9 @@ private:
 	bool ProcessSendMessage(const CowBuffer<uint8_t> buffer);
 	bool ProcessUpdateMessage(const CowBuffer<uint8_t> buffer);
 	bool ProcessOfferMessage(const CowBuffer<uint8_t> buffer);
+	bool ProcessStreamInit(const CowBuffer<uint8_t> buffer);
+	bool ProcessStreamRequest(const CowBuffer<uint8_t> buffer);
+	bool ProcessStreamEnd();
 
 	bool _objectTransmissionActive;
 	ObjectStorage::ID _currentObjectID;
@@ -135,6 +146,23 @@ public:
 		const ObjectStorage::ID &messageID,
 		Message::Attribute attr,
 		bool value) = 0;
+};
+
+class StreamProcessorBase
+{
+public:
+	virtual ~StreamProcessorBase()
+	{ }
+
+	virtual void EndStream(ServerSession *session) = 0;
+	virtual bool ProcessUserStreamInit(
+		const CowBuffer<uint8_t> initRequest,
+		ServerSession *session) = 0;
+	virtual void NotifyUserSessionClosed(ServerSession *session) = 0;
+	virtual bool ProcessUserStreamResponse(
+		const CowBuffer<uint8_t> initResponse,
+		ServerSession *session) = 0;
+	virtual void CheckNewSession(ServerSession *session) = 0;
 };
 
 #endif

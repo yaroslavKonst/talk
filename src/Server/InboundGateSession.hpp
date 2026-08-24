@@ -30,6 +30,8 @@ public:
 	virtual CowBuffer<uint8_t> GetData() = 0;
 	// Process data. Returned false must close the session.
 	virtual bool ProcessData(const CowBuffer<uint8_t> buffer) = 0;
+	// True means that the task is finished, processor can be removed.
+	virtual bool TaskEnded() = 0;
 
 protected:
 	InboundTaskBase()
@@ -46,6 +48,7 @@ public:
 	bool HasData() override;
 	CowBuffer<uint8_t> GetData() override;
 	bool ProcessData(const CowBuffer<uint8_t> buffer) override;
+	bool TaskEnded() override;
 
 private:
 	UserDB *_users;
@@ -54,7 +57,8 @@ private:
 	enum class State
 	{
 		WaitForHeader,
-		WaitForBody
+		WaitForBody,
+		End
 	};
 
 	State _state;
@@ -69,6 +73,40 @@ private:
 	bool ProcessWaitHeader(const CowBuffer<uint8_t> buffer);
 	bool ProcessWaitBody(const CowBuffer<uint8_t> buffer);
 	void SendVerificationCode(int32_t code);
+};
+
+class InboundTaskAnswerCall : public InboundTaskBase
+{
+public:
+	InboundTaskAnswerCall(
+		UserDB *users,
+		GateSecurityModule *secMod);
+	~InboundTaskAnswerCall();
+
+	bool HasData() override;
+	CowBuffer<uint8_t> GetData() override;
+	bool ProcessData(const CowBuffer<uint8_t> buffer) override;
+	bool TaskEnded() override;
+
+private:
+	UserDB *_users;
+	GateSecurityModule *_securityModule;
+
+	StreamHandler *_streamHandler;
+
+	enum class State
+	{
+		WaitingForInit,
+		Forwarding,
+		End
+	};
+
+	State _state;
+	CowBuffer<uint8_t> _response;
+
+	void SendCode(int32_t code);
+
+	void StreamLog(String message);
 };
 
 class InboundGateSessionStorage;
@@ -157,6 +195,7 @@ private:
 	bool ProcessSessionInput(CowBuffer<uint8_t> buffer);
 
 	InboundTaskBase *_task;
+	bool DrainTask();
 
 	void CreateSizePrefixAndSend(CowBuffer<uint8_t> buffer);
 	void InboundGateLog(String message);

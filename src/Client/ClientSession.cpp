@@ -190,6 +190,27 @@ void ClientSession::SetAccountSettingsProcessor(
 	_accountSettingsProcessor = processor;
 }
 
+void ClientSession::SendStreamInit(const CowBuffer<uint8_t> buffer)
+{
+	CommandStreamInit::Command command;
+	command.InitRequest = buffer;
+
+	_protocol->Send(CommandStreamInit::BuildCommand(command), 0);
+}
+
+void ClientSession::SendStreamEnd()
+{
+	_protocol->Send(CommandStreamEnd::BuildCommand(), 0);
+}
+
+void ClientSession::SendStreamRequest(const CowBuffer<uint8_t> buffer)
+{
+	CommandStreamRequest::Response response;
+	response.InitResponse = buffer;
+
+	_protocol->Send(CommandStreamRequest::BuildResponse(response), 0);
+}
+
 bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 {
 	if (buffer.Size() < sizeof(int32_t)) {
@@ -227,6 +248,14 @@ bool ClientSession::ProcessInput(const CowBuffer<uint8_t> buffer)
 		return ProcessSendMessage(buffer);
 	case SESSION_COMMAND_UPDATE_MESSAGE:
 		return ProcessUpdateMessage(buffer);
+	case SESSION_COMMAND_STREAM_INIT:
+		return ProcessStreamInit(buffer);
+	case SESSION_COMMAND_STREAM_END:
+		return ProcessStreamEnd();
+	case SESSION_COMMAND_STREAM_REQUEST:
+		return ProcessStreamRequest(buffer);
+	case SESSION_COMMAND_STREAM_RESPONSE:
+		return ProcessStreamResponse(buffer);
 	default:
 		return false;
 	}
@@ -518,5 +547,50 @@ bool ClientSession::ProcessUpdateMessage(const CowBuffer<uint8_t> buffer)
 		command.Attr,
 		command.AttrValue);
 
+	return true;
+}
+
+bool ClientSession::ProcessStreamInit(const CowBuffer<uint8_t> buffer)
+{
+	CommandStreamInit::Response response;
+	bool parseResult = CommandStreamInit::ParseResponse(buffer, response);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_root->Voice->ProcessInitResponse(response.Status);
+	return true;
+}
+
+bool ClientSession::ProcessStreamEnd()
+{
+	_root->Voice->StreamEnd();
+	return true;
+}
+
+bool ClientSession::ProcessStreamRequest(const CowBuffer<uint8_t> buffer)
+{
+	CommandStreamRequest::Command command;
+	bool parseResult = CommandStreamRequest::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_root->Voice->ProcessInit(command.InitRequest);
+	return true;
+}
+
+bool ClientSession::ProcessStreamResponse(const CowBuffer<uint8_t> buffer)
+{
+	CommandStreamResponse::Command command;
+	bool parseResult = CommandStreamResponse::ParseCommand(buffer, command);
+
+	if (!parseResult) {
+		return false;
+	}
+
+	_root->Voice->ProcessPeerResponse(command.InitResponse);
 	return true;
 }

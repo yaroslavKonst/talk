@@ -5,72 +5,211 @@
 #include <cstdio>
 
 #include "../Common/Exception.hpp"
+#include "../Common/StreamReader.hpp"
+#include "../Common/StreamWriter.hpp"
 
-Audio::Audio()
+AudioRecorder::AudioRecorder()
 {
-	SetupPipes();
-	SetupStreams();
-	StartThreads();
+	SetupPipe();
+
+	try {
+		SetupStream();
+	} catch(...) {
+		CloseMainPipeEnd();
+		CloseThreadPipeEnd();
+		throw;
+	}
+
+	try {
+		StartThread();
+	} catch (...) {
+		CloseThreadPipeEnd();
+		CloseMainPipeEnd();
+		CloseStream();
+		throw;
+	}
 }
 
-Audio::~Audio()
+AudioRecorder::~AudioRecorder()
 {
-	StopThreads();
-	CloseStreams();
-	ClosePipes();
+	CloseMainPipeEnd();
+	JoinThread();
+	CloseThreadPipeEnd();
+	CloseStream();
 }
 
-void Audio::WriteRaw(CowBuffer<int16_t> sound)
+CowBuffer<int16_t> AudioRecorder::ReadRaw()
 {
-	uint32_t bytesToWrite = sound.Size() * sizeof(int16_t);
-	uint32_t writtenBytes = 0;
+	StreamReader reader(_readPipe[0], SampleCount * sizeof(int16_t));
 
-	do {
-		int res = write(
-			_writePipe[1],
-			(const uint8_t*)sound.Pointer() + writtenBytes,
-			bytesToWrite - writtenBytes);
+	while (!reader.ReadingEnd()) {
+		bool success = reader.Read();
 
-		if (res > 0) {
-			writtenBytes += res;
-		} else {
-			THROW("Failed to write raw sound.");
+		if (!success) {
+			THROW("Failed to read raw sound.");
 		}
-	} while (writtenBytes < bytesToWrite);
+	}
+
+	const CowBuffer<uint8_t> bytes = reader.GetBuffer();
+	CowBuffer<int16_t> sound(SampleCount);
+	memcpy(sound.Pointer(), bytes.Pointer(), bytes.Size());
+
+	return sound;
 }
 
-CowBuffer<int16_t> Audio::ReadRaw()
-{
-	int bytesToRead = 1024;
-	CowBuffer<int16_t> result(bytesToRead / sizeof(int16_t));
-
-	int res = read(_readPipe[0], result.Pointer(), bytesToRead);
-
-	if (res <= 0) {
-		THROW("Failed to read raw sound.");
-	}
-
-	if (res % 2) {
-		while (read(
-			_readPipe[0],
-			(uint8_t*)result.Pointer() + res,
-			1) != 1) { }
-		++res;
-	}
-
-	if (res == bytesToRead) {
-		return result;
-	}
-
-	return result.Slice(0, res / sizeof(int16_t));
-}
-
-int Audio::GetSoundReadFileDescriptor()
+int AudioRecorder::GetSoundReadFileDescriptor()
 {
 	return _readPipe[0];
 }
 
-void Audio::SetupStreams()
+void AudioRecorder::SetupStream()
+{
+	pa_sample_spec sampleSpec;
+	sampleSpec.format = PA_SAMPLE_S16LE;
+	sampleSpec.channels = 1;
+	sampleSpec.rate = SampleRate;
+
+	pa_buffer_attr bufAttr;
+	bufAttr.maxlength = -1;
+	bufAttr.tlength = -1;
+	bufAttr.prebuf = 1024;
+	bufAttr.minreq = -1;
+	bufAttr.fragsize = 2048;
+
+	_readConnection = pa_simple_new(
+		nullptr,
+		"talk",
+		PA_STREAM_RECORD,
+		nullptr,
+		"Voice input",
+		&sampleSpec,
+		nullptr,
+		&bufAttr,
+		nullptr);
+
+	if (!_readConnection) {
+		THROW("Failed to connect to pulseaudio server.");
+	}
+}
+
+void AudioRecorder::CloseStream()
+{
+	pa_simple_free(_readConnection);
+}
+
+void AudioRecorder::SetupPipe()
+{
+	int res = pipe(_readPipe);
+
+	if (res == -1) {
+		THROW("Failed to create input pipe.");
+	}
+}
+
+void AudioRecorder::CloseMainPipeEnd()
+{
+	close(_readPipe[0]);
+}
+
+void AudioRecorder::CloseThreadPipeEnd()
+{
+	close(_readPipe[1]);
+}
+
+void AudioRecorder::StartThread()
+{
+	int res = pthread_create(&_readThread, nullptr, ReadLoop, this);
+
+	if (res) {
+		THROW("Failed to start thread.");
+	}
+}
+
+void AudioRecorder::JoinThread()
+{
+	pthread_join(_readThread, nullptr);
+}
+
+void *AudioRecorder::ReadLoop(void *arg)
+{
+	AudioRecorder *audio = static_cast<AudioRecorder*>(arg);
+
+	CowBuffer<uint8_t> buffer(SampleCount * sizeof(int16_t));
+	bool work = true;
+
+	while (work) {
+		int paReadStat = pa_simple_read(
+			audio->_readConnection,
+			buffer.Pointer(),
+			buffer.Size(),
+			nullptr);
+
+		if (paReadStat) {
+			break;
+		}
+
+		StreamWriter writer(audio->_readPipe[1], buffer);
+
+		while (!writer.WritingEnd()) {
+			bool success = writer.Write();
+
+			if (!success) {
+				work = false;
+				break;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
+AudioPlayback::AudioPlayback()
+{
+	SetupPipe();
+
+	try {
+		SetupStream();
+	} catch(...) {
+		CloseMainPipeEnd();
+		CloseThreadPipeEnd();
+		throw;
+	}
+
+	try {
+		StartThread();
+	} catch (...) {
+		CloseThreadPipeEnd();
+		CloseMainPipeEnd();
+		CloseStream();
+		throw;
+	}
+}
+
+AudioPlayback::~AudioPlayback()
+{
+	CloseMainPipeEnd();
+	JoinThread();
+	CloseThreadPipeEnd();
+	CloseStream();
+}
+
+void AudioPlayback::WriteRaw(const CowBuffer<int16_t> sound)
+{
+	CowBuffer<uint8_t> bytes(sound.Size() * sizeof(int16_t));
+	memcpy(bytes.Pointer(), sound.Pointer(), bytes.Size());
+
+	StreamWriter writer(_writePipe[1], bytes);
+
+	while (!writer.WritingEnd()) {
+		bool success = writer.Write();
+
+		if (!success) {
+			THROW("Failed to write raw sound.");
+		}
+	}
+}
+
+void AudioPlayback::SetupStream()
 {
 	pa_sample_spec sampleSpec;
 	sampleSpec.format = PA_SAMPLE_S16LE;
@@ -98,143 +237,79 @@ void Audio::SetupStreams()
 	if (!_writeConnection) {
 		THROW("Failed to connect to pulseaudio server.");
 	}
-
-	_readConnection = pa_simple_new(
-		nullptr,
-		"talk",
-		PA_STREAM_RECORD,
-		nullptr,
-		"Voice input",
-		&sampleSpec,
-		nullptr,
-		&bufAttr,
-		nullptr);
-
-	if (!_readConnection) {
-		pa_simple_free(_writeConnection);
-		THROW("Failed to connect to pulseaudio server.");
-	}
 }
 
-void Audio::CloseStreams()
+void AudioPlayback::CloseStream()
 {
-	pa_simple_free(_readConnection);
-
 	pa_simple_drain(_writeConnection, nullptr);
 	pa_simple_free(_writeConnection);
 }
 
-void Audio::SetupPipes()
+void AudioPlayback::SetupPipe()
 {
-	int res = pipe(_readPipe);
-
-	if (res == -1) {
-		THROW("Failed to create input pipe.");
-	}
-
-	res = pipe(_writePipe);
+	int res = pipe(_writePipe);
 
 	if (res == -1) {
 		THROW("Failed to create output pipe.");
 	}
 }
 
-void Audio::ClosePipes()
+void AudioPlayback::CloseMainPipeEnd()
 {
-	close(_readPipe[0]);
-	close(_readPipe[1]);
-	close(_writePipe[0]);
 	close(_writePipe[1]);
 }
 
-void Audio::StartThreads()
+void AudioPlayback::CloseThreadPipeEnd()
 {
-	_work = true;
+	close(_writePipe[0]);
+}
 
+void AudioPlayback::StartThread()
+{
 	int res = pthread_create(&_writeThread, nullptr, WriteLoop, this);
 
 	if (res) {
 		THROW("Failed to start thread.");
 	}
-
-	res = pthread_create(&_readThread, nullptr, ReadLoop, this);
-
-	if (res) {
-		THROW("Failed to start thread.");
-	}
 }
 
-void Audio::StopThreads()
+void AudioPlayback::JoinThread()
 {
-	_work = false;
-
-	int16_t s = 0;
-	write(_writePipe[1], &s, sizeof(s));
-
-	pthread_join(_readThread, nullptr);
 	pthread_join(_writeThread, nullptr);
 }
 
-void *Audio::WriteLoop(void *arg)
+void *AudioPlayback::WriteLoop(void *arg)
 {
-	Audio *audio = static_cast<Audio*>(arg);
-	int bufferSize = 512;
+	AudioPlayback *audio = static_cast<AudioPlayback*>(arg);
 
-	int16_t *buffer = new int16_t[bufferSize];
+	bool work = true;
 
-	while (audio->_work) {
-		int res = read(
+	while (work) {
+		StreamReader reader(
 			audio->_writePipe[0],
-			buffer,
-			bufferSize * sizeof(int16_t));
+			SampleCount * sizeof(int16_t));
 
-		if (res > 0) {
-			if (res % 2) {
-				while (read(
-					audio->_writePipe[0],
-					(char*)buffer + res,
-					1) != 1) { }
-				++res;
+		while (!reader.ReadingEnd()) {
+			bool success = reader.Read();
+
+			if (!success) {
+				work = false;
+				break;
 			}
 		}
 
-		pa_simple_write(audio->_writeConnection, buffer, res, nullptr);
-	}
+		if (!work) {
+			break;
+		}
 
-	delete[] buffer;
-	return nullptr;
-}
+		const CowBuffer<uint8_t> buffer = reader.GetBuffer();
 
-void *Audio::ReadLoop(void *arg)
-{
-	Audio *audio = static_cast<Audio*>(arg);
-	int bufferSize = 512;
-
-	int16_t *buffer = new int16_t[bufferSize];
-
-	while (audio->_work) {
-		pa_simple_read(
-			audio->_readConnection,
-			buffer,
-			bufferSize * sizeof(int16_t),
+		pa_simple_write(
+			audio->_writeConnection,
+			buffer.Pointer(),
+			buffer.Size(),
 			nullptr);
-
-		int writtenBytes = 0;
-
-		do {
-			int res = write(
-				audio->_readPipe[1],
-				(char*)buffer + writtenBytes,
-				bufferSize * sizeof(int16_t) - writtenBytes);
-
-			if (res > 0) {
-				writtenBytes += res;
-			} else {
-				break;
-			}
-		} while (writtenBytes < bufferSize * (int)sizeof(int16_t));
 	}
 
-	delete[] buffer;
 	return nullptr;
 }

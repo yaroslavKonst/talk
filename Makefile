@@ -28,6 +28,7 @@ client: utils
 	cd src && $(MAKE) client
 
 utils:
+	src/Utils/CodeCheck.sh
 	cd src/Utils && $(MAKE)
 
 tests: all

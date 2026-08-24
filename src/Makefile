@@ -12,11 +12,13 @@ SERVER_MODULES =\
 	Server/GateListeningSocket.o \
 	Server/InboundGateSession.o \
 	Server/OutboundGateSession.o \
+	Server/OutboundTaskBase.o \
 	Server/GateSecurityModule.o \
 	Server/SendPlanner.o \
 	Server/ObjectType.o \
 	Server/FailBan.o \
 	Server/RateLimiter.o \
+	Server/StreamHandler.o \
 	Server/ShutdownSignalController.o \
 	Message/Message.o \
 	Message/ContactStorage.o \
@@ -25,6 +27,7 @@ SERVER_MODULES =\
 	Protocol/SessionProtocol.o \
 	Protocol/GateProtocol.o \
 	Protocol/SessionParser.o \
+	Protocol/StreamParser.o \
 	Protocol/ControlParser.o \
 	Protocol/GateParser.o \
 	Common/EventDispatcher.o \
@@ -68,6 +71,7 @@ CLIENT_MODULES=\
 	Client/Network.o \
 	Client/ChatList.o \
 	Client/Chat.o \
+	Client/VoiceChat.o \
 	Client/TextEditor.o \
 	Client/ClientHandshake.o \
 	Client/ClientSession.o \
@@ -83,12 +87,14 @@ CLIENT_MODULES=\
 	Client/MessageDescriptor.o \
 	Client/MessageDraft.o \
 	Client/NotificationSystem.o \
+	Audio/Audio.o \
 	Message/ContactStorage.o \
 	Message/Message.o \
 	Protocol/ParserHelpers.o \
 	Protocol/HandshakeParser.o \
 	Protocol/SessionProtocol.o \
 	Protocol/SessionParser.o \
+	Protocol/StreamParser.o \
 	Common/MyString.o \
 	Common/UTF8.o \
 	Common/Version.o \

@@ -8,14 +8,13 @@
 using namespace Crypto::X25519;
 
 static const uint64_t MaxNameLength = 500;
-static const uint64_t SaltSize = 32;
 
 static const uint64_t SynAckLength =
 	sizeof(int32_t) +
 	sizeof(int32_t) +
 	(uint64_t)Handshake::ChallengeSize +
 	(uint64_t)KEY_SIZE +
-	SaltSize;
+	Handshake::SaltSize;
 
 bool HandshakeSyn::Parse(const CowBuffer<uint8_t> buffer, Data &result)
 {
@@ -37,19 +36,19 @@ bool HandshakeSyn::Parse(const CowBuffer<uint8_t> buffer, Data &result)
 		SetProtoEndian(*buffer.SwitchType<int32_t>(offset));
 	offset += sizeof(int32_t);
 
-	if (buffer.Size() < offset + SaltSize) {
+	if (buffer.Size() < offset + Handshake::SaltSize) {
 		return false;
 	}
 
-	result.Salt1 = buffer.Slice(offset, SaltSize);
-	offset += SaltSize;
+	result.Salt1 = buffer.Slice(offset, Handshake::SaltSize);
+	offset += Handshake::SaltSize;
 
-	if (buffer.Size() < offset + SaltSize) {
+	if (buffer.Size() < offset + Handshake::SaltSize) {
 		return false;
 	}
 
-	result.OneTimeSalt = buffer.Slice(offset, SaltSize);
-	offset += SaltSize;
+	result.OneTimeSalt = buffer.Slice(offset, Handshake::SaltSize);
+	offset += Handshake::SaltSize;
 
 	if (buffer.Size() < offset + (uint64_t)KEY_SIZE) {
 		return false;
@@ -141,7 +140,7 @@ bool HandshakeSynAck::Parse(const CowBuffer<uint8_t> buffer, Data &result)
 	result.ServerSessionPublicKey = buffer.Pointer(offset);
 	offset += KEY_SIZE;
 
-	result.Salt2 = buffer.Slice(offset, SaltSize);
+	result.Salt2 = buffer.Slice(offset, Handshake::SaltSize);
 
 	return true;
 }
@@ -171,7 +170,10 @@ CowBuffer<uint8_t> HandshakeSynAck::Build(const Data &data)
 		KEY_SIZE);
 	offset += KEY_SIZE;
 
-	memcpy(result.Pointer(offset), data.Salt2.Pointer(), SaltSize);
+	memcpy(
+		result.Pointer(offset),
+		data.Salt2.Pointer(),
+		Handshake::SaltSize);
 
 	return result;
 }

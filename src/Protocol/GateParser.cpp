@@ -235,3 +235,89 @@ CowBuffer<uint8_t> GateCommandMessage::BuildCode(const VerificationCode &data)
 	*result.SwitchType<int32_t>() = SetProtoEndian(data.Code);
 	return result;
 }
+
+bool GateCommandStream::ParseInitRequest(
+	const CowBuffer<uint8_t> buffer,
+	InitRequest &data)
+{
+	if (buffer.Size() <= sizeof(int32_t)) {
+		return false;
+	}
+
+	if (buffer.Size() > 4096) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != GATE_COMMAND_STREAM_REQUEST) {
+		return false;
+	}
+
+	uint64_t offset = sizeof(int32_t);
+	data.Request = buffer.Slice(offset, buffer.Size() - offset);
+
+	return true;
+}
+
+CowBuffer<uint8_t> GateCommandStream::BuildInitRequest(const InitRequest &data)
+{
+	CowBuffer<uint8_t> result(sizeof(int32_t));
+
+	*result.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(GATE_COMMAND_STREAM_REQUEST);
+
+	return result.Concat(data.Request);
+}
+
+bool GateCommandStream::ParseInitResponse(
+	const CowBuffer<uint8_t> buffer,
+	InitResponse &data)
+{
+	if (buffer.Size() != sizeof(int32_t)) {
+		return false;
+	}
+
+	data.Code = SetProtoEndian(*buffer.SwitchType<int32_t>());
+	return true;
+}
+
+CowBuffer<uint8_t> GateCommandStream::BuildInitResponse(
+	const InitResponse &data)
+{
+	CowBuffer<uint8_t> result(sizeof(int32_t));
+	*result.SwitchType<int32_t>() = SetProtoEndian(data.Code);
+	return result;
+}
+
+bool GateCommandStream::ParseFrame(const CowBuffer<uint8_t> buffer, Frame &data)
+{
+	if (buffer.Size() <= sizeof(int32_t)) {
+		return false;
+	}
+
+	if (buffer.Size() > 4096) {
+		return false;
+	}
+
+	int32_t command = SetProtoEndian(*buffer.SwitchType<int32_t>());
+
+	if (command != GATE_STREAM_FRAME) {
+		return false;
+	}
+
+	uint64_t offset = sizeof(int32_t);
+	data.Payload = buffer.Slice(offset, buffer.Size() - offset);
+
+	return true;
+}
+
+CowBuffer<uint8_t> GateCommandStream::BuildFrame(const Frame &data)
+{
+	CowBuffer<uint8_t> result(sizeof(int32_t));
+
+	*result.SwitchType<int32_t>() =
+		SetProtoEndian<int32_t>(GATE_STREAM_FRAME);
+
+	return result.Concat(data.Payload);
+}

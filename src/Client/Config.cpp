@@ -156,6 +156,23 @@ namespace ContactScreenControls
 	static const char *ListValue = "Ctrl-U";
 }
 
+namespace VoiceControls
+{
+	static const char *Section = "Voice Chat Controls";
+
+	static const char *Start = "Start Call";
+	static const char *StartValue = "Ctrl-V";
+
+	static const char *End = "End Call";
+	static const char *EndValue = "Ctrl-V";
+
+	static const char *Accept = "Accept Call";
+	static const char *AcceptValue = "y";
+
+	static const char *Decline = "Decline Call";
+	static const char *DeclineValue = "n";
+}
+
 namespace NotificationControls
 {
 	static const char *Section = "Notification Controls";
@@ -189,11 +206,11 @@ static int ParseKey(String key)
 	if (key == "Enter") {
 		return '\n';
 	}
-	
+
 	if (key == "Escape") {
 		return '\e';
 	}
-	
+
 	if (key == "Backspace") {
 		return '\b';
 	}
@@ -487,6 +504,14 @@ void Config::Init()
 		}
 
 		{
+			using namespace VoiceControls;
+			_configFile.Set(Section, Start, StartValue);
+			_configFile.Set(Section, End, EndValue);
+			_configFile.Set(Section, Accept, AcceptValue);
+			_configFile.Set(Section, Decline, DeclineValue);
+		}
+
+		{
 			using namespace NotificationControls;
 			_configFile.Set(Section, Confirm, ConfirmValue);
 		}
@@ -585,6 +610,18 @@ void Config::LoadControls()
 			_configFile.Get(Section, Remove);
 		_keyNames[(int)Keys::ContactListContacts] =
 			_configFile.Get(Section, List);
+	}
+
+	{
+		using namespace VoiceControls;
+		_keyNames[(int)Keys::VoiceStart] =
+			_configFile.Get(Section, Start);
+		_keyNames[(int)Keys::VoiceEnd] =
+			_configFile.Get(Section, End);
+		_keyNames[(int)Keys::VoiceAccept] =
+			_configFile.Get(Section, Accept);
+		_keyNames[(int)Keys::VoiceDecline] =
+			_configFile.Get(Section, Decline);
 	}
 
 	{

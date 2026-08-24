@@ -95,7 +95,7 @@ static CowBuffer<uint8_t> RequestAddUser(const CowBuffer<String> args)
 	CommandAddUser::Request request;
 	request.Name = name;
 	request.Key = key.Pointer();
-	
+
 	CowBuffer<uint8_t> resultBuffer = CommandAddUser::BuildRequest(request);
 
 	return resultBuffer;

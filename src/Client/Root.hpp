@@ -14,6 +14,7 @@ struct Root
 	EventDispatcher *Dispatcher;
 	Config *Conf;
 	MessageEventProcessor *Messages;
+	VoiceEventProcessor *Voice;
 
 	const Crypto::X25519::PrivateKeyContainer *PrivateKey;
 	const Crypto::X25519::PublicKeyContainer *PublicKey;

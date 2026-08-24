@@ -1,250 +1,23 @@
 #include "VoiceChat.hpp"
 
-#include <cstdlib>
-#include <cstring>
-#include <curses.h>
+#include "../Protocol/StreamParser.hpp"
+#include "../Common/Endianness.hpp"
 
-#include "../Common/Hex.hpp"
-#include "TextColor.hpp"
-
-// Filters.
-// LPF.
-struct LPFData
-{
-	int32_t Size;
-	int16_t *Buffer;
-
-	int Position;
-	int bf;
-	int bfSize;
-
-	LPFData(int size)
-	{
-		Size = size;
-		Buffer = new int16_t[Size];
-		Position = 0;
-		bf = 0;
-		bfSize = 0;
-	}
-
-	~LPFData()
-	{
-		delete Buffer;
-	}
-};
-
-static void LowPassFilter(
-	int16_t *buffer,
-	int size,
-	LPFData *data)
-{
-	for (int i = 0; i < size; i++) {
-		if (data->bfSize == data->Size) {
-			data->bf -= data->Buffer[data->Position];
-			data->bfSize -= 1;
-		}
-
-		data->Buffer[data->Position] = buffer[i];
-		data->bf += buffer[i];
-		data->bfSize += 1;
-
-		data->Position += 1;
-
-		if (data->Position >= data->Size) {
-			data->Position = 0;
-		}
-
-		buffer[i] = data->bf / data->bfSize;
-	}
-}
-
-// Voice chat.
 VoiceChat::VoiceChat(Root *root)
 {
 	_root = root;
 
-	_state = VoiceStateOff;
-	_silence = true;
-	_mute = false;
-
-	_volume = 100;
-	_applyFilter = true;
-	_silenceLevel = 3;
-	_silenceSlope = 0;
-
-	_configFile = nullptr;
+	_state = State::Closed;
 }
 
 VoiceChat::~VoiceChat()
 {
-	Stop();
+	StreamEnd();
 }
 
-void VoiceChat::SetConfigFile(IniFile *configFile)
+VoiceChat::State VoiceChat::GetState()
 {
-	_configFile = configFile;
-	LoadConfigFile();
-}
-
-void VoiceChat::ProcessInput()
-{
-	CowBuffer<int16_t> audioData = _audio.ReadRaw();
-
-	if (_state != VoiceStateActive) {
-		return;
-	}
-
-	if (_mute) {
-		_silenceSlope = 0;
-		return;
-	}
-
-	int16_t absMax = 0;
-
-	for (uint32_t i = 0; i < audioData.Size(); i++) {
-		int16_t value = abs(audioData[i]);
-
-		if (value > absMax) {
-			absMax = value;
-		}
-	}
-
-	int silenceLevel = _silenceLevel * (65535 / 2 - 1) / 100;
-
-	if (absMax < silenceLevel) {
-		if (!_silence) {
-			_silence = true;
-			_root->Ui->Redraw();
-		}
-
-		--_silenceSlope;
-	} else {
-		if (_silence) {
-			_silence = false;
-			_root->Ui->Redraw();
-		}
-
-		_silenceSlope += 50;
-	}
-
-
-	if (_silenceSlope > 100) {
-		_silenceSlope = 100;
-	} else if (_silenceSlope < 0) {
-		_silenceSlope = 0;
-	}
-
-	if (!_silenceSlope) {
-		return;
-	}
-
-	for (unsigned int i = 0; i < audioData.Size(); i++) {
-		audioData[i] = audioData[i] * _silenceSlope / 100;
-	}
-
-	_root->Network->SendVoiceFrame(EncryptSoundFrame(audioData));
-}
-
-bool VoiceChat::Active()
-{
-	return _state != VoiceStateOff;
-}
-
-void VoiceChat::Prepare(
-	String name,
-	const uint8_t *peerKey,
-	int64_t timestamp,
-	bool invert,
-	const uint8_t *privateKey,
-	const uint8_t *publicKey)
-{
-	_peerName = name;
-
-	_state = VoiceStateInit;
-
-	if (!invert) {
-		GenerateSessionKeys(
-			privateKey,
-			publicKey,
-			peerKey,
-			timestamp,
-			_outES.Key,
-			_inES.Key,
-			invert);
-	} else {
-		GenerateSessionKeys(
-			privateKey,
-			publicKey,
-			peerKey,
-			timestamp,
-			_inES.Key,
-			_outES.Key,
-			invert);
-	}
-
-	InitNonce(_outES.Nonce);
-	memset(_inES.Nonce, 0, NONCE_SIZE);
-}
-
-void VoiceChat::Ask()
-{
-	_state = VoiceStateAsk;
-}
-
-void VoiceChat::Wait()
-{
-	_state = VoiceStateWait;
-}
-
-void VoiceChat::Start()
-{
-	_state = VoiceStateActive;
-}
-
-void VoiceChat::Stop()
-{
-	_state = VoiceStateOff;
-	_mute = false;
-	crypto_wipe(_outES.Key, KEY_SIZE);
-	crypto_wipe(_inES.Key, KEY_SIZE);
-}
-
-bool VoiceChat::ReceiveVoiceFrame(CowBuffer<uint8_t> frame)
-{
-	if (_state != VoiceStateActive) {
-		return true;
-	}
-
-	CowBuffer<int16_t> audioData = DecryptSoundFrame(frame);
-
-	if (audioData.Size() == 0) {
-		Stop();
-		_root->Network->EndVoice();
-		return false;
-	}
-
-	if (_applyFilter) {
-		static LPFData data(5);
-
-		LowPassFilter(
-			audioData.Pointer(),
-			audioData.Size(),
-			&data);
-	}
-
-	if (_volume != 100) {
-		for (unsigned int i = 0; i < audioData.Size(); i++) {
-			audioData[i] = audioData[i] * _volume / 100;
-		}
-	}
-
-	_audio.WriteRaw(audioData);
-	return true;
-}
-
-int VoiceChat::GetSoundReadFileDescriptor()
-{
-	return _audio.GetSoundReadFileDescriptor();
+	return _state;
 }
 
 String VoiceChat::GetPeerName()
@@ -252,143 +25,375 @@ String VoiceChat::GetPeerName()
 	return _peerName;
 }
 
-bool VoiceChat::IsMuted()
+Crypto::X25519::PublicKeyContainer VoiceChat::GetPeerPublicKey()
 {
-	return _mute;
+	return _peerPublicKey;
 }
 
-void VoiceChat::ToggleMute()
+void VoiceChat::InitCall(
+	String peerName,
+	const Crypto::X25519::PublicKeyContainer &peerPublicKey)
 {
-	_mute = !_mute;
+	if (_state != State::Closed) {
+		_root->Ui->Notify("Call is already active.");
+		return;
+	}
+
+	_peerName = peerName;
+	_peerPublicKey = peerPublicKey;
+
+	StreamHandshake::InitRequest request;
+	request.Source =
+		_root->Conf->GetName() + "@" + _root->Conf->GetHostName();
+	request.SourceKey = *_root->PublicKey;
+	request.Destination = peerName;
+	request.DestinationKey = peerPublicKey;
+
+	_salt1.Resize(StreamHandshake::SaltSize);
+	Crypto::GenerateRandomData(
+		_salt1.Size(),
+		_salt1.Pointer(),
+		false);
+
+	request.Salt = _salt1;
+
+	_challenge.Resize(StreamHandshake::ChallengeSize);
+	Crypto::GenerateRandomData(
+		_challenge.Size(),
+		_challenge.Pointer(),
+		false);
+
+	bool keyExchangeSuccess = Crypto::X25519::GenerateSessionKeys(
+		*_root->PrivateKey,
+		*_root->PublicKey,
+		_peerPublicKey,
+		_salt1,
+		_initOutES.Key,
+		_initInES.Key,
+		false);
+
+	if (!keyExchangeSuccess) {
+		_root->Ui->Notify("Key exchange for call failed.");
+		return;
+	}
+
+	Crypto::X25519::InitNonce(_initOutES.Nonce);
+	memset(_initInES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
+
+	Crypto::X25519::GenerateEphemeralKeyPair(
+		_ephemeralPrivateKey,
+		_ephemeralPublicKey);
+
+	CowBuffer<uint8_t> requestBuffer = BuildInitRequest(request);
+
+	StreamHandshake::ProtectedInitRequest protectedInitRequest;
+	protectedInitRequest.EphemeralKey = _ephemeralPublicKey;
+	protectedInitRequest.Challenge = _challenge;
+
+	request.ProtectedPart =
+		Crypto::X25519::Encrypt(
+			BuildProtectedInitRequest(protectedInitRequest),
+			_initOutES,
+			requestBuffer);
+
+	requestBuffer = BuildInitRequest(request);
+
+	bool sendSuccess = _root->Network->SendStreamInit(requestBuffer);
+
+	if (!sendSuccess) {
+		_root->Ui->Notify("Failed to start call. No connection.");
+		return;
+	}
+
+	_state = State::InitSent;
 }
 
-int VoiceChat::GetVolume()
+void VoiceChat::EndCall()
 {
-	return _volume;
+	_root->Network->SendStreamEnd();
+	StreamEnd();
 }
 
-void VoiceChat::IncreaseVolume()
+void VoiceChat::StreamEnd()
 {
-	++_volume;
+	if (_state == State::Closed) {
+		return;
+	}
 
-	if (_volume > 200) {
-		_volume = 200;
+	_state = State::Closed;
+	_root->Ui->Redraw();
+}
+
+void VoiceChat::ProcessInitResponse(int32_t status)
+{
+	if (_state != State::InitSent) {
+		EndCall();
+		return;
+	}
+
+	if (status == STREAM_INIT_RESPONSE_WAITING_FOR_ANSWER) {
+		_state = State::WaitingForPeerAnswer;
+		_root->Ui->Redraw();
+		return;
+	}
+
+	StreamEnd();
+
+	switch (status) {
+	case STREAM_INIT_RESPONSE_ERROR:
+		_root->Ui->Notify("Call failed.");
+		break;
+	case STREAM_INIT_RESPONSE_YOU_ARE_IN_CALL:
+		_root->Ui->Notify(
+			"You are already in a call from another device.");
+		break;
+	case STREAM_INIT_RESPONSE_SERVER_OFFLINE:
+		_root->Ui->Notify("Requested server is offline.");
+		break;
+	case STREAM_INIT_RESPONSE_USER_OFFLINE:
+		_root->Ui->Notify("Requested user is offline.");
+		break;
+	case STREAM_INIT_RESPONSE_USER_BUSY:
+		_root->Ui->Notify("Requested user is in another call.");
+		break;
+	case STREAM_INIT_RESPONSE_USER_NONEXISTENT:
+		_root->Ui->Notify("Requested user does not exist.");
+		break;
+	case STREAM_INIT_RESPONSE_INVALID_DESTINATION_KEY:
+		_root->Ui->Notify("Peer key is rejected.");
+		break;
+	case STREAM_INIT_RESPONSE_CALL_PROHIBITED:
+		_root->Ui->Notify("Requested user does not allow calls.");
+		break;
+	case STREAM_INIT_RESPONSE_YOU_ARE_BANNED:
+		_root->Ui->Notify("You are banned.");
+		break;
+	case STREAM_INIT_RESPONSE_YOUR_KEY_IS_BANNED:
+		_root->Ui->Notify("Your key is banned.");
+		break;
+	case STREAM_INIT_RESPONSE_PARSING_FAILURE:
+		_root->Ui->Notify("Peer server reported malformed request.");
+		break;
+	default:
+		_root->Ui->Notify("Unknown call failure code.");
+		break;
 	}
 }
 
-void VoiceChat::DecreaseVolume()
+void VoiceChat::ProcessInit(const CowBuffer<uint8_t> buffer)
 {
-	--_volume;
+	StreamHandshake::InitRequest request;
+	bool parseResult = ParseInitRequest(buffer, request);
 
-	if (_volume <= 0) {
-		_volume = 1;
+	if (!parseResult || _state != State::Closed) {
+		EndCall();
+		return;
 	}
-}
 
-int VoiceChat::GetSilenceLevel()
-{
-	return _silenceLevel;
-}
+	_peerName = request.Source;
+	_peerPublicKey = request.SourceKey;
 
-void VoiceChat::IncreaseSilenceLevel()
-{
-	++_silenceLevel;
-
-	if (_silenceLevel > 100) {
-		_silenceLevel = 100;
+	if (request.Destination !=
+		_root->Conf->GetName() + "@" + _root->Conf->GetHostName())
+	{
+		_root->Network->SendStreamEnd();
+		return;
 	}
-}
 
-void VoiceChat::DecreaseSilenceLevel()
-{
-	--_silenceLevel;
-
-	if (_silenceLevel <= 0) {
-		_silenceLevel = 1;
+	if (crypto_verify32(request.DestinationKey.Key, _root->PublicKey->Key))
+	{
+		_root->Network->SendStreamEnd();
+		return;
 	}
+
+	_salt1 = request.Salt;
+
+	bool keyExchangeSuccess = Crypto::X25519::GenerateSessionKeys(
+		*_root->PrivateKey,
+		*_root->PublicKey,
+		_peerPublicKey,
+		_salt1,
+		_initInES.Key,
+		_initOutES.Key,
+		true);
+
+	if (!keyExchangeSuccess) {
+		_root->Network->SendStreamEnd();
+		return;
+	}
+
+	Crypto::X25519::InitNonce(_initOutES.Nonce);
+	memset(_initInES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
+
+	CowBuffer<uint8_t> protectedRequestBuffer = Crypto::X25519::Decrypt(
+		request.ProtectedPart,
+		_initInES,
+		buffer.Slice(0, buffer.Size() -
+			request.ProtectedPart.Size()));
+
+	if (!protectedRequestBuffer.Size()) {
+		_root->Network->SendStreamEnd();
+		return;
+	}
+
+	StreamHandshake::ProtectedInitRequest protectedRequest;
+	parseResult = ParseProtectedInitRequest(
+		protectedRequestBuffer,
+		protectedRequest);
+
+	if (!parseResult) {
+		_root->Network->SendStreamEnd();
+		return;
+	}
+
+	_peerEphemeralPublicKey = protectedRequest.EphemeralKey;
+	_challenge = protectedRequest.Challenge;
+
+	_state = State::WaitingForUserAnswer;
+	_root->Ui->Redraw();
 }
 
-bool VoiceChat::GetFilterEnabled()
+void VoiceChat::RespondToInboundCall(bool answer)
 {
-	return _applyFilter;
-}
+	if (_state != State::WaitingForUserAnswer) {
+		EndCall();
+		return;
+	}
 
-void VoiceChat::EnableFilter()
-{
-	_applyFilter = true;
-}
+	StreamHandshake::ProtectedPeerResponse protectedResponse;
 
-void VoiceChat::DisableFilter()
-{
-	_applyFilter = false;
-}
+	_salt2.Resize(StreamHandshake::SaltSize);
 
-void VoiceChat::LoadConfigFile()
-{
-	String volumeStr = _configFile->Get("voice", "Volume");
-	String applyFilterStr = _configFile->Get("voice", "ApplyFilter");
-	String silenceLevelStr = _configFile->Get("voice", "SilenceLevel");
+	Crypto::GenerateRandomData(_salt2.Size(), _salt2.Pointer(), false);
 
-	if (volumeStr.Length()) {
-		int volume = atoi(volumeStr.CStr());
+	if (answer) {
+		protectedResponse.ResponseCode =
+			STREAM_PEER_RESPONSE_ACCEPT;
+	} else {
+		protectedResponse.ResponseCode =
+			STREAM_PEER_RESPONSE_DECLINE;
+	}
 
-		if (volume > 0) {
-			_volume = volume;
+	protectedResponse.Salt = _salt2;
 
-			if (_volume > 200) {
-				_volume = 200;
-			}
+	if (!answer) {
+		memset(
+			protectedResponse.EphemeralKey.Key,
+			0,
+			Crypto::X25519::KEY_SIZE);
+	} else {
+		Crypto::X25519::GenerateEphemeralKeyPair(
+			_ephemeralPrivateKey,
+			_ephemeralPublicKey);
+
+		protectedResponse.EphemeralKey = _ephemeralPublicKey;
+
+		bool validSessionKey = Crypto::X25519::GenerateSessionKeys(
+			_ephemeralPrivateKey,
+			_ephemeralPublicKey,
+			_peerEphemeralPublicKey,
+			_salt1.Concat(_salt2),
+			_inES.Key,
+			_outES.Key,
+			true);
+
+		if (!validSessionKey) {
+			_root->Ui->Notify("Ephemeral key exchange failed.");
+			EndCall();
+			return;
 		}
 
+		Crypto::X25519::InitNonce(_outES.Nonce);
+		memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
 	}
 
-	if (applyFilterStr.Length()) {
-		if (applyFilterStr == "Yes") {
-			_applyFilter = true;
-		} else if (applyFilterStr == "No") {
-			_applyFilter = false;
-		}
+	protectedResponse.Challenge = _challenge;
+
+	CowBuffer<uint8_t> buffer = BuildProtectedPeerResponse(
+		protectedResponse);
+
+	buffer = Crypto::X25519::Encrypt(buffer, _initOutES);
+
+	bool success = _root->Network->SendStreamRequest(buffer);
+
+	if (!success) {
+		StreamEnd();
+		_root->Ui->Notify("Failed to answer call, network failure.");
+		return;
 	}
 
-	if (silenceLevelStr.Length()) {
-		int silenceLevel = atoi(silenceLevelStr.CStr());
-
-		if (silenceLevel > 0) {
-			_silenceLevel = silenceLevel;
-
-			if (_silenceLevel > 100) {
-				_silenceLevel = 100;
-			}
-		}
+	if (answer) {
+		_state = State::ActiveSession;
+		StartMainSession();
+	} else {
+		EndCall();
 	}
 }
 
-void VoiceChat::UpdateConfigFile()
+void VoiceChat::ProcessPeerResponse(const CowBuffer<uint8_t> buffer)
 {
-	_configFile->Set("voice", "Volume", ToString(_volume));
-	_configFile->Set("voice", "ApplyFilter", _applyFilter ? "Yes" : "No");
-	_configFile->Set("voice", "SilenceLevel", ToString(_silenceLevel));
-	_configFile->Write();
-}
-
-CowBuffer<uint8_t> VoiceChat::EncryptSoundFrame(CowBuffer<int16_t> frame)
-{
-	CowBuffer<uint8_t> input(frame.Size() * sizeof(int16_t));
-	memcpy(input.Pointer(), frame.Pointer(), input.Size());
-
-	return Encrypt(input, _outES);
-}
-
-CowBuffer<int16_t> VoiceChat::DecryptSoundFrame(CowBuffer<uint8_t> frame)
-{
-	CowBuffer<uint8_t> decryptedData = Decrypt(frame, _inES);
-
-	if (!decryptedData.Size()) {
-		return CowBuffer<int16_t>();
+	if (_state != State::WaitingForPeerAnswer) {
+		EndCall();
+		return;
 	}
 
-	CowBuffer<int16_t> result(decryptedData.Size() / sizeof(int16_t));
+	CowBuffer<uint8_t> decryptedBuffer =
+		Crypto::X25519::Decrypt(buffer, _initInES);
 
-	memcpy(result.Pointer(), decryptedData.Pointer(), decryptedData.Size());
-	return result;
+	if (!decryptedBuffer.Size()) {
+		EndCall();
+		return;
+	}
+
+	StreamHandshake::ProtectedPeerResponse response;
+	bool parseResult =
+		ParseProtectedPeerResponse(decryptedBuffer, response);
+
+	if (!parseResult) {
+		EndCall();
+		return;
+	}
+
+	if (crypto_verify64(
+		response.Challenge.Pointer(),
+		_challenge.Pointer()))
+	{
+		EndCall();
+		return;
+	}
+
+	if (response.ResponseCode != STREAM_PEER_RESPONSE_ACCEPT) {
+		_root->Ui->Notify("Call declined.");
+		EndCall();
+		return;
+	}
+
+	_salt2 = response.Salt;
+	_peerEphemeralPublicKey = response.EphemeralKey;
+
+	bool validSessionKey = Crypto::X25519::GenerateSessionKeys(
+		_ephemeralPrivateKey,
+		_ephemeralPublicKey,
+		_peerEphemeralPublicKey,
+		_salt1.Concat(_salt2),
+		_outES.Key,
+		_inES.Key,
+		false);
+
+	if (!validSessionKey) {
+		_root->Ui->Notify("Ephemeral key exchange failed.");
+		EndCall();
+		return;
+	}
+
+	Crypto::X25519::InitNonce(_outES.Nonce);
+	memset(_inES.Nonce, 0, Crypto::X25519::NONCE_SIZE);
+
+	_state = State::ActiveSession;
+	StartMainSession();
+	_root->Ui->Redraw();
+}
+
+void VoiceChat::StartMainSession()
+{
 }

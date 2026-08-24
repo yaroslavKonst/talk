@@ -9,6 +9,7 @@
 #include "../Common/Log.hpp"
 #include "../Protocol/ParserHelpers.hpp"
 #include "../Protocol/GateParser.hpp"
+#include "../Protocol/StreamParser.hpp"
 #include "../ThirdParty/monocypher.h"
 
 void User::CreateUser(
@@ -38,7 +39,8 @@ User::User(
 	Config *config,
 	UserStorage *userStorage) :
 	_objectStorage("storage/users/" + name + "/sequence", dispatcher),
-	_contactStorage("storage/users/" + name)
+	_contactStorage("storage/users/" + name),
+	_streamHandler(name, &_publicKey, config, this)
 {
 	_dispatcher = dispatcher;
 	_config = config;
@@ -65,6 +67,8 @@ User::User(
 
 User::~User()
 {
+	_objectStorage.SetUser(nullptr);
+
 	if (_timeQuantRequested) {
 		_dispatcher->UnregisterQuantProcessor(this);
 		_timeQuantRequested = false;
@@ -77,6 +81,11 @@ User::~User()
 		delete session->Session;
 		delete session;
 	}
+}
+
+bool User::CanBeDeleted()
+{
+	return _streamHandler.IsIdle();
 }
 
 void User::AddSession(
@@ -94,6 +103,7 @@ void User::AddSession(
 		this,
 		_config,
 		_dispatcher,
+		&_streamHandler,
 		outES,
 		inES,
 		outScramblerInit,
@@ -514,6 +524,115 @@ bool User::ProcessUpdateMessageRequest(
 
 	UpdateMessage(peerName, messageID, attr, value);
 	return true;
+}
+
+StreamHandler *User::GetStreamHandler()
+{
+	return &_streamHandler;
+}
+
+void User::StartStreamGateSession()
+{
+	_userStorage->InitStream(&_streamHandler);
+}
+
+int32_t User::CheckInboundCall(const StreamHandshake::InitRequest &request)
+{
+	bool allowMessagesOnlyFromContacts;
+	bool allowCallsOnlyFromContacts;
+
+	GetAccountSettings(
+		allowMessagesOnlyFromContacts,
+		allowCallsOnlyFromContacts);
+
+	if (!Message::VerifyFullUserName(request.Source)) {
+		return STREAM_INIT_RESPONSE_PARSING_FAILURE;
+	}
+
+	if (!Message::VerifyFullUserName(request.Destination)) {
+		return STREAM_INIT_RESPONSE_PARSING_FAILURE;
+	}
+
+	if (request.Source == request.Destination) {
+		return STREAM_INIT_RESPONSE_ERROR;
+	}
+
+	String userName;
+	String hostName;
+
+	bool parseResult = Message::SplitFullUserName(
+		request.Destination,
+		userName,
+		hostName);
+
+	if (!parseResult) {
+		return STREAM_INIT_RESPONSE_PARSING_FAILURE;
+	}
+
+	if (userName != _name) {
+		return STREAM_INIT_RESPONSE_USER_NONEXISTENT;
+	}
+
+	if (hostName != _config->GetHostName()) {
+		return STREAM_INIT_RESPONSE_USER_NONEXISTENT;
+	}
+
+	if (crypto_verify32(_publicKey.Key, request.DestinationKey.Key)) {
+		return STREAM_INIT_RESPONSE_INVALID_DESTINATION_KEY;
+	}
+
+	Contact *contact = _contactStorage.GetContact(request.Source);
+
+	if (contact) {
+		Contact::BlockStatus blockStat = contact->GetBlockStatus();
+
+		if (blockStat == Contact::BlockStatus::Blocked) {
+			return STREAM_INIT_RESPONSE_YOU_ARE_BANNED;
+		}
+
+		if (blockStat == Contact::BlockStatus::SilentlyBlocked) {
+			return STREAM_INIT_RESPONSE_USER_OFFLINE;
+		}
+
+		if (contact->IsKeyBlocked(request.SourceKey)) {
+			return STREAM_INIT_RESPONSE_YOUR_KEY_IS_BANNED;
+		}
+	} else {
+		if (allowCallsOnlyFromContacts) {
+			return STREAM_INIT_RESPONSE_CALL_PROHIBITED;
+		}
+	}
+
+	return STREAM_INIT_RESPONSE_WAITING_FOR_ANSWER;
+}
+
+bool User::BroadcastStreamRequest(const CowBuffer<uint8_t> initRequest)
+{
+	UserSession *node = _sessions;
+
+	if (!node) {
+		return false;
+	}
+
+	while (node) {
+		node->Session->SendStreamRequest(initRequest);
+		node = node->Next;
+	}
+
+	return true;
+}
+
+void User::BroadcastStreamEnd(ServerSession *exception)
+{
+	UserSession *node = _sessions;
+
+	while (node) {
+		if (node->Session != exception) {
+			node->Session->SendStreamEnd();
+		}
+
+		node = node->Next;
+	}
 }
 
 void User::LoadPublicKey()

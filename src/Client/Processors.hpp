@@ -83,21 +83,35 @@ public:
 	virtual ~VoiceEventProcessor()
 	{ }
 
-	enum VoiceState
+	enum class State
 	{
-		VoiceStateOff = 0,
-		VoiceStateInit = 1,
-		VoiceStateAsk = 2,
-		VoiceStateWait = 3,
-		VoiceStateActive = 4
+		Closed,
+		InitSent,
+		WaitingForPeerAnswer,
+		WaitingForUserAnswer,
+		ActiveSession
 	};
 
+	virtual State GetState() = 0;
 	virtual String GetPeerName() = 0;
-	virtual VoiceState GetState() = 0;
-	virtual bool IsMuted() = 0;
-	virtual bool IsSilent() = 0;
+	virtual Crypto::X25519::PublicKeyContainer GetPeerPublicKey() = 0;
 
-	virtual void ToggleMute() = 0;
+	virtual void InitCall(
+		String peerName,
+		const Crypto::X25519::PublicKeyContainer &peerPublicKey) = 0;
+
+	// Local stream end request. Involves command to server.
+	virtual void EndCall() = 0;
+
+	// Shutdown stream locally. No command is sent.
+	virtual void StreamEnd() = 0;
+
+	virtual void ProcessInitResponse(int32_t status) = 0;
+
+	virtual void ProcessInit(const CowBuffer<uint8_t> buffer) = 0;
+	virtual void RespondToInboundCall(bool answer) = 0;
+
+	virtual void ProcessPeerResponse(const CowBuffer<uint8_t> buffer) = 0;
 };
 
 // Network session.
@@ -168,6 +182,10 @@ public:
 		bool allowCalls) = 0;
 	virtual bool SetAccountSettingsProcessor(
 		AccountSettingsProcessor *processor) = 0;
+
+	virtual bool SendStreamInit(const CowBuffer<uint8_t> buffer) = 0;
+	virtual bool SendStreamEnd() = 0;
+	virtual bool SendStreamRequest(const CowBuffer<uint8_t> buffer) = 0;
 };
 
 // UI.

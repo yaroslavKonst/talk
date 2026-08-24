@@ -3,6 +3,7 @@
 
 #include "User.hpp"
 #include "ServerHandshake.hpp"
+#include "StreamHandler.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 #include "../Common/Tree.hpp"
 
@@ -30,7 +31,7 @@ public:
 	void AddUser(
 		String name,
 		const Crypto::X25519::PublicKeyContainer &key);
-	void RemoveUser(String name);
+	bool RemoveUser(String name);
 
 	int GetUserCount();
 	CowBuffer<String> ListUsers() override;
@@ -43,6 +44,8 @@ public:
 	void RegisterMessageForDelivery(
 		const Message::X25519::HeaderPointToPoint &header,
 		const ObjectStorage::ID &messageID) override;
+
+	void InitStream(StreamHandler *handler) override;
 
 private:
 	EventDispatcher *_dispatcher;
@@ -91,6 +94,8 @@ public:
 	virtual void RegisterMessageForDelivery(
 		const Message::X25519::HeaderPointToPoint &header,
 		const ObjectStorage::ID &messageID) = 0;
+
+	virtual void InitStream(StreamHandler *handler) = 0;
 };
 
 #endif

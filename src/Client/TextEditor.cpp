@@ -507,8 +507,8 @@ void TextEditor::Redraw()
 
 	int cursorX = _fromX + curColumn;
 
-	if (cursorX > _toX) {
-		cursorX = _toX;
+	if (cursorX > _toX + 1) {
+		cursorX = _toX + 1;
 	}
 
 	move(cursorRow, cursorX);

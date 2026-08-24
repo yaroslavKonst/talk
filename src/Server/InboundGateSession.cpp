@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 
 #include "../Protocol/GateParser.hpp"
+#include "../Protocol/StreamParser.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/File.hpp"
 #include "../Common/UnixTime.hpp"
@@ -20,6 +21,8 @@ InboundTaskBase *InboundTaskBase::GetTask(
 	switch (command) {
 	case GATE_COMMAND_MESSAGE:
 		return new InboundTaskReceiveMessage(users, secMod);
+	case GATE_COMMAND_STREAM_REQUEST:
+		return new InboundTaskAnswerCall(users, secMod);
 	default:
 		break;
 	}
@@ -61,6 +64,11 @@ bool InboundTaskReceiveMessage::ProcessData(const CowBuffer<uint8_t> buffer)
 	return false;
 }
 
+bool InboundTaskReceiveMessage::TaskEnded()
+{
+	return _state == State::End;
+}
+
 bool InboundTaskReceiveMessage::ProcessWaitHeader(
 	const CowBuffer<uint8_t> buffer)
 {
@@ -79,12 +87,14 @@ bool InboundTaskReceiveMessage::ProcessWaitHeader(
 	if (!parseResult) {
 		SendVerificationCode(
 			GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER);
+		_state = State::End;
 		return true;
 	}
 
 	if (headerData.MessageHeader.Size() != _header.HeaderSize) {
 		SendVerificationCode(
 			GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER);
+		_state = State::End;
 		return true;
 	}
 
@@ -98,6 +108,7 @@ bool InboundTaskReceiveMessage::ProcessWaitHeader(
 	if (!res) {
 		SendVerificationCode(
 			GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER);
+		_state = State::End;
 		return true;
 	}
 
@@ -112,11 +123,13 @@ bool InboundTaskReceiveMessage::ProcessWaitHeader(
 	if (!res) {
 		SendVerificationCode(
 			GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER);
+		_state = State::End;
 		return true;
 	}
 
 	if (sourceHost != _securityModule->GetFullHostName()) {
 		SendVerificationCode(GATE_MESSAGE_HEADER_REJECT);
+		_state = State::End;
 		return true;
 	}
 
@@ -125,6 +138,7 @@ bool InboundTaskReceiveMessage::ProcessWaitHeader(
 	if (!user) {
 		SendVerificationCode(
 			GATE_MESSAGE_HEADER_REJECT_INVALID_DESTINATION_USER);
+		_state = State::End;
 		return true;
 	}
 
@@ -137,6 +151,8 @@ bool InboundTaskReceiveMessage::ProcessWaitHeader(
 	if (resultCode == GATE_MESSAGE_HEADER_ACCEPT) {
 		_receivedPart = headerData.MessageHeader;
 		_state = State::WaitForBody;
+	} else if (resultCode != GATE_MESSAGE_HEADER_REJECT_SILENTBLOCK) {
+		_state = State::End;
 	}
 
 	SendVerificationCode(resultCode);
@@ -166,7 +182,7 @@ bool InboundTaskReceiveMessage::ProcessWaitBody(
 		}
 	}
 
-	_state = State::WaitForHeader;
+	_state = State::End;
 	_silentBlock = false;
 	return true;
 }
@@ -183,6 +199,171 @@ void InboundTaskReceiveMessage::SendVerificationCode(int32_t code)
 	codeStruct.Code = code;
 
 	_response = GateCommandMessage::BuildCode(codeStruct);
+}
+
+InboundTaskAnswerCall::InboundTaskAnswerCall(
+	UserDB *users,
+	GateSecurityModule *secMod)
+{
+	_users = users;
+	_securityModule = secMod;
+
+	_streamHandler = nullptr;
+
+	_state = State::WaitingForInit;
+}
+
+InboundTaskAnswerCall::~InboundTaskAnswerCall()
+{
+	if (_streamHandler) {
+		_streamHandler->NotifyGateSessionClosed();
+	}
+
+	_streamHandler = nullptr;
+}
+
+bool InboundTaskAnswerCall::HasData()
+{
+	if (_state == State::WaitingForInit) {
+		return false;
+	}
+
+	if (_response.Size()) {
+		return true;
+	}
+
+	if (_state == State::Forwarding) {
+		return _streamHandler->HasData();
+	}
+
+	return false;
+}
+
+CowBuffer<uint8_t> InboundTaskAnswerCall::GetData()
+{
+	if (_state == State::WaitingForInit) {
+		return CowBuffer<uint8_t>();
+	}
+
+	if (_response.Size()) {
+		CowBuffer<uint8_t> response = _response;
+		_response.Resize(0);
+		return response;
+	}
+
+	if (_state == State::Forwarding) {
+		return _streamHandler->GetData();
+	}
+
+	return CowBuffer<uint8_t>();
+}
+
+bool InboundTaskAnswerCall::ProcessData(const CowBuffer<uint8_t> buffer)
+{
+	if (_state == State::WaitingForInit) {
+		StreamLog("Processing stream init.");
+
+		GateCommandStream::InitRequest gateRequest;
+		bool parseResult = GateCommandStream::ParseInitRequest(
+			buffer,
+			gateRequest);
+
+		if (!parseResult) {
+			_state = State::End;
+			StreamLog("Base parsing failure.");
+			return false;
+		}
+
+		StreamHandshake::InitRequest request;
+		parseResult = StreamHandshake::ParseInitRequest(
+			gateRequest.Request,
+			request);
+
+		if (!parseResult) {
+			StreamLog("Stream init parsing failure.");
+			SendCode(STREAM_INIT_RESPONSE_PARSING_FAILURE);
+			_state = State::End;
+			return true;
+		}
+
+		String userName;
+		String hostName;
+
+		bool res = Message::SplitFullUserName(
+			request.Destination,
+			userName,
+			hostName);
+
+		if (!res) {
+			SendCode(STREAM_INIT_RESPONSE_USER_NONEXISTENT);
+			_state = State::End;
+			return true;
+		}
+
+		String sourceName;
+		String sourceHost;
+
+		res = Message::SplitFullUserName(
+			request.Source,
+			sourceName,
+			sourceHost);
+
+		if (!res) {
+			SendCode(STREAM_INIT_RESPONSE_PARSING_FAILURE);
+			_state = State::End;
+			return true;
+		}
+
+		if (sourceHost != _securityModule->GetFullHostName()) {
+			SendCode(STREAM_INIT_RESPONSE_ERROR);
+			_state = State::End;
+			return true;
+		}
+
+		User *user = _users->GetUser(userName);
+
+		if (!user) {
+			SendCode(STREAM_INIT_RESPONSE_USER_NONEXISTENT);
+			_state = State::End;
+			return true;
+		}
+
+		_streamHandler = user->GetStreamHandler();
+
+		int32_t requestStatus =
+			_streamHandler->ProcessGateStreamInit(
+				gateRequest.Request);
+
+		SendCode(requestStatus);
+
+		if (requestStatus != STREAM_INIT_RESPONSE_WAITING_FOR_ANSWER) {
+			_streamHandler = nullptr;
+			_state = State::End;
+		} else {
+			_state = State::Forwarding;
+		}
+
+		return true;
+	}
+
+	return _streamHandler->ProcessData(buffer);
+}
+
+bool InboundTaskAnswerCall::TaskEnded()
+{
+	return _state == State::End;
+}
+
+void InboundTaskAnswerCall::SendCode(int32_t code)
+{
+	GateCommandStream::InitResponse response;
+	response.Code = code;
+	_response = GateCommandStream::BuildInitResponse(response);
+}
+
+void InboundTaskAnswerCall::StreamLog(String message)
+{
+	Log(LogLevel::Debug, "InboundCallTask", message);
 }
 
 InboundGateSession::InboundGateSession(
@@ -340,15 +521,9 @@ void InboundGateSession::ProcessWrite()
 {
 	SetTimestamp(GetMonotonicMillisecondTime());
 
-	if (_protocol && _task && _task->HasData()) {
-		CowBuffer<uint8_t> buf = _task->GetData();
-
-		if (buf.Size()) {
-			_protocol->AddBufferForOutput(buf);
-		} else {
-			_storage->MarkSessionForRemoval(this);
-			return;
-		}
+	if (!DrainTask()) {
+		_storage->MarkSessionForRemoval(this);
+		return;
 	}
 
 	if (!_writer) {
@@ -719,6 +894,10 @@ bool InboundGateSession::ProcessSessionInput(CowBuffer<uint8_t> buffer)
 
 	CowBuffer<uint8_t> inputBuffer = _protocol->GetInputBuffer();
 
+	if (!DrainTask()) {
+		return false;
+	}
+
 	if (!_task) {
 		if (inputBuffer.Size() < sizeof(int32_t)) {
 			return false;
@@ -743,14 +922,32 @@ bool InboundGateSession::ProcessSessionInput(CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
-	if (_task->HasData()) {
+	if (!DrainTask()) {
+		return false;
+	}
+
+	return true;
+}
+
+bool InboundGateSession::DrainTask()
+{
+	if (!_protocol) {
+		return true;
+	}
+
+	while (_task && _task->HasData()) {
 		CowBuffer<uint8_t> buf = _task->GetData();
 
-		if (!buf.Size()) {
+		if (buf.Size()) {
+			_protocol->AddBufferForOutput(buf);
+		} else {
 			return false;
 		}
+	}
 
-		_protocol->AddBufferForOutput(buf);
+	if (_task && _task->TaskEnded()) {
+		delete _task;
+		_task = nullptr;
 	}
 
 	return true;

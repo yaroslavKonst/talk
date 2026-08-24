@@ -143,6 +143,13 @@ void Network::StartConnection(
 	int fd,
 	const Crypto::X25519::PublicKeyContainer &serverKey)
 {
+	if (_handshake || _session) {
+		shutdown(fd, SHUT_RDWR);
+		close(fd);
+		_root->Ui->Notify("Connection is already active.");
+		return;
+	}
+
 	SetTimestamp(GetMonotonicMillisecondTime());
 
 	_fd = fd;
@@ -311,6 +318,36 @@ bool Network::SetAccountSettingsProcessor(AccountSettingsProcessor *processor)
 	return true;
 }
 
+bool Network::SendStreamInit(const CowBuffer<uint8_t> buffer)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->SendStreamInit(buffer);
+	return true;
+}
+
+bool Network::SendStreamEnd()
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->SendStreamEnd();
+	return true;
+}
+
+bool Network::SendStreamRequest(const CowBuffer<uint8_t> buffer)
+{
+	if (!_session) {
+		return false;
+	}
+
+	_session->SendStreamRequest(buffer);
+	return true;
+}
+
 void Network::CheckHandshake()
 {
 	if (_handshake->ConnectionSuccessful()) {
@@ -348,4 +385,6 @@ void Network::CloseConnection()
 		close(_fd);
 		_fd = -1;
 	}
+
+	_root->Voice->EndCall();
 }

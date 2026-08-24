@@ -8,6 +8,7 @@
 #include "Network.hpp"
 #include "UI.hpp"
 #include "ChatList.hpp"
+#include "VoiceChat.hpp"
 #include "../Common/SignalHandling.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/Hex.hpp"
@@ -44,17 +45,22 @@ int Client::Run()
 	Config config(_publicKey);
 	root.Conf = &config;
 
-	Network network(&root);
-	root.Network = &network;
-
 	ChatList chats(&root);
 	root.Messages = &chats;
+
+	VoiceChat voice(&root);
+	root.Voice = &voice;
+
+	Network network(&root);
+	root.Network = &network;
 
 	UI ui(&root);
 	root.Ui = &ui;
 	ui.ProcessResize();
 
 	dispatcher.Run();
+
+	network.Disconnect();
 
 	return 0;
 }

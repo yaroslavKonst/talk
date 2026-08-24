@@ -6,38 +6,61 @@
 
 #include "../Common/CowBuffer.hpp"
 
-class Audio
+class AudioRecorder
 {
 public:
 	static const int SampleRate = 44100;
 	static const int SampleCount = 512;
 
-	Audio();
-	~Audio();
+	AudioRecorder();
+	~AudioRecorder();
 
-	void WriteRaw(CowBuffer<int16_t> sound);
 	CowBuffer<int16_t> ReadRaw();
 	int GetSoundReadFileDescriptor();
 
 private:
-	pa_simple *_writeConnection;;
-	pa_simple *_readConnection;;
-	void SetupStreams();
-	void CloseStreams();
+	pa_simple *_readConnection;
+	void SetupStream();
+	void CloseStream();
 
 	int _readPipe[2];
-	int _writePipe[2];
-	void SetupPipes();
-	void ClosePipes();
+	void SetupPipe();
+	void CloseMainPipeEnd();
+	void CloseThreadPipeEnd();
 
 	pthread_t _readThread;
+	void StartThread();
+	void JoinThread();
+
+	static void *ReadLoop(void *arg);
+};
+
+class AudioPlayback
+{
+public:
+	static const int SampleRate = 44100;
+	static const int SampleCount = 512;
+
+	AudioPlayback();
+	~AudioPlayback();
+
+	void WriteRaw(const CowBuffer<int16_t> sound);
+
+private:
+	pa_simple *_writeConnection;
+	void SetupStream();
+	void CloseStream();
+
+	int _writePipe[2];
+	void SetupPipe();
+	void CloseMainPipeEnd();
+	void CloseThreadPipeEnd();
+
 	pthread_t _writeThread;
-	volatile bool _work;
-	void StartThreads();
-	void StopThreads();
+	void StartThread();
+	void JoinThread();
 
 	static void *WriteLoop(void *arg);
-	static void *ReadLoop(void *arg);
 };
 
 #endif

@@ -95,6 +95,8 @@ public:
 		const Message::X25519::HeaderPointToPoint &header,
 		const ObjectStorage::ID &messageID) override;
 
+	void InitStream(StreamHandler *handler) override;
+
 	void ProcessQuant() override;
 
 	void MarkSessionForRemoval(OutboundGateSession *session) override;

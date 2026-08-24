@@ -75,7 +75,7 @@ void UserDB::AddUser(
 	_usersByName.AddEntry(user);
 }
 
-void UserDB::RemoveUser(String name)
+bool UserDB::RemoveUser(String name)
 {
 	Tree<UserByName>::Entry *nameEntry = _usersByName.FindEntry(name);
 
@@ -85,10 +85,15 @@ void UserDB::RemoveUser(String name)
 
 	User *user = nameEntry->Key.user;
 
+	if (!user->CanBeDeleted()) {
+		return false;
+	}
+
 	_usersByName.RemoveEntry(nameEntry);
 
 	delete user;
 	User::RemoveUser(name);
+	return true;
 }
 
 int UserDB::GetUserCount()
@@ -186,6 +191,11 @@ void UserDB::RegisterMessageForDelivery(
 	}
 
 	_sendPlanner->RegisterMessageForDelivery(header, messageID);
+}
+
+void UserDB::InitStream(StreamHandler *handler)
+{
+	_sendPlanner->InitStream(handler);
 }
 
 UserDB::UserByName::UserByName()

@@ -3,11 +3,11 @@
 #include <unistd.h>
 #include <errno.h>
 
-StreamWriter::StreamWriter(int fd, CowBuffer<uint8_t> buffer)
+StreamWriter::StreamWriter(int fd, const CowBuffer<uint8_t> buffer) :
+	_buffer(buffer)
 {
 	_fd = fd;
 	_writtenBytes = 0;
-	_buffer = buffer;
 }
 
 bool StreamWriter::Write()

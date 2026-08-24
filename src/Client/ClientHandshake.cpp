@@ -123,10 +123,10 @@ bool ClientHandshake::ErrorState()
 
 void ClientHandshake::InitSyn()
 {
-	_salt1 = CowBuffer<uint8_t>(32);
+	_salt1 = CowBuffer<uint8_t>(Handshake::SaltSize);
 	Crypto::GenerateRandomData(_salt1.Size(), _salt1.Pointer(), false);
 
-	CowBuffer<uint8_t> oneTimeSalt(32);
+	CowBuffer<uint8_t> oneTimeSalt(Handshake::SaltSize);
 	Crypto::GenerateRandomData(
 		oneTimeSalt.Size(),
 		oneTimeSalt.Pointer(),

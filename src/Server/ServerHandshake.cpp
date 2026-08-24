@@ -263,7 +263,7 @@ void ServerHandshake::ProcessSyn(CowBuffer<uint8_t> buffer)
 
 	outData.ServerSessionPublicKey = _ephemeralPublicKey;
 
-	_salt2 = CowBuffer<uint8_t>(32);
+	_salt2 = CowBuffer<uint8_t>(Handshake::SaltSize);
 	Crypto::GenerateRandomData(
 		_salt2.Size(),
 		_salt2.Pointer(),
@@ -374,7 +374,11 @@ String ServerHandshake::DecryptUserNameFromSyn(
 	CowBuffer<uint8_t> userNameString = Crypto::X25519::Decrypt(
 		data.EncryptedName,
 		userNameStream,
-		buffer.Slice(0, sizeof(int32_t) * 3 + 32 * 3));
+		buffer.Slice(
+			0,
+			sizeof(int32_t) * 3 +
+			Handshake::SaltSize * 2 +
+			Crypto::X25519::KEY_SIZE));
 
 	if (!userNameString.Size()) {
 		HandshakeLog("", "User name decryption failed.");

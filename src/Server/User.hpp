@@ -2,6 +2,8 @@
 #define _USER_HPP
 
 #include "ServerSession.hpp"
+#include "StreamHandler.hpp"
+#include "../Protocol/StreamParser.hpp"
 #include "../Message/Message.hpp"
 #include "../Message/ContactStorage.hpp"
 #include "../Common/MyString.hpp"
@@ -9,11 +11,13 @@
 #include "../Crypto/CryptoDefinitions.hpp"
 
 class UserStorage;
+class StreamProcessor;
 
 class User :
 	public ServerSessionStorage,
 	public QuantEventProcessor,
-	public ObjectStorageUser
+	public ObjectStorageUser,
+	public StreamHandlerUser
 {
 public:
 	static void CreateUser(
@@ -37,6 +41,8 @@ public:
 	{
 		return _name;
 	}
+
+	bool CanBeDeleted();
 
 	void AddSession(
 		int fd,
@@ -95,17 +101,27 @@ public:
 		const ObjectStorage::ID &messageID,
 		Message::Attribute &attr) override;
 
+	// Only for local calls.
 	void UpdateMessage(
 		String peerName,
 		const ObjectStorage::ID &messageID,
 		Message::Attribute attr,
 		bool value);
 
+	// For update requests from clients. Contains additional checks.
 	bool ProcessUpdateMessageRequest(
 		String peerName,
 		const ObjectStorage::ID &messageID,
 		Message::Attribute attr,
 		bool value) override;
+
+	StreamHandler *GetStreamHandler();
+	void StartStreamGateSession() override;
+	int32_t CheckInboundCall(
+		const StreamHandshake::InitRequest &request) override;
+	bool BroadcastStreamRequest(
+		const CowBuffer<uint8_t> initRequest) override;
+	void BroadcastStreamEnd(ServerSession *exception) override;
 
 private:
 	EventDispatcher *_dispatcher;
@@ -142,6 +158,8 @@ private:
 		const CowBuffer<uint8_t> message,
 		Message::Attribute attr,
 		bool inbound);
+
+	StreamHandler _streamHandler;
 };
 
 class UserStorage
@@ -156,6 +174,8 @@ public:
 	virtual void RegisterMessageForDelivery(
 		const Message::X25519::HeaderPointToPoint &header,
 		const ObjectStorage::ID &messageID) = 0;
+
+	virtual void InitStream(StreamHandler *handler) = 0;
 };
 
 #endif

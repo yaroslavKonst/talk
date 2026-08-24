@@ -334,6 +334,8 @@ void OutboundChannel::StartTransmission()
 		_config,
 		this,
 		task);
+
+	_session->CompleteInitialization();
 }
 
 bool OutboundChannel::ParseChannelObject(
@@ -460,6 +462,22 @@ void SendPlanner::RegisterMessageForDelivery(
 			rmch = &(*rmch)->Next;
 		}
 	}
+}
+
+void SendPlanner::InitStream(StreamHandler *handler)
+{
+	SessionNode *node = new SessionNode;
+	node->Remove = false;
+	node->Next = _sessions;
+	node->Session = new OutboundGateSession(
+		_dispatcher,
+		_config,
+		this,
+		handler);
+
+	_sessions = node;
+
+	node->Session->CompleteInitialization();
 }
 
 void SendPlanner::ProcessQuant()

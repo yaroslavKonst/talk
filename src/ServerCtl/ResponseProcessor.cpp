@@ -29,6 +29,9 @@ static void PrintError(int32_t code)
 	case ERROR_USER_EXISTS:
 		printf("User already exists.\n");
 		break;
+	case ERROR_USER_BUSY:
+		printf("User is busy. Suspend the account before removal.\n");
+		break;
 	case ERROR_INVALID_IP:
 		printf("Invalid IP address.\n");
 		break;
