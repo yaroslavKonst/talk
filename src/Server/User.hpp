@@ -59,9 +59,21 @@ public:
 		const CowBuffer<uint8_t> buffer) override;
 	void NotifyWriteCompleted(const ObjectStorage::ID &id) override;
 
-	// True means that action is allowed only for users in contact list.
-	void GetAccountSettings(bool &messages, bool &calls) override;
-	void SetAccountSettings(bool messages, bool calls) override;
+	void GetAccountSettings(
+		bool &messages, // True: contacts only.
+		bool &calls, // True: contacts only.
+		bool &list) override;
+	void SetAccountSettings(
+		bool messages,
+		bool calls,
+		bool list) override;
+
+	enum AccountSettingsValues
+	{
+		SettingForbidMessages = 0x1,
+		SettingForbidCalls = 0x2,
+		SettingShowInContactList = 0x4
+	};
 
 	void AddContact(String name) override;
 	void UpdateContactKey(
@@ -160,6 +172,17 @@ private:
 		bool inbound);
 
 	StreamHandler _streamHandler;
+
+	struct AccountSettings
+	{
+		bool AllowMessagesOnlyFromContactList;
+		bool AllowCallsOnlyFromContactList;
+		bool ShowInContactList;
+	};
+
+	AccountSettings _accountSettings;
+	void LoadAccountSettings();
+	void StoreAccountSettings();
 };
 
 class UserStorage
@@ -168,7 +191,7 @@ public:
 	virtual ~UserStorage()
 	{ }
 
-	virtual CowBuffer<String> ListUsers() = 0;
+	virtual CowBuffer<String> ListUsers(bool publicData) = 0;
 	virtual User *GetUser(String name) = 0;
 
 	virtual void RegisterMessageForDelivery(

@@ -33,8 +33,8 @@ public:
 		const Crypto::X25519::PublicKeyContainer &key);
 	bool RemoveUser(String name);
 
-	int GetUserCount();
-	CowBuffer<String> ListUsers() override;
+	int GetUserCount(bool publicData);
+	CowBuffer<String> ListUsers(bool publicData) override;
 
 	void AddSession(int fd, IPAddress ip);
 	void MarkSessionForRemoval(ServerHandshake *session) override;

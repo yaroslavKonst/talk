@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "../Common/ObjectStorage.hpp"
+#include "../Protocol/CommonParserConstants.hpp"
 #include "../Protocol/ParserHelpers.hpp"
 
 bool NewContactObject::ParseData(const CowBuffer<uint8_t> object, Data &data)
@@ -22,7 +23,12 @@ bool NewContactObject::ParseData(const CowBuffer<uint8_t> object, Data &data)
 
 	uint64_t offset = headerSize;
 
-	if (!ParseString(object, offset, data.ContactName, 500)) {
+	if (!ParseString(
+		object,
+		offset,
+		data.ContactName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -77,7 +83,12 @@ bool UpdateContactKeyObject::ParseData(
 
 	uint64_t offset = headerSize;
 
-	if (!ParseString(object, offset, data.ContactName, 500)) {
+	if (!ParseString(
+		object,
+		offset,
+		data.ContactName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -159,7 +170,12 @@ bool BlockContactObject::ParseData(const CowBuffer<uint8_t> object, Data &data)
 
 	uint64_t offset = headerSize;
 
-	if (!ParseString(object, offset, data.ContactName, 500)) {
+	if (!ParseString(
+		object,
+		offset,
+		data.ContactName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -217,7 +233,12 @@ bool RemoveContactObject::ParseData(const CowBuffer<uint8_t> object, Data &data)
 
 	uint64_t offset = headerSize;
 
-	if (!ParseString(object, offset, data.ContactName, 500)) {
+	if (!ParseString(
+		object,
+		offset,
+		data.ContactName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -270,7 +291,12 @@ bool MessageObject::ParseData(const CowBuffer<uint8_t> object, Data &data)
 
 	uint64_t offset = headerSize;
 
-	if (!ParseString(object, offset, data.PeerName, 500)) {
+	if (!ParseString(
+		object,
+		offset,
+		data.PeerName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -330,7 +356,12 @@ bool UpdateMessageObject::ParseData(const CowBuffer<uint8_t> object, Data &data)
 
 	uint64_t offset = headerSize;
 
-	if (!ParseString(object, offset, data.PeerName, 500)) {
+	if (!ParseString(
+		object,
+		offset,
+		data.PeerName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 

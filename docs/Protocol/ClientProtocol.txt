@@ -415,12 +415,12 @@ Sent by the client to request account settings.
 
 Response:
 | GET_ACCOUNT_SETTINGS | allow messages only from contact list |...
-...| allow calls only from contact list |
+...| allow calls only from contact list | show in contact list |
 
 All response parameters are bytes interpreted as boolean values.
 
 | SET_ACCOUNT_SETTINGS | allow messages only from contact list |...
-...| allow calls only from contact list |
+...| allow calls only from contact list | show in contact list |
 Sent by the client to set new settings. Has the same arguments as
 GET_ACCOUNT_SETTINGS response. This command does not have response.
 

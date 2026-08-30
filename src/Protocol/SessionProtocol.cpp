@@ -1,5 +1,6 @@
 #include "SessionProtocol.hpp"
 
+#include "CommonParserConstants.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/Endianness.hpp"
 
@@ -159,7 +160,7 @@ Demultiplexer::Demultiplexer(int channelCount)
 	_inProgressBuffers = new CowBuffer<uint8_t>[_channelCount];
 	_bytesToRead = new uint64_t[_channelCount];
 
-	_inputSizeLimit = 1024 * 4;
+	_inputSizeLimit = CommonParserConstants::SmallDatagramSize;
 
 	for (int i = 0; i < _channelCount; i++) {
 		_bytesToRead[i] = 0;
@@ -331,7 +332,7 @@ bool SessionProtocol::Read()
 
 		uint64_t size = SetProtoEndian(*buffer.SwitchType<uint64_t>());
 
-		if (size > 4 * 1024 || !size) {
+		if (size > CommonParserConstants::SmallDatagramSize || !size) {
 			return false;
 		}
 

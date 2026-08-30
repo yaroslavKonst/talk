@@ -12,6 +12,7 @@
 
 #include "WorkScreen.hpp"
 #include "TextColor.hpp"
+#include "UiLayout.hpp"
 #include "../Common/Hex.hpp"
 #include "../Common/File.hpp"
 #include "../Common/Resolver.hpp"
@@ -29,18 +30,18 @@ LoginScreen::LoginScreen(Root *root)
 	_port.Caption = "Port: ";
 	_serverKeyHex.Caption = "Server public key: ";
 
-	_ip.Text = _root->Conf->GetServerAddress();
-	_port.Text = _root->Conf->GetServerPort();
-	_serverKeyHex.Text = _root->Conf->GetServerKeyHex();
+	_ip.SetText(_root->Conf->GetServerAddress());
+	_port.SetText(_root->Conf->GetServerPort());
+	_serverKeyHex.SetText(_root->Conf->GetServerKeyHex());
 
 	_modified = false;
 
-	if (_ip.Text.Length()) {
+	if (_ip.HasText()) {
 		_writingIp = false;
 		_writingPort = true;
 	}
 
-	if (_writingPort && _port.Text.Length()) {
+	if (_writingPort && _port.HasText()) {
 		_writingPort = false;
 		_writingKey = true;
 	}
@@ -49,14 +50,14 @@ LoginScreen::LoginScreen(Root *root)
 void LoginScreen::Redraw()
 {
 	for (int i = 0; i < _columns; i++) {
-		move(4, i);
+		move(LayoutConstants::HeaderHeight, i);
 		addch(ACS_HLINE);
 	}
 
 	bool running;
 	UiHelpers::DrawFrame(
-		5,
-		_rows - 3,
+		LayoutConstants::HeaderHeight + 1,
+		_rows - 1 - LayoutConstants::FooterHeight,
 		1,
 		_columns - 2,
 		"Login to server as " + _root->Conf->GetName(),
@@ -67,19 +68,19 @@ void LoginScreen::Redraw()
 		_root->Ui->RequestRunningLine();
 	}
 
-	_ip.SetCaptionPosition(_rows / 2 - 2, 4);
-	_ip.SetWidthLimit(_columns - 7);
+	_ip.SetCaptionPosition(_rows / 2 - 2, 3);
+	_ip.SetWidthLimit(_columns - 6);
 	_ip.AlignTextToCaption();
 	_ip.Redraw();
 
-	_port.SetCaptionPosition(_rows / 2, 4);
-	_port.SetWidthLimit(_columns - 7);
+	_port.SetCaptionPosition(_rows / 2, 3);
+	_port.SetWidthLimit(_columns - 6);
 	_port.AlignTextToCaption();
 	_port.Redraw();
 
-	_serverKeyHex.SetCaptionPosition(_rows / 2 + 2, 4);
-	_serverKeyHex.SetWidthLimit(_columns - 7);
-	_serverKeyHex.SetTextPosition(_rows / 2 + 3, 4);
+	_serverKeyHex.SetCaptionPosition(_rows / 2 + 2, 3);
+	_serverKeyHex.SetWidthLimit(_columns - 6);
+	_serverKeyHex.SetTextPosition(_rows / 2 + 3, 3);
 	_serverKeyHex.Redraw();
 
 	if (_writingIp) {
@@ -206,27 +207,29 @@ Screen *LoginScreen::ProcessConnection()
 		return this;
 	}
 
-	if (_serverKeyHex.Text.Length() != Crypto::X25519::KEY_SIZE * 2) {
+	String serverKeyHex = _serverKeyHex.GetText();
+
+	if (serverKeyHex.Length() != Crypto::X25519::KEY_SIZE * 2) {
 		_root->Ui->Notify("Invalid server key length.");
 		return this;
 	}
 
 	Crypto::X25519::PublicKeyContainer serverKey;
-	HexToData(_serverKeyHex.Text, serverKey.Key);
+	HexToData(serverKeyHex, serverKey.Key);
 
 	void *blockHandle = _root->Ui->BlockNotify("Connecting...");
 
 	Resolver resolver(_root->Dispatcher);
 
-	String hostName = _ip.Text;
-	String portName = _port.Text;
+	String hostName = _ip.GetText();
+	String portName = _port.GetText();
 
 	IPAddress address;
 	uint16_t portNumber;
 
 	if (!portName.Length()) {
 		Resolver::SRVResult *srv = resolver.ResolveSRV(
-			_ip.Text,
+			hostName,
 			"talkdclient",
 			true);
 
@@ -245,13 +248,13 @@ Screen *LoginScreen::ProcessConnection()
 
 		delete srv;
 	} else {
-		int port = atoi(portName.CStr());
-
-		if (!port || port > 65535) {
+		if (!Message::VerifyPortName(portName)) {
 			_root->Ui->BlockCancel(blockHandle);
 			_root->Ui->Notify("Invalid port number.");
 			return this;
 		}
+
+		int port = atoi(portName.CStr());
 
 		portNumber = htons(port);
 	}
@@ -272,9 +275,9 @@ Screen *LoginScreen::ProcessConnection()
 	}
 
 	if (_modified) {
-		_root->Conf->SetServerAddress(_ip.Text);
-		_root->Conf->SetServerPort(_port.Text);
-		_root->Conf->SetServerKeyHex(_serverKeyHex.Text);
+		_root->Conf->SetServerAddress(_ip.GetText());
+		_root->Conf->SetServerPort(_port.GetText());
+		_root->Conf->SetServerKeyHex(_serverKeyHex.GetText());
 		_root->Conf->Save();
 		_modified = false;
 	}

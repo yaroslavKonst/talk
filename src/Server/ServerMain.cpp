@@ -12,6 +12,7 @@
 #include "../Common/CommandLineParser.hpp"
 #include "../Common/Version.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/FileAccess.hpp"
 #include "../Common/Log.hpp"
 
 static int OpenLog()
@@ -23,7 +24,10 @@ static int OpenLog()
 	String logName = "logs/Log_" +
 		timeString.Replace(' ', '_').Replace(':', '-') + ".txt";
 
-	int logFd = open(logName.CStr(), O_WRONLY | O_CREAT, 0600);
+	int logFd = open(
+		logName.CStr(),
+		O_WRONLY | O_CREAT,
+		FileAccessConstants::FileAccessRights);
 
 	if (logFd == -1) {
 		THROW("Failed to open log.");
@@ -143,10 +147,28 @@ static void SetLogLevel(String levelString)
 	}
 }
 
+static void SetLogWidth(String widthString)
+{
+	if (!widthString.Length()) {
+		return;
+	}
+
+	for (int i = 0; i < widthString.Length(); i++) {
+		char c = widthString.CStr()[i];
+
+		if (c < '0' || c > '9') {
+			THROW("Log width must be a number.");
+		}
+	}
+
+	SetMaxLogWidth(atoi(widthString.CStr()));
+}
+
 static const char *HelpKey = "-help";
 static const char *VersionKey = "-version";
 static const char *NoDaemonizeKey = "-no-D";
 static const char *NoMultilineLogKey = "-no-multiline-log";
+static const char *LogWidthArg = "-log-width";
 static const char *WorkingDirectoryArg = "-work-dir";
 static const char *LogLevelArg = "-log-level";
 
@@ -158,6 +180,12 @@ static void PrintHelp()
 	printf(
 		"%-19s do not print log entries in multiline format.\n",
 		NoMultilineLogKey);
+	printf("                    Same as %s 0.\n", LogWidthArg);
+	printf(
+		"%-19s set log width. Value equal to zero means\n",
+		(String(LogWidthArg) + " WIDTH").CStr());
+	printf("                    infinite width. Lowest allowed\n");
+	printf("                    positive value: 70. Default: 80.\n");
 	printf("%-19s set working directory.\n",
 		(String(WorkingDirectoryArg) + " PATH").CStr());
 	printf("%-19s set log level. Levels: Debug, Verbose, Info, Warning,\n",
@@ -173,9 +201,10 @@ static bool ParseCmd(CommandLineParser &cmd, int argc, char **argv)
 	keys[2] = NoDaemonizeKey;
 	keys[3] = NoMultilineLogKey;
 
-	CowBuffer<String> args(2);
+	CowBuffer<String> args(3);
 	args[0] = WorkingDirectoryArg;
 	args[1] = LogLevelArg;
+	args[2] = LogWidthArg;
 
 	cmd = CommandLineParser(keys, CowBuffer<String>(), args);
 	bool parseResult = cmd.Parse(argc, argv);
@@ -216,12 +245,13 @@ int main(int argc, char **argv)
 			return 0;
 		}
 
-		if (!cmd.GetKeyValue(NoMultilineLogKey)) {
-			AllowMultilineLog(true);
+		if (cmd.GetKeyValue(NoMultilineLogKey)) {
+			SetMaxLogWidth(0);
 		}
 
 		SetWorkingDirectory(cmd.GetArgumentValue(WorkingDirectoryArg));
 		SetLogLevel(cmd.GetArgumentValue(LogLevelArg));
+		SetLogWidth(cmd.GetArgumentValue(LogWidthArg));
 
 		Server server;
 

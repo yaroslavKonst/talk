@@ -7,9 +7,15 @@
 #include "ContactScreen.hpp"
 //#include "AttachmentScreen.hpp"
 #include "TextColor.hpp"
+#include "UiLayout.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Hex.hpp"
 #include "../Common/File.hpp"
+
+enum
+{
+	LayoutTextBoxHeight = 5
+};
 
 WorkScreen::WorkScreen(Root *root)
 {
@@ -18,6 +24,12 @@ WorkScreen::WorkScreen(Root *root)
 
 	_workAsLineCounter = false;
 	_lineCounterValue = 0;
+
+	_h1Y = 2;
+	_h2Y = 4;
+	_h3Y = 6;
+	_h4Y = 8;
+	_v1X = 2;
 }
 
 WorkScreen::~WorkScreen()
@@ -119,66 +131,69 @@ void WorkScreen::RedrawFrames()
 	 *  PublicKey
 	 *  ConnectionStatus
 	 *  VoiceStatus
-	 *  ----------------------------------
+	 *  ----------------------------------  h1
 	 *  CurrentContactName, thread
-	 *  ----------------------------------
+	 *  ----------------------------------  h2
 	 *  ContactList | CurrentChatMessages
 	 *              |
 	 *              |
 	 *              |
 	 *              |
 	 *              |
-	 *              |---------------------
+	 *              |---------------------  h3
 	 *              | CurrentChatTextbox
 	 *              |
-	 *  ----------------------------------
+	 *  ----------------------------------  h4
 	 *  Help
+	 *
+	 *              v1
 	 */
 
-	const int h1Y = 4;
-	const int h2Y = 6;
-	const int h3Y = _rows - 9;
-	const int h4Y = _rows - 3;
+	_h1Y = LayoutConstants::HeaderHeight;
+	_h2Y = _h1Y + 2;
 
-	const int v1X = _columns / 4;
+	_h4Y = _rows - 1 - LayoutConstants::FooterHeight;
+	_h3Y = _h4Y - LayoutTextBoxHeight - 1;
+
+	_v1X = _columns / 4;
 
 	for (int i = 0; i < _columns; i++) {
-		move(h1Y, i);
+		move(_h1Y, i);
 		addch(ACS_HLINE);
 
-		move(h2Y, i);
+		move(_h2Y, i);
 		addch(ACS_HLINE);
 
-		if (i > v1X) {
-			move(h3Y, i);
+		if (i > _v1X) {
+			move(_h3Y, i);
 			addch(ACS_HLINE);
 		}
 
-		move(h4Y, i);
+		move(_h4Y, i);
 		addch(ACS_HLINE);
 	}
 
-	for (int i = h2Y + 1; i < h4Y; i++) {
-		move(i, v1X);
+	for (int i = _h2Y + 1; i < _h4Y; i++) {
+		move(i, _v1X);
 		addch(ACS_VLINE);
 	}
 
-	move(h2Y, v1X);
+	move(_h2Y, _v1X);
 	addch(ACS_TTEE);
 
-	move(h4Y, v1X);
+	move(_h4Y, _v1X);
 	addch(ACS_BTEE);
 
-	move(h3Y, v1X);
+	move(_h3Y, _v1X);
 	addch(ACS_LTEE);
 
-	move(5, 0);
+	move(_h2Y + 1, 0);
 }
 
 void WorkScreen::RedrawChatList()
 {
-	int fromY = 7;
-	int toY = _rows - 4;
+	int fromY = _h2Y + 1;
+	int toY = _h4Y - 1;
 
 	String currentName = _root->Messages->GetCurrentChatName();
 
@@ -238,7 +253,7 @@ void WorkScreen::RedrawChatList()
 			addstr("-> ");
 		}
 
-		int widthLimit = _columns / 4 - 2;
+		int widthLimit = _v1X - 2;
 
 		if (thisChatIsCurrent) {
 			widthLimit -= 3;
@@ -276,32 +291,35 @@ void WorkScreen::RedrawCurrentChat()
 
 	_root->Messages->SelectOrCreateChat(_chatStack->PeerName);
 
-	move(5, 0);
+	move(_h1Y + 1, 0);
 
-	String chatCaptionLine = _chatStack->PeerName + ", ";
+	String chatCaptionLine;
 
 	if (_chatStack->ThreadID.IsZero()) {
-		chatCaptionLine += "main thread.";
+		chatCaptionLine = "Main thread";
 	} else {
 		MessageEventProcessor::MessageDescriptorBase *md =
 			_root->Messages->GetMessageDescriptor(
 				_chatStack->ThreadID);
 
 		if (!md) {
-			chatCaptionLine += "thread " + DataToHex(
+			chatCaptionLine = "Thread " + DataToHex(
 				_chatStack->ThreadID.GetValuePointer(),
 				(int)ObjectStorage::Constants::IDSize);
 		} else {
-			chatCaptionLine += "thread " +
+			chatCaptionLine = "Thread " +
 				md->GetHeader().Source + ", " +
 				TimeInSecondsToString(
 					md->GetHeader().Timestamp);
 		}
 	}
 
-	bool running = UiHelpers::DrawRunningLine(
+	bool running = UiHelpers::DrawCommentedLine(
+		_chatStack->PeerName,
 		chatCaptionLine,
-		_columns);
+		_columns,
+		COLOR_PAIR(DEFAULT_TEXT),
+		COLOR_PAIR(DEFAULT_TEXT));
 
 	if (running) {
 		_root->Ui->RequestRunningLine();
@@ -325,10 +343,10 @@ void WorkScreen::RedrawCurrentChat()
 		}
 	}
 
-	int currentLinePosition = _rows - 10;
+	int currentLinePosition = _h3Y - 1;
 	int skipLines = _chatStack->LineOffset;
 
-	while (currentLinePosition >= 7) {
+	while (currentLinePosition >= _h2Y + 1) {
 		if (currentMessageID.IsZero()) {
 			RedrawConversationStart(currentLinePosition, skipLines);
 			break;
@@ -350,7 +368,7 @@ void WorkScreen::RedrawCurrentChat()
 			currentMessageID);
 	}
 
-	move(_rows - 10, _columns / 4 + 1);
+	move(_h3Y - 1, _v1X + 1);
 }
 
 bool WorkScreen::AddLineToChatScreen(
@@ -366,7 +384,7 @@ bool WorkScreen::AddLineToChatScreen(
 		return true;
 	}
 
-	if (currentLinePosition < 7) {
+	if (currentLinePosition < _h2Y + 1) {
 		return false;
 	}
 
@@ -383,7 +401,7 @@ bool WorkScreen::AddLineToChatScreen(
 
 		int widthLimit =
 			_columns -
-			_columns / 4 - 3 -
+			_v1X - 3 -
 			staticText.Length();
 
 		if (prefix) {
@@ -414,10 +432,10 @@ bool WorkScreen::AddLineToChatScreen(
 	}
 
 	if (centering) {
-		int posX = _columns * 5 / 8 - text.Length() / 2;
+		int posX = (_v1X + _columns) / 2 - text.Length() / 2;
 		move(currentLinePosition, posX);
 	} else {
-		move(currentLinePosition, _columns / 4 + 2);
+		move(currentLinePosition, _v1X + 2);
 	}
 
 	if (prefix) {
@@ -579,7 +597,7 @@ bool WorkScreen::RedrawTextContentsEntry(
 
 	CowBuffer<String> lines = UiHelpers::MakeMultiline(
 		entry->Text,
-		_columns * 3 / 4 - 4);
+		_columns - _v1X - 4);
 
 	for (int i = lines.Size() - 1; i >= 0; i--) {
 		bool success = AddLineToChatScreen(
@@ -822,7 +840,7 @@ bool WorkScreen::RedrawMessageDelimiter(
 
 	String text = "-";
 
-	while (text.Length() < _columns * 3 / 4 - 4) {
+	while (text.Length() < _columns - _v1X - 4) {
 		text += " -";
 	}
 
@@ -858,7 +876,7 @@ void WorkScreen::RedrawTextBox()
 	MessageDraft::DraftEntryBase *currItem = draft.GetCurrentEntry();
 
 	if (!currItem || currItem->Type != MessageDraft::EntryType::Text) {
-		move(_rows - 8, _columns / 4 + 1);
+		move(_h3Y + 1, _v1X + 1);
 		return;
 	}
 
@@ -866,9 +884,9 @@ void WorkScreen::RedrawTextBox()
 		currItem);
 
 	e->Editor.SetPosition(
-		_rows - 8,
-		_rows - 4,
-		_columns / 4 + 1,
+		_h3Y + 1,
+		_h4Y - 1,
+		_v1X + 1,
 		_columns - 2);
 
 	e->Editor.Redraw();
@@ -1050,9 +1068,9 @@ Screen *WorkScreen::ProcessChatTypeEvent(int event)
 
 	if (needSetSize) {
 		e->Editor.SetPosition(
-			_rows - 8,
-			_rows - 4,
-			_columns / 4 + 1,
+			_h3Y + 1,
+			_h4Y - 1,
+			_v1X + 1,
 			_columns - 2);
 	}
 
@@ -1105,9 +1123,10 @@ void WorkScreen::MarkMessageAsRead()
 	}
 
 	int messageHeight = GetMessageHeight(md);
+	int lineAfterFlags = messageHeight - 7;
 
 	// Mark the message as read on the first message body line.
-	bool markAsRead = _chatStack->LineOffset == messageHeight - 7;
+	bool markAsRead = _chatStack->LineOffset == lineAfterFlags;
 
 	if (!markAsRead) {
 		return;

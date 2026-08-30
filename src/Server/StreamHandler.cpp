@@ -2,6 +2,7 @@
 
 #include "../Protocol/StreamParser.hpp"
 #include "../Protocol/GateParser.hpp"
+#include "../Protocol/CommonParserConstants.hpp"
 #include "../Common/Endianness.hpp"
 #include "../Common/Log.hpp"
 
@@ -181,7 +182,7 @@ bool StreamHandler::ProcessData(const CowBuffer<uint8_t> buffer)
 		return false;
 	}
 
-	if (buffer.Size() > 4096) {
+	if (buffer.Size() > CommonParserConstants::SmallDatagramSize) {
 		return false;
 	}
 

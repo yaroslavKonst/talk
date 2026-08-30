@@ -1,6 +1,7 @@
 #include "StreamParser.hpp"
 
 #include "ParserHelpers.hpp"
+#include "CommonParserConstants.hpp"
 #include "../Message/Message.hpp"
 #include "../Common/Endianness.hpp"
 
@@ -10,11 +11,16 @@ bool StreamHandshake::ParseInitRequest(
 {
 	uint64_t offset = 0;
 
-	if (!ParseString(buffer, offset, data.Source)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		data.Source,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
-	if (!data.Source.Length() || data.Source.Length() > 500) {
+	if (!data.Source.Length()) {
 		return false;
 	}
 
@@ -29,11 +35,16 @@ bool StreamHandshake::ParseInitRequest(
 	data.SourceKey = buffer.Pointer(offset);
 	offset += Crypto::X25519::KEY_SIZE;
 
-	if (!ParseString(buffer, offset, data.Destination)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		data.Destination,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
-	if (!data.Destination.Length() || data.Destination.Length() > 500) {
+	if (!data.Destination.Length()) {
 		return false;
 	}
 

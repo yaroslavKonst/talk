@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 
 #include "User.hpp"
+#include "../Protocol/CommonParserConstants.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/Endianness.hpp"
 #include "../Common/UnixTime.hpp"
@@ -21,6 +22,7 @@ ServerHandshake::ServerHandshake(
 	_privateKey(privateKey),
 	_publicKey(publicKey)
 {
+	// Timeout 10 seconds.
 	SetInterval(10000);
 	SetTimestamp(GetMonotonicMillisecondTime());
 
@@ -182,7 +184,8 @@ void ServerHandshake::ProcessSynSize(CowBuffer<uint8_t> buffer)
 
 	uint32_t synLength = SetProtoEndian(*buffer.SwitchType<uint32_t>());
 
-	if (synLength > 1024 || !synLength) {
+	if (synLength > CommonParserConstants::SmallDatagramSize || !synLength)
+	{
 		HandshakeLog("", "Invalid Syn size.");
 		_storage->MarkSessionForRemoval(this);
 		return;

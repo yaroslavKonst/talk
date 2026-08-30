@@ -14,11 +14,12 @@
 #include "../Common/SignalHandling.hpp"
 #include "../Common/Log.hpp"
 #include "../Common/EventDispatcher.hpp"
+#include "../Common/FileAccess.hpp"
 #include "../Crypto/Crypto.hpp"
 
 Server::Server()
 {
-	umask(077);
+	umask(FileAccessConstants::ProcessUmask);
 	GetPassword();
 }
 
@@ -93,8 +94,9 @@ void Server::GetPassword()
 	}
 
 	String buffer;
+	int maxBufferLength = 100000;
 
-	while (buffer.Length() < 100000) {
+	while (buffer.Length() < maxBufferLength) {
 		char c;
 
 		int res = read(passFd, &c, 1);

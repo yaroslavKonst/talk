@@ -61,7 +61,8 @@ public:
 	bool RequestAccountSettings() override;
 	bool SetAccountSettings(
 		bool allowMessages,
-		bool allowCalls) override;
+		bool allowCalls,
+		bool showInList) override;
 	bool SetAccountSettingsProcessor(
 		AccountSettingsProcessor *processor) override;
 

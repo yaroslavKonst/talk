@@ -8,7 +8,8 @@
 #include <sys/types.h>
 #include <dirent.h>
 
-#include "../Common/Exception.hpp"
+#include "Exception.hpp"
+#include "FileAccess.hpp"
 
 void CreateDirectory(String path)
 {
@@ -19,7 +20,9 @@ void CreateDirectory(String path)
 			THROW("Error on checking directory.");
 		}
 
-		fd = mkdir(path.CStr(), 0700);
+		fd = mkdir(
+			path.CStr(),
+			FileAccessConstants::DirectoryAccessRights);
 
 		if (fd == -1) {
 			THROW("Failed to create directory.");

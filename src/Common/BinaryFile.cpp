@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include "FileAccess.hpp"
+
 BinaryFile::BinaryFile(String path, bool create, bool trunc)
 {
 	int flags = O_RDWR;
@@ -16,7 +18,7 @@ BinaryFile::BinaryFile(String path, bool create, bool trunc)
 		flags |= O_TRUNC;
 	}
 
-	_fd = open(path.CStr(), flags, 0600);
+	_fd = open(path.CStr(), flags, FileAccessConstants::FileAccessRights);
 
 	if (_fd == -1) {
 		THROW("Failed to open file " + path + ".");

@@ -1,6 +1,7 @@
 #include "ClientHandshake.hpp"
 
 #include "../Protocol/HandshakeParser.hpp"
+#include "../Protocol/CommonParserConstants.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/Endianness.hpp"
 
@@ -221,7 +222,7 @@ bool ClientHandshake::ProcessSynAckSize(CowBuffer<uint8_t> buffer)
 
 	uint32_t synAckSize = SetProtoEndian(*buffer.SwitchType<uint32_t>());
 
-	if (synAckSize > 512) {
+	if (synAckSize > CommonParserConstants::SmallDatagramSize) {
 		return false;
 	}
 

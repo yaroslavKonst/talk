@@ -1,6 +1,7 @@
 #include "ControlParser.hpp"
 
 #include "ParserHelpers.hpp"
+#include "CommonParserConstants.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
 
 bool CommandAddUser::ParseRequest(
@@ -21,7 +22,12 @@ bool CommandAddUser::ParseRequest(
 
 	uint64_t offset = baseLength;
 
-	if (!ParseString(buffer, offset, request.Name, 500)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		request.Name,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -87,7 +93,12 @@ bool CommandRemoveUser::ParseRequest(
 
 	uint64_t offset = sizeof(int32_t);
 
-	if (!ParseString(buffer, offset, request.Name, 500)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		request.Name,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -200,7 +211,12 @@ bool CommandListUsers::ParseResponse(
 	uint64_t offset = baseSize;
 
 	for (int32_t i = 0; i < userCount; i++) {
-		if (!ParseString(buffer, offset, userData[i].Name, 500)) {
+		if (!ParseString(
+			buffer,
+			offset,
+			userData[i].Name,
+			CommonParserConstants::FullNameSize))
+		{
 			return false;
 		}
 

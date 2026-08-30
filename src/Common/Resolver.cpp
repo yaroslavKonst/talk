@@ -218,7 +218,8 @@ IPAddress Resolver::ResolveAAAA(String dnsName)
 
 		bool isRequiredEntry =
 			ns_rr_type(rr) == ns_t_aaaa &&
-			ns_rr_rdlen(rr) == 16;
+			ns_rr_rdlen(rr) ==
+			sizeof(IPAddress::AddressStorage::IPv6);
 
 		if (isRequiredEntry) {
 			IPAddress ipv6;
@@ -226,7 +227,7 @@ IPAddress Resolver::ResolveAAAA(String dnsName)
 			memcpy(
 				ipv6.Address.IPv6,
 				ns_rr_rdata(rr),
-				16);
+				sizeof(IPAddress::AddressStorage::IPv6));
 			_status = 0;
 
 			ResolverLog("Result: " + ipv6.ToString() + ".");
@@ -253,11 +254,17 @@ String Resolver::ResolveRDNS(IPAddress ip)
 
 		dnsName += "in-addr.arpa";
 	} else {
-		uint8_t bytes[16];
+		uint8_t bytes[sizeof(IPAddress::AddressStorage::IPv6)];
 
-		memcpy(bytes, ip.Address.IPv6, 16);
+		memcpy(
+			bytes,
+			ip.Address.IPv6,
+			sizeof(IPAddress::AddressStorage::IPv6));
 
-		for (int i = 15; i >= 0; i--) {
+		for (int i = sizeof(IPAddress::AddressStorage::IPv6) - 1;
+			i >= 0;
+			i--)
+		{
 			uint8_t octet = bytes[i];
 
 			uint8_t lp = octet & 0xf;

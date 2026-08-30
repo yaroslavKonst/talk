@@ -3,11 +3,13 @@
 #include <unistd.h>
 #include <sys/socket.h>
 
+#include "../Protocol/CommonParserConstants.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Exception.hpp"
 
 Network::Network(Root *root)
 {
+	// Timeout 2 seconds for KEEP_ALIVE.
 	SetInterval(2000);
 	SetTimestamp(GetMonotonicMillisecondTime());
 
@@ -191,7 +193,7 @@ uint64_t Network::GetMaxMessageSize()
 		return _session->GetMaxMessageSize();
 	}
 
-	return 2048;
+	return CommonParserConstants::SmallDatagramSize;
 }
 
 bool Network::AddContact(String name)
@@ -298,13 +300,16 @@ bool Network::RequestAccountSettings()
 	return true;
 }
 
-bool Network::SetAccountSettings(bool allowMessages, bool allowCalls)
+bool Network::SetAccountSettings(
+	bool allowMessages,
+	bool allowCalls,
+	bool showInList)
 {
 	if (!_session) {
 		return false;
 	}
 
-	_session->SetAccountSettings(allowMessages, allowCalls);
+	_session->SetAccountSettings(allowMessages, allowCalls, showInList);
 	return true;
 }
 

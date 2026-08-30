@@ -47,7 +47,10 @@ public:
 		bool value);
 
 	void GetAccountSettings();
-	void SetAccountSettings(bool allowMessages, bool allowCalls);
+	void SetAccountSettings(
+		bool allowMessages,
+		bool allowCalls,
+		bool showInList);
 	void SetAccountSettingsProcessor(
 		NetworkEventProcessor::AccountSettingsProcessor *processor);
 

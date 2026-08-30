@@ -2,6 +2,7 @@
 #define _UI_HELPERS_HPP
 
 #include "../Common/MyString.hpp"
+#include "../Common/UTF8.hpp"
 
 namespace UiHelpers
 {
@@ -32,7 +33,11 @@ namespace UiHelpers
 		TextBox();
 
 		String Caption;
-		String Text;
+
+		bool HasText();
+		int GetTextLength();
+		String GetText();
+		void SetText(String text);
 
 		void SetCaptionPosition(int y, int x);
 		void SetTextPosition(int y, int x);
@@ -51,11 +56,22 @@ namespace UiHelpers
 		int _tY;
 
 		int _widthLimit;
+
+		CowBuffer<uint32_t> _text;
+
+		UTF8::Decoder _decoder;
 	};
 
 	String GetRunningLine(String text, int widthLimit, bool &running);
 	bool DrawRunningLine(String text, int widthLimit);
 	void UpdateRunningLineSeed();
+
+	bool DrawCommentedLine(
+		String text,
+		String comment,
+		int width,
+		int textAttr,
+		int commentAttr);
 }
 
 #endif

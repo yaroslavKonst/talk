@@ -3,8 +3,9 @@
 #include <cstdio>
 
 #include "UnixTime.hpp"
+#include "Exception.hpp"
 
-static bool AllowMultilineLogValue = false;
+static int MaxLogWidth = 80;
 static LogLevel LogLevelValue = LogLevel::Verbose;
 
 static CowBuffer<String> MakeMultiline(String text, int limit)
@@ -103,24 +104,23 @@ void Log(LogLevel level, String section, String message)
 	String timeStr = "[" + TimeInSecondsToString(GetUnixTime()) + "]: " +
 		section + ": ";
 
-	if (AllowMultilineLogValue) {
+	if (MaxLogWidth > 0) {
 		String filler;
 
-		for (int i = 0; i < timeStr.Length(); i++) {
-			filler += " ";
-		}
-
-		int limit = 80 - timeStr.Length() - 1;
+		int limit = MaxLogWidth - timeStr.Length() - 1;
 
 		bool tooLongHeader = false;
 
 		if (limit < 20) {
 			// Header is too long for nice formatting.
-			limit = 39;
+			limit = MaxLogWidth - 40 - 1;
 			tooLongHeader = true;
+		}
 
-			// Header length is at least 60, so it is safe.
-			filler = filler.Substring(0, 40);
+		int fillerWidth = MaxLogWidth - limit - 1;
+
+		for (int i = 0; i < fillerWidth; i++) {
+			filler += " ";
 		}
 
 		CowBuffer<String> lines = MakeMultiline(message, limit);
@@ -149,9 +149,16 @@ void Log(LogLevel level, String section, String message)
 	fflush(stdout);
 }
 
-void AllowMultilineLog(bool allow)
+void SetMaxLogWidth(int width)
 {
-	AllowMultilineLogValue = allow;
+	int minLogWidth = 70;
+
+	if (width < minLogWidth && width > 0) {
+		THROW("Log can not be narrower than " +
+			ToString(minLogWidth) + ".");
+	}
+
+	MaxLogWidth = width;
 }
 
 void SetLogLevel(LogLevel level)

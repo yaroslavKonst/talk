@@ -8,6 +8,7 @@
 #include "../Message/Message.hpp"
 #include "../Protocol/GateParser.hpp"
 #include "../Protocol/StreamParser.hpp"
+#include "../Protocol/CommonParserConstants.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/File.hpp"
 #include "../Common/UnixTime.hpp"
@@ -202,6 +203,7 @@ OutboundGateSession::OutboundGateSession(
 	OutboundTaskBase *task) :
 	_securityModule(dispatcher)
 {
+	// Timeout is defined by task module.
 	SetInterval(task->GetTimeoutInterval());
 	SetTimestamp(GetMonotonicMillisecondTime());
 
@@ -673,7 +675,7 @@ void OutboundGateSession::SendHandshakeSyn()
 		_ephemeralPrivateKey,
 		_ephemeralPublicKey);
 
-	_salt1 = CowBuffer<uint8_t>(32);
+	_salt1 = CowBuffer<uint8_t>(GateHandshake::SaltSize);
 
 	Crypto::GenerateRandomData(_salt1.Size(), _salt1.Pointer(), false);
 
@@ -723,7 +725,7 @@ bool OutboundGateSession::ProcessSynSize(CowBuffer<uint8_t> buffer)
 
 	uint32_t synSize = SetProtoEndian(*buffer.SwitchType<uint32_t>());
 
-	if (!synSize || synSize > 2048) {
+	if (!synSize || synSize > CommonParserConstants::SmallDatagramSize) {
 		return false;
 	}
 
@@ -851,7 +853,7 @@ bool OutboundGateSession::ProcessSessionInput(CowBuffer<uint8_t> buffer)
 
 		uint32_t size = SetProtoEndian(*buffer.SwitchType<uint32_t>());
 
-		if (!size || size > 4096) {
+		if (!size || size > CommonParserConstants::SmallDatagramSize) {
 			return false;
 		}
 

@@ -6,6 +6,14 @@
 
 #include "MyString.hpp"
 
+namespace NetworkConstants
+{
+	enum
+	{
+		ListenBacklogSize = 5
+	};
+}
+
 struct IPAddress
 {
 	enum class AddressType

@@ -25,6 +25,13 @@ private:
 	void RedrawFrames();
 	void RedrawChatList();
 
+	// Layout. Scheme is in cpp file.
+	int _h1Y;
+	int _h2Y;
+	int _h3Y;
+	int _h4Y;
+	int _v1X;
+
 	void RedrawCurrentChat();
 
 	// Chat screen line drawing helper.

@@ -24,6 +24,7 @@ ServerSession::ServerSession(
 	uint8_t outScramblerInit,
 	uint8_t inScramblerInit)
 {
+	// Timeout 10 seconds.
 	SetInterval(10000);
 	SetTimestamp(GetMonotonicMillisecondTime());
 
@@ -260,7 +261,8 @@ bool ServerSession::ProcessGetAccountSettings()
 
 	_storage->GetAccountSettings(
 		response.AllowMessagesOnlyFromContactList,
-		response.AllowCallsOnlyFromContactList);
+		response.AllowCallsOnlyFromContactList,
+		response.ShowInContactList);
 
 	_protocol->Send(CommandGetAccountSettings::BuildResponse(response), 0);
 	return true;
@@ -279,7 +281,8 @@ bool ServerSession::ProcessSetAccountSettings(const CowBuffer<uint8_t> buffer)
 
 	_storage->SetAccountSettings(
 		command.AllowMessagesOnlyFromContactList,
-		command.AllowCallsOnlyFromContactList);
+		command.AllowCallsOnlyFromContactList,
+		command.ShowInContactList);
 	return true;
 }
 

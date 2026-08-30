@@ -20,7 +20,8 @@ public:
 
 	void ReceiveAccountSettings(
 		bool allowMessagesOnlyFromContactList,
-		bool allowCallsOnlyFromContactList) override;
+		bool allowCallsOnlyFromContactList,
+		bool showInContactList) override;
 
 private:
 	Root *_root;
@@ -32,12 +33,14 @@ private:
 
 	bool _onlyContactsCanWriteMessages;
 	bool _onlyContactsCanCall;
+	bool _showInContactList;
 
 	enum class State
 	{
 		NameSetting,
 		MessageSetting,
-		CallSetting
+		CallSetting,
+		ContactListSetting
 	};
 
 	State _state;

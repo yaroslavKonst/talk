@@ -5,6 +5,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "../Protocol/CommonParserConstants.hpp"
+#include "../Message/Message.hpp"
 #include "../Common/File.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/Log.hpp"
@@ -417,13 +419,14 @@ static bool ParseTime(String text, int64_t &result)
 void Config::Validate()
 {
 	// Port.
-	int32_t port = atoi(
-		_configFile.Get(NetworkSection, PortSetting).CStr());
+	String portString = _configFile.Get(NetworkSection, PortSetting);
 
-	if (port <= 0 || port > 65535) {
+	if (!Message::VerifyPortName(portString)) {
 		THROW("Client port number must be positive integer less "
 			"than 65536.");
 	}
+
+	int32_t port = atoi(portString.CStr());
 
 	// Address.
 	IPAddress addr;
@@ -435,13 +438,14 @@ void Config::Validate()
 	}
 
 	// Gate port.
-	int32_t gatePort = atoi(
-		_configFile.Get(NetworkSection, GatePortSetting).CStr());
+	portString = _configFile.Get(NetworkSection, GatePortSetting);
 
-	if (gatePort <= 0 || gatePort > 65535) {
+	if (!Message::VerifyPortName(portString)) {
 		THROW("Gate port number must be positive integer less "
 			"than 65536.");
 	}
+
+	int32_t gatePort = atoi(portString.CStr());
 
 	// Gate address.
 	IPAddress gateAddr;
@@ -459,9 +463,13 @@ void Config::Validate()
 		_configFile.Get(LimitsSection, MessageSizeLimitSetting),
 		messageSize);
 
-	if (!parseResult || messageSize < 4096) {
+	if (!parseResult ||
+		messageSize < CommonParserConstants::SmallDatagramSize)
+	{
 		THROW("Message size limit must be integer with "
-			"optional K,M or G suffix not less than 4096.");
+			"optional K,M or G suffix not less than " +
+			ToString(CommonParserConstants::SmallDatagramSize) +
+			".");
 	}
 
 	// Host name.

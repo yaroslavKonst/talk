@@ -14,7 +14,7 @@ enum class LogLevel
 };
 
 void Log(LogLevel level, String section, String message);
-void AllowMultilineLog(bool allow);
+void SetMaxLogWidth(int width);
 void SetLogLevel(LogLevel level);
 
 #endif

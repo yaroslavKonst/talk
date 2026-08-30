@@ -84,7 +84,7 @@ void GateListeningSocket::OpenSocket()
 		THROW("Failed to bind listening socket.");
 	}
 
-	res = listen(_socketFd, 5);
+	res = listen(_socketFd, NetworkConstants::ListenBacklogSize);
 
 	if (res == -1) {
 		CloseSocket();

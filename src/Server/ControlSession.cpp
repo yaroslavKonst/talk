@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 
 #include "../Protocol/ControlParser.hpp"
+#include "../Protocol/CommonParserConstants.hpp"
 #include "../Message/Message.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Exception.hpp"
@@ -19,6 +20,7 @@ ControlSession::ControlSession(
 	EventDispatcher *dispatcher,
 	FailBan *failBan)
 {
+	// Timeout 10 seconds.
 	SetInterval(10000);
 	SetTimestamp(GetMonotonicMillisecondTime());
 
@@ -160,7 +162,9 @@ void ControlSession::Process(const CowBuffer<uint8_t> buffer)
 
 		_requestSize = *buffer.SwitchType<uint64_t>();
 
-		if (_requestSize > 1024 * 1024 * 1024 || !_requestSize) {
+		if (_requestSize > CommonParserConstants::SmallDatagramSize ||
+			!_requestSize)
+		{
 			_storage->MarkSessionForRemoval(this);
 			return;
 		}
@@ -357,7 +361,7 @@ void ControlSession::ProcessListUsersCommand(CowBuffer<uint8_t> buffer)
 
 	CommandListUsers::Response response;
 
-	CowBuffer<String> userNames = _users->ListUsers();
+	CowBuffer<String> userNames = _users->ListUsers(false);
 
 	if (!ValidateFlags(request.Flags)) {
 		response.Code = ERROR_UNSUPPORTED_OPTION;

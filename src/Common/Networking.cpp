@@ -20,7 +20,10 @@ bool IPAddress::operator==(const IPAddress &addr) const
 		return Address.IPv4 == addr.Address.IPv4;
 	}
 
-	return !memcmp(Address.IPv6, addr.Address.IPv6, 16);
+	return !memcmp(
+		Address.IPv6,
+		addr.Address.IPv6,
+		sizeof(IPAddress::AddressStorage::IPv6));
 }
 
 bool IPAddress::operator!=(const IPAddress &addr) const
@@ -38,7 +41,11 @@ bool IPAddress::operator<(const IPAddress &addr) const
 		return Address.IPv4 < addr.Address.IPv4;
 	}
 
-	int res = memcmp(Address.IPv6, addr.Address.IPv6, 16);
+	int res = memcmp(
+		Address.IPv6,
+		addr.Address.IPv6,
+		sizeof(IPAddress::AddressStorage::IPv6));
+
 	return res < 0;
 }
 
@@ -60,7 +67,10 @@ struct sockaddr_storage *IPAddress::GetStructSockaddr(
 		struct sockaddr_in6 *addr = (struct sockaddr_in6*)addrBase;
 		addr->sin6_family = AF_INET6;
 		addr->sin6_port = port;
-		memcpy(addr->sin6_addr.s6_addr, Address.IPv6, 16);
+		memcpy(
+			addr->sin6_addr.s6_addr,
+			Address.IPv6,
+			sizeof(IPAddress::AddressStorage::IPv6));
 
 		addrLen = sizeof(struct sockaddr_in6);
 	} else {
@@ -83,7 +93,10 @@ bool IPAddress::LoadStructSockaddr(struct sockaddr_storage *addr)
 	if (addr->ss_family == AF_INET6) {
 		struct sockaddr_in6 *addrIn = (struct sockaddr_in6*)addr;
 		Type = AddressType::IPv6;
-		memcpy(Address.IPv6, addrIn->sin6_addr.s6_addr, 16);
+		memcpy(
+			Address.IPv6,
+			addrIn->sin6_addr.s6_addr,
+			sizeof(IPAddress::AddressStorage::IPv6));
 		return true;
 	}
 

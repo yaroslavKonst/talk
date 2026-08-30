@@ -96,31 +96,59 @@ bool UserDB::RemoveUser(String name)
 	return true;
 }
 
-int UserDB::GetUserCount()
+int UserDB::GetUserCount(bool publicData)
 {
 	int userCount = 0;
 
 	Tree<UserByName>::Entry *entry = _usersByName.FindSmallest();
 
 	while (entry) {
-		++userCount;
+		bool unusedValue1;
+		bool unusedValue2;
+		bool showInContactList = true;
+
+		if (publicData) {
+			entry->Key.user->GetAccountSettings(
+				unusedValue1,
+				unusedValue2,
+				showInContactList);
+		}
+
+		if (showInContactList) {
+			++userCount;
+		}
+
 		entry = _usersByName.Next(entry);
 	}
 
 	return userCount;
 }
 
-CowBuffer<String> UserDB::ListUsers()
+CowBuffer<String> UserDB::ListUsers(bool publicData)
 {
-	int userCount = GetUserCount();
+	int userCount = GetUserCount(publicData);
 	CowBuffer<String> data(userCount);
 
 	int index = 0;
 	Tree<UserByName>::Entry *entry = _usersByName.FindSmallest();
 
 	while (entry) {
-		data[index] = entry->Key.user->GetName();
-		++index;
+		bool unusedValue1;
+		bool unusedValue2;
+		bool showInContactList = true;
+
+		if (publicData) {
+			entry->Key.user->GetAccountSettings(
+				unusedValue1,
+				unusedValue2,
+				showInContactList);
+		}
+
+		if (showInContactList) {
+			data[index] = entry->Key.user->GetName();
+			++index;
+		}
+
 		entry = _usersByName.Next(entry);
 	}
 

@@ -7,6 +7,7 @@
 
 #include "../Common/UnixTime.hpp"
 #include "../Common/Exception.hpp"
+#include "../Common/FileAccess.hpp"
 
 namespace Crypto
 {
@@ -293,6 +294,8 @@ namespace Crypto
 			config.nb_passes = 3;
 			config.nb_lanes = 1;
 
+			int blockSize = 1024;
+
 			crypto_argon2_inputs inputs;
 			inputs.pass = (const uint8_t*)password;
 			inputs.salt = salt;
@@ -305,7 +308,7 @@ namespace Crypto
 			extras.key_size = 0;
 			extras.ad_size = 0;
 
-			char *workArea = new char[config.nb_blocks * 1024];
+			char *workArea = new char[config.nb_blocks * blockSize];
 			crypto_argon2(
 				key.Key,
 				KEY_SIZE,
@@ -437,7 +440,7 @@ namespace Crypto
 				fd = open(
 					file.CStr(),
 					O_WRONLY | O_CREAT,
-					0600);
+					FileAccessConstants::FileAccessRights);
 
 				if (fd == -1) {
 					THROW("Failed to open salt file for "

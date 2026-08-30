@@ -29,6 +29,7 @@ public:
 
 	virtual int64_t GetTimeoutInterval() override
 	{
+		// Timeout 30 seconds before and after KEEP_ALIVE.
 		return 30000;
 	}
 

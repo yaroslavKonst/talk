@@ -12,6 +12,14 @@
 #define GATE_HANDSHAKE_UNSUPPORTED_PROTOCOL_VERSION 2
 #define GATE_HANDSHAKE_UNSUPPORTED_ENCRYPTION_SCHEME 3
 
+namespace GateHandshake
+{
+	enum
+	{
+		SaltSize = 32
+	};
+}
+
 namespace GateHandshakeStatus
 {
 	struct Data
@@ -103,6 +111,7 @@ namespace GateCommandMessage
 }
 
 #define GATE_COMMAND_STREAM_REQUEST 2
+
 #define GATE_STREAM_FRAME 0
 #define GATE_STREAM_END 1
 #define GATE_STREAM_KEEP_ALIVE 2

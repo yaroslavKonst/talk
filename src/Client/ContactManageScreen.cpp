@@ -4,6 +4,7 @@
 
 #include "WorkScreen.hpp"
 #include "TextColor.hpp"
+#include "UiLayout.hpp"
 #include "../Common/Hex.hpp"
 
 ContactManageScreen::ContactManageScreen(Root *root, String contactName)
@@ -27,14 +28,14 @@ ContactManageScreen::~ContactManageScreen()
 void ContactManageScreen::Redraw()
 {
 	for (int i = 0; i < _columns; i++) {
-		move(4, i);
+		move(LayoutConstants::HeaderHeight, i);
 		addch(ACS_HLINE);
 	}
 
 	bool running;
 	UiHelpers::DrawFrame(
-		5,
-		_rows - 3,
+		LayoutConstants::HeaderHeight + 1,
+		_rows - 1 - LayoutConstants::FooterHeight,
 		1,
 		_columns - 2,
 		"Manage " + _contactName,
@@ -48,10 +49,10 @@ void ContactManageScreen::Redraw()
 	Contact *contact = _contacts->GetContact(_contactName);
 
 	if (!contact) {
-		move(6, 3);
+		move(LayoutConstants::HeaderHeight + 2, 3);
 		running = UiHelpers::DrawRunningLine(
 			"Contact is deleted.",
-			_columns - 8);
+			_columns - 6);
 
 		if (running) {
 			_root->Ui->RequestRunningLine();
@@ -119,7 +120,9 @@ CowBuffer<String> ContactManageScreen::GetControlHelp()
 
 void ContactManageScreen::RedrawKeyList()
 {
-	int size = _rows - 9;
+	int size = _rows -
+		LayoutConstants::HeaderHeight -
+		LayoutConstants::FooterHeight - 3;
 
 	Contact *contact = _contacts->GetContact(_contactName);
 
@@ -127,7 +130,7 @@ void ContactManageScreen::RedrawKeyList()
 		contact->GetKeys();
 
 	if (!keys.Size()) {
-		move(6, 2);
+		move(LayoutConstants::HeaderHeight + 2, 2);
 		return;
 	}
 
@@ -164,8 +167,8 @@ void ContactManageScreen::RedrawKeyList()
 		}
 	}
 
-	int currentKeyPosition = 6;
-	int selectedKeyPosition = 6;
+	int currentKeyPosition = LayoutConstants::HeaderHeight + 2;
+	int selectedKeyPosition = currentKeyPosition;
 
 	for (int i = firstKey; i <= lastKey; i++) {
 		move(currentKeyPosition, 3);
@@ -175,9 +178,12 @@ void ContactManageScreen::RedrawKeyList()
 			Crypto::X25519::KEY_SIZE);
 
 		String statusString;
+		int statusAttr = COLOR_PAIR(DEFAULT_TEXT);
 
-		if (contact->IsKeyBlocked(keys[i])) {
-			statusString += "blocked";
+		if (contact->HasDefaultKey()) {
+			if (contact->GetDefaultKey() == keys[i]) {
+				statusString += "default";
+			}
 		}
 
 		if (!contact->IsKeyVerified(keys[i])) {
@@ -186,72 +192,36 @@ void ContactManageScreen::RedrawKeyList()
 			}
 
 			statusString += "unverified";
+			statusAttr = COLOR_PAIR(YELLOW_TEXT);
 		}
 
-		if (contact->HasDefaultKey()) {
-			if (contact->GetDefaultKey() == keys[i]) {
-				if (statusString.Length()) {
-					statusString += ", ";
-				}
-
-				statusString += "default";
-			}
-		}
-
-		int keyLength = keyString.Length();
-		int statusLength = statusString.Length();
-
-		if (statusLength) {
-			keyLength += 3;
-		}
-
-		int widthLimit = _columns - 7;
-
-		if (keyLength + statusLength > widthLimit) {
-			if (statusLength > widthLimit / 4) {
-				statusLength = widthLimit / 4;
+		if (contact->IsKeyBlocked(keys[i])) {
+			if (statusString.Length()) {
+				statusString += ", ";
 			}
 
-			keyLength = widthLimit - statusLength;
-
-			if (statusLength) {
-				keyLength -= 3;
-			}
+			statusString += "blocked";
+			statusAttr = COLOR_PAIR(RED_TEXT);
 		}
+
+		int widthLimit = _columns - 6;
+
+		int keyAttr = COLOR_PAIR(DEFAULT_TEXT);
 
 		if (i == _currentKey) {
-			attrset(COLOR_PAIR(YELLOW_TEXT));
 			selectedKeyPosition = currentKeyPosition;
+			keyAttr = COLOR_PAIR(YELLOW_TEXT);
 		}
 
-		bool running = UiHelpers::DrawRunningLine(keyString, keyLength);
+		bool running = UiHelpers::DrawCommentedLine(
+			keyString,
+			statusString,
+			widthLimit,
+			keyAttr,
+			statusAttr);
 
 		if (running) {
 			_root->Ui->RequestRunningLine();
-		}
-
-		if (i == _currentKey) {
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
-		}
-
-		if (statusString.Length()) {
-			addstr(" | ");
-
-			if (contact->IsKeyBlocked(keys[i])) {
-				attrset(COLOR_PAIR(RED_TEXT));
-			} else if (!contact->IsKeyVerified(keys[i])) {
-				attrset(COLOR_PAIR(YELLOW_TEXT));
-			}
-
-			running = UiHelpers::DrawRunningLine(
-				statusString,
-				statusLength);
-
-			if (running) {
-				_root->Ui->RequestRunningLine();
-			}
-
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
 		}
 
 		++currentKeyPosition;
@@ -301,8 +271,8 @@ void ContactManageScreen::DrawAddWindow()
 	int baseX = _columns / 2;
 
 	int xOffset =
-		(_newKeyHex.Caption.Length() +
-		_newKeyHex.Text.Length()) /
+		(UTF8::StrLen(_newKeyHex.Caption.CStr()) +
+		_newKeyHex.GetTextLength()) /
 		2;
 
 	if (xOffset > _columns / 2 - 4) {
@@ -350,13 +320,16 @@ Screen *ContactManageScreen::ProcessAddEvent(int event)
 	}
 
 	if (event == _root->Conf->ContactEnterKey()) {
-		if (_newKeyHex.Text.Length() != Crypto::X25519::KEY_SIZE * 2) {
-			_root->Ui->Notify("Key length must be 64 characters.");
+		int validKeySize = Crypto::X25519::KEY_SIZE * 2;
+
+		if (_newKeyHex.GetTextLength() != validKeySize) {
+			_root->Ui->Notify("Key length must be " +
+				ToString(validKeySize) + " characters.");
 			return this;
 		}
 
 		Crypto::X25519::PublicKeyContainer key;
-		HexToData(_newKeyHex.Text, key.Key);
+		HexToData(_newKeyHex.GetText(), key.Key);
 
 		CowBuffer<Crypto::X25519::PublicKeyContainer> keys =
 			_contacts->GetContact(_contactName)->GetKeys();
@@ -382,14 +355,17 @@ Screen *ContactManageScreen::ProcessAddEvent(int event)
 			return this;
 		}
 
-		_newKeyHex.Text = "";
+		_newKeyHex.SetText("");
 		_mode = Mode::List;
 		_currentKey = keys.Size();
 		return this;
 	}
 
 	if (ValidChar(event)) {
-		if (event != '\b' && _newKeyHex.Text.Length() >= 64) {
+		if (event != '\b' &&
+			_newKeyHex.GetTextLength() >=
+			Crypto::X25519::KEY_SIZE * 2)
+		{
 			_root->Ui->Notify("Key length limit reached.");
 			return this;
 		}

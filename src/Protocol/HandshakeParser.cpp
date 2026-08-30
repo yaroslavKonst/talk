@@ -2,12 +2,11 @@
 
 #include <cstring>
 
+#include "CommonParserConstants.hpp"
 #include "../Crypto/Crypto.hpp"
 #include "../Common/Endianness.hpp"
 
 using namespace Crypto::X25519;
-
-static const uint64_t MaxNameLength = 500;
 
 static const uint64_t SynAckLength =
 	sizeof(int32_t) +
@@ -18,6 +17,10 @@ static const uint64_t SynAckLength =
 
 bool HandshakeSyn::Parse(const CowBuffer<uint8_t> buffer, Data &result)
 {
+	if (buffer.Size() > CommonParserConstants::SmallDatagramSize) {
+		return false;
+	}
+
 	uint64_t offset = 0;
 
 	if (buffer.Size() < offset + sizeof(int32_t)) {
@@ -59,7 +62,8 @@ bool HandshakeSyn::Parse(const CowBuffer<uint8_t> buffer, Data &result)
 
 	uint64_t minSize = (uint64_t)MAC_SIZE + (uint64_t)NONCE_SIZE + 1;
 	uint64_t maxSize =
-		(uint64_t)MAC_SIZE + (uint64_t)NONCE_SIZE + MaxNameLength;
+		(uint64_t)MAC_SIZE + (uint64_t)NONCE_SIZE +
+		CommonParserConstants::FullNameSize;
 
 	uint64_t encryptedNameSize = buffer.Size() - offset;
 

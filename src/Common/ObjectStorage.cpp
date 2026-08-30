@@ -6,6 +6,7 @@
 #include "File.hpp"
 #include "BinaryFile.hpp"
 #include "Hex.hpp"
+#include "FileAccess.hpp"
 #include "../Crypto/Crypto.hpp"
 
 #define OBJECT_PREFIX "objects"
@@ -466,7 +467,7 @@ void ObjectStorage::StartOperation()
 		_operationFd = open(
 			path.CStr(),
 			O_WRONLY | O_CREAT | O_TRUNC,
-			0600);
+			FileAccessConstants::FileAccessRights);
 
 		if (!_operationFd) {
 			THROW("Failed to open file for writing.");
@@ -474,7 +475,10 @@ void ObjectStorage::StartOperation()
 
 		_writer = new StreamWriter(_operationFd, _operationFirst->Data);
 	} else if (_operationFirst->Type == OperationNode::Update) {
-		_operationFd = open(path.CStr(), O_WRONLY | O_CREAT, 0600);
+		_operationFd = open(
+			path.CStr(),
+			O_WRONLY | O_CREAT,
+			FileAccessConstants::FileAccessRights);
 
 		if (!_operationFd) {
 			THROW("Failed to open file for writing.");
@@ -528,19 +532,22 @@ String ObjectStorage::GetPathForID(const ID &id, bool create)
 {
 	String idHex = DataToHex(id.GetValuePointer(), (int)Constants::IDSize);
 
-	String part1 = idHex.Substring(0, 3);
-	String part2 = idHex.Substring(3, 3);
-	String part3 = idHex.Substring(6, 3);
+	int pos = 0;
+	int partSize = 3;
+	int levelCount = 3;
 
-	if (create) {
-		String path = _rootPath + "/" + OBJECT_PREFIX + "/" + part1;
-		CreateDirectory(path);
-		path += "/" + part2;
-		CreateDirectory(path);
-		path += "/" + part3;
-		CreateDirectory(path);
+	String path = _rootPath + "/" + OBJECT_PREFIX;
+
+	for (int i = 0; i < levelCount; i++) {
+		String part = idHex.Substring(pos, partSize);
+		pos += partSize;
+
+		path += "/" + part;
+
+		if (create) {
+			CreateDirectory(path);
+		}
 	}
 
-	return _rootPath + "/" + OBJECT_PREFIX + "/" +
-		part1 + "/" + part2 + "/" + part3 + "/" + idHex;
+	return path + "/" + idHex;
 }

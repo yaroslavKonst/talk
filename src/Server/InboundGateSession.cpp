@@ -6,6 +6,7 @@
 
 #include "../Protocol/GateParser.hpp"
 #include "../Protocol/StreamParser.hpp"
+#include "../Protocol/CommonParserConstants.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/File.hpp"
 #include "../Common/UnixTime.hpp"
@@ -376,6 +377,7 @@ InboundGateSession::InboundGateSession(
 	RateLimiter *rateLimiter) :
 	_securityModule(dispatcher)
 {
+	// Timeout 60 seconds.
 	SetInterval(60000);
 	SetTimestamp(GetMonotonicMillisecondTime());
 
@@ -638,7 +640,7 @@ bool InboundGateSession::ProcessHandshakeSynSize(CowBuffer<uint8_t> buffer)
 
 	uint32_t synSize = SetProtoEndian(*buffer.SwitchType<uint32_t>());
 
-	if (!synSize || synSize > 2048) {
+	if (!synSize || synSize > CommonParserConstants::SmallDatagramSize) {
 		return false;
 	}
 
@@ -737,7 +739,7 @@ void InboundGateSession::SendSyn()
 	syn.ServerName = _config->GetHostName();
 	syn.Key = _ephemeralPublicKey;
 
-	_salt2 = CowBuffer<uint8_t>(32);
+	_salt2 = CowBuffer<uint8_t>(GateHandshake::SaltSize);
 
 	Crypto::GenerateRandomData(
 		_salt2.Size(),
@@ -866,7 +868,7 @@ bool InboundGateSession::ProcessSessionInput(CowBuffer<uint8_t> buffer)
 
 		uint32_t size = SetProtoEndian(*buffer.SwitchType<uint32_t>());
 
-		if (!size || size > 4096) {
+		if (!size || size > CommonParserConstants::SmallDatagramSize) {
 			return false;
 		}
 

@@ -157,5 +157,5 @@ int main(int argc, char **argv)
 		printf("%s\n", ex.Message().CStr());
 	}
 
-	return 10;
+	return 100;
 }

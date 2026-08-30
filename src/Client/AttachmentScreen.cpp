@@ -5,6 +5,8 @@
 #include <errno.h>
 #include <curses.h>
 
+#include "../Common/FileAccess.hpp"
+
 AttachmentScreen::AttachmentScreen(
 	Root *root,
 	bool extract,
@@ -120,7 +122,7 @@ bool AttachmentScreen::ExtractAttachment()
 		fd = open(
 			_path.CStr(),
 			O_WRONLY | O_CREAT | O_TRUNC,
-			0600);
+			FileAccessRights);
 
 		if (fd == -1) {
 			if (errno == EINTR) {
@@ -231,7 +233,7 @@ bool AttachmentScreen::LoadAttachment()
 		return false;
 	}
 
-	if (fileSize > 1024 * 1024 * 896) {
+	if (fileSize > _root->Network->GetMaxMessageSize()) {
 		_status = "File is too big.";
 		close(fd);
 		return false;

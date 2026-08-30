@@ -21,6 +21,7 @@ public:
 
 	virtual int64_t GetTimeoutInterval()
 	{
+		// Default timeout 60 seconds.
 		return 60000;
 	}
 

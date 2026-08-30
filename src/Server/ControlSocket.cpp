@@ -85,7 +85,7 @@ void ControlSocket::OpenSocket()
 		THROW("Failed to bind control socket.");
 	}
 
-	res = listen(_socketFd, 5);
+	res = listen(_socketFd, NetworkConstants::ListenBacklogSize);
 
 	if (res == -1) {
 		CloseSocket();

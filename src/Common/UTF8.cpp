@@ -12,7 +12,7 @@ CowBuffer<uint32_t> UTF8::Decode(String str)
 	int index = 0;
 
 	for (int i = 0; i < str.Length(); i++) {
-		bool success = decoder.AddByte(str.CStr()[i]);
+		bool success = decoder.AddByte((uint8_t)str.CStr()[i]);
 
 		if (!success) {
 			return CowBuffer<uint32_t>();

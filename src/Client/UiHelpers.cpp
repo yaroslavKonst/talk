@@ -4,6 +4,7 @@
 
 #include "TextColor.hpp"
 #include "../Common/UTF8.hpp"
+#include "../Common/Exception.hpp"
 
 using namespace UiHelpers;
 
@@ -225,6 +226,27 @@ TextBox::TextBox()
 	_widthLimit = -1;
 }
 
+bool TextBox::HasText()
+{
+	return _text.Size();
+}
+
+int TextBox::GetTextLength()
+{
+	return _text.Size();
+}
+
+String TextBox::GetText()
+{
+	return UTF8::Encode(_text);
+}
+
+void TextBox::SetText(String text)
+{
+	_text = UTF8::Decode(text);
+	_decoder.Reset();
+}
+
 void TextBox::SetCaptionPosition(int y, int x)
 {
 	_cY = y;
@@ -245,16 +267,18 @@ void TextBox::SetWidthLimit(int limit)
 void TextBox::AlignTextToCaption()
 {
 	_tY = _cY;
-	_tX = _cX + Caption.Length();
+	_tX = _cX + UTF8::StrLen(Caption.CStr());
 }
 
 void TextBox::Redraw()
 {
+	if (_widthLimit != -1 && UTF8::StrLen(Caption.CStr()) > _widthLimit) {
+		return;
+	}
+
 	move(_cY, _cX);
 	addstr(Caption.CStr());
 	move(_tY, _tX);
-
-	String text = Text;
 
 	int prefixSize = _tX - _cX;
 
@@ -262,16 +286,18 @@ void TextBox::Redraw()
 		prefixSize = 0;
 	}
 
+	CowBuffer<uint32_t> text = _text;
+
 	bool adjustStringWidth =
 		_widthLimit != -1 &&
-		text.Length() > _widthLimit - prefixSize;
+		(int)text.Size() > _widthLimit - prefixSize;
 
 	if (adjustStringWidth) {
-		int offset = text.Length() - _widthLimit + prefixSize;
-		text = text.Substring(offset, text.Length() - offset);
+		int offset = _text.Size() - _widthLimit + prefixSize;
+		text = text.Slice(offset, text.Size() - offset);
 	}
 
-	addstr(text.CStr());
+	addstr(UTF8::Encode(text).CStr());
 }
 
 void TextBox::SetCursor()
@@ -282,11 +308,11 @@ void TextBox::SetCursor()
 		prefixSize = 0;
 	}
 
+	int textWidth = _text.Size();
+
 	bool adjustPosition =
 		_widthLimit != -1 &&
-		Text.Length() > _widthLimit - prefixSize;
-
-	int textWidth = Text.Length();
+		textWidth > _widthLimit - prefixSize;
 
 	if (adjustPosition) {
 		textWidth = _widthLimit - prefixSize;
@@ -298,31 +324,59 @@ void TextBox::SetCursor()
 void TextBox::ProcessChar(int event)
 {
 	if (event == '\b') {
-		if (Text.Length() == 0) {
+		_decoder.Reset();
+
+		if (_text.Size() == 0) {
 			return;
 		}
 
-		Text = Text.Substring(0, Text.Length() - 1);
+		_text = _text.Slice(0, _text.Size() - 1);
 		return;
 	}
 
-	Text += event;
+	bool success = _decoder.AddByte(event);
+
+	if (!success) {
+		_decoder.Reset();
+		return;
+	}
+
+	if (!_decoder.HasChar()) {
+		return;
+	}
+
+	CowBuffer<uint32_t> charBuf(1);
+	charBuf[0] = _decoder.GetChar();
+
+	_text = _text.Concat(charBuf);
 }
 
 String UiHelpers::GetRunningLine(String text, int widthLimit, bool &running)
 {
-	if (text.Length() <= widthLimit) {
+	if (widthLimit < 1) {
+		running = false;
+		return "";
+	}
+
+	int len = UTF8::StrLen(text.CStr());
+
+	if (len <= widthLimit) {
 		running = false;
 		return text;
 	}
-
-	int len = text.Length();
 
 	text = text + "       " + text;
 	int maxOffset = len + 7;
 	int offset = RunningLineSeedValue % maxOffset;
 
-	text = text.Substring(offset, widthLimit);
+	CowBuffer<uint32_t> decodedText = UTF8::Decode(text.CStr());
+
+	if (!decodedText.Size()) {
+		running = false;
+		return "";
+	}
+
+	text = UTF8::Encode(decodedText.Slice(offset, widthLimit));
 
 	running = true;
 	return text;
@@ -340,7 +394,60 @@ void UiHelpers::UpdateRunningLineSeed()
 {
 	++RunningLineSeedValue;
 
-	if (RunningLineSeedValue > 1024 * 1024 * 1024) {
+	if (RunningLineSeedValue >= UINT32_MAX - 1) {
 		RunningLineSeedValue = 0;
 	}
+}
+
+bool UiHelpers::DrawCommentedLine(
+	String text,
+	String comment,
+	int width,
+	int textAttr,
+	int commentAttr)
+{
+	if (width < 5) {
+		THROW("Too narrow commented line.");
+	}
+
+	int fullTextSize = UTF8::StrLen(text.CStr());
+
+	int textLimit = fullTextSize;
+	int commentLimit = UTF8::StrLen(comment.CStr());
+	int delimLimit = commentLimit ? 3 : 0;
+
+	if (textLimit + commentLimit + delimLimit > width) {
+		if (commentLimit > width / 4) {
+			commentLimit = width / 4;
+		}
+
+		textLimit = width - delimLimit - commentLimit;
+
+		if (textLimit > fullTextSize) {
+			textLimit = fullTextSize;
+			commentLimit = width - delimLimit - textLimit;
+		}
+	}
+
+	bool running = false;
+
+	attrset(textAttr);
+	if (DrawRunningLine(text, textLimit)) {
+		running = true;
+	}
+
+	attrset(COLOR_PAIR(DEFAULT_TEXT));
+
+	if (commentLimit) {
+		addstr(" | ");
+
+		attrset(commentAttr);
+		if (DrawRunningLine(comment, commentLimit)) {
+			running = true;
+		}
+
+		attrset(COLOR_PAIR(DEFAULT_TEXT));
+	}
+
+	return running;
 }

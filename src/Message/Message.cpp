@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "../Protocol/ParserHelpers.hpp"
+#include "../Protocol/CommonParserConstants.hpp"
 #include "../Crypto/Crypto.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/Endianness.hpp"
@@ -10,8 +11,6 @@
 #include "../ThirdParty/monocypher.h"
 
 using namespace Crypto::X25519;
-
-const int32_t MaxNameLength = 500;
 
 static uint64_t EntryDataSize(const Message::ContentsEntry *entry)
 {
@@ -231,7 +230,7 @@ bool Message::ParseContents(
 				data,
 				dataOffset,
 				userName,
-				MaxNameLength))
+				CommonParserConstants::FullNameSize))
 			{
 				failed = true;
 				break;
@@ -375,6 +374,10 @@ bool Message::VerifyFullUserName(String name)
 		return false;
 	}
 
+	if (name.Length() > CommonParserConstants::FullNameSize) {
+		return false;
+	}
+
 	String userName;
 	String hostName;
 
@@ -394,6 +397,10 @@ bool Message::VerifyFullUserName(String name)
 bool Message::VerifyFullGroupName(String name)
 {
 	if (!name.Length()) {
+		return false;
+	}
+
+	if (name.Length() > CommonParserConstants::FullNameSize) {
 		return false;
 	}
 
@@ -426,7 +433,8 @@ bool Message::VerifyShortName(String name)
 			c > ' ' &&
 			c != '/' &&
 			c != '@' &&
-			c != 0xff; // No delete.
+			c != 0x7f &&
+			c != 0xff;
 
 		if (!validChar) {
 			return false;
@@ -492,7 +500,7 @@ bool Message::VerifyHostName(String hostName)
 			c != '/' &&
 			c != ':' &&
 			c != '@' &&
-			c < 0xff; // No delete or non-ASCII char.
+			c < 0x7f; // No delete or non-ASCII char.
 
 		if (!validChar) {
 			return false;
@@ -663,7 +671,12 @@ bool Message::X25519::ParseHeader(
 	offset += sizeof(int32_t);
 
 	// Source address.
-	if (!ParseString(message, offset, header.Source, MaxNameLength)) {
+	if (!ParseString(
+		message,
+		offset,
+		header.Source,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -680,7 +693,12 @@ bool Message::X25519::ParseHeader(
 	offset += KEY_SIZE;
 
 	// Destination address.
-	if (!ParseString(message, offset, header.Destination, MaxNameLength)) {
+	if (!ParseString(
+		message,
+		offset,
+		header.Destination,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -829,7 +847,12 @@ bool Message::X25519::ParseHeader(
 	offset += sizeof(int32_t);
 
 	// Source address.
-	if (!ParseString(message, offset, header.Source, MaxNameLength)) {
+	if (!ParseString(
+		message,
+		offset,
+		header.Source,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -846,7 +869,12 @@ bool Message::X25519::ParseHeader(
 	offset += KEY_SIZE;
 
 	// Group name.
-	if (!ParseString(message, offset, header.GroupName, MaxNameLength)) {
+	if (!ParseString(
+		message,
+		offset,
+		header.GroupName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 

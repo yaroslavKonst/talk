@@ -13,12 +13,13 @@
 #include "../Common/Exception.hpp"
 #include "../Common/Hex.hpp"
 #include "../Common/File.hpp"
+#include "../Common/FileAccess.hpp"
 #include "../Crypto/Crypto.hpp"
 #include "../ThirdParty/monocypher.h"
 
 Client::Client()
 {
-	umask(077);
+	umask(FileAccessConstants::ProcessUmask);
 
 	DisableSigPipe();
 	GetPassword();
@@ -75,8 +76,9 @@ void Client::GetPassword()
 	}
 
 	String password;
+	int maxPasswordLength = 100000;
 
-	while (password.Length() < 100000) {
+	while (password.Length() < maxPasswordLength) {
 		char c;
 		res = read(0, &c, 1);
 
@@ -107,13 +109,14 @@ static void CheckAccountPresence(const Crypto::X25519::PublicKeyContainer &key)
 		return;
 	}
 
-	printf("Account with given key is not found. "
+	printf("Account with the given key is not found. "
 		"Create new account? [y/N] ");
 	fflush(stdout);
 
 	String answer;
+	int maxAnswerLength = 100;
 
-	while (answer.Length() < 100) {
+	while (answer.Length() < maxAnswerLength) {
 		char c;
 		int res = read(0, &c, 1);
 

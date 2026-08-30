@@ -61,6 +61,7 @@ User::User(
 	_timeQuantRequested = false;
 
 	LoadPublicKey();
+	LoadAccountSettings();
 
 	_objectStorage.SetUser(this);
 }
@@ -159,41 +160,19 @@ void User::NotifyWriteCompleted(const ObjectStorage::ID &id)
 {
 }
 
-void User::GetAccountSettings(bool &messages, bool &calls)
+void User::GetAccountSettings(bool &messages, bool &calls, bool &list)
 {
-	String path = _root + "/AccountSettings";
-
-	if (!FileExists(path)) {
-		messages = false;
-		calls = true;
-		return;
-	}
-
-	uint32_t settings;
-
-	BinaryFile file(path, false);
-	file.Read<uint32_t>(&settings, 1, 0);
-
-	messages = settings & 0x1;
-	calls = settings & 0x2;
+	messages = _accountSettings.AllowMessagesOnlyFromContactList;
+	calls = _accountSettings.AllowCallsOnlyFromContactList;
+	list = _accountSettings.ShowInContactList;
 }
 
-void User::SetAccountSettings(bool messages, bool calls)
+void User::SetAccountSettings(bool messages, bool calls, bool list)
 {
-	String path = _root + "/AccountSettings";
-
-	uint32_t settings = 0;
-
-	if (messages) {
-		settings |= 0x1;
-	}
-
-	if (calls) {
-		settings |= 0x2;
-	}
-
-	BinaryFile file(path, true);
-	file.Write<uint32_t>(&settings, 1, 0);
+	_accountSettings.AllowMessagesOnlyFromContactList = messages;
+	_accountSettings.AllowCallsOnlyFromContactList = calls;
+	_accountSettings.ShowInContactList = list;
+	StoreAccountSettings();
 }
 
 void User::AddContact(String name)
@@ -266,7 +245,7 @@ void User::RemoveContact(String name)
 
 CowBuffer<CommandListContacts::Response::UserData> User::GetContactList()
 {
-	CowBuffer<String> userNames = _userStorage->ListUsers();
+	CowBuffer<String> userNames = _userStorage->ListUsers(true);
 
 	CowBuffer<CommandListContacts::Response::UserData> result(
 		userNames.Size());
@@ -352,10 +331,12 @@ int32_t User::CheckInboundMessage(
 {
 	bool allowMessagesOnlyFromContacts;
 	bool allowCallsOnlyFromContacts;
+	bool showInContactList;
 
 	GetAccountSettings(
 		allowMessagesOnlyFromContacts,
-		allowCallsOnlyFromContacts);
+		allowCallsOnlyFromContacts,
+		showInContactList);
 
 	if (!Message::VerifyFullUserName(header.Source)) {
 		return GATE_MESSAGE_HEADER_REJECT_INVALID_HEADER;
@@ -540,10 +521,12 @@ int32_t User::CheckInboundCall(const StreamHandshake::InitRequest &request)
 {
 	bool allowMessagesOnlyFromContacts;
 	bool allowCallsOnlyFromContacts;
+	bool showInContactList;
 
 	GetAccountSettings(
 		allowMessagesOnlyFromContacts,
-		allowCallsOnlyFromContacts);
+		allowCallsOnlyFromContacts,
+		showInContactList);
 
 	if (!Message::VerifyFullUserName(request.Source)) {
 		return STREAM_INIT_RESPONSE_PARSING_FAILURE;
@@ -738,4 +721,50 @@ void User::RegisterNewMessage(
 
 		_userStorage->RegisterMessageForDelivery(header, messageID);
 	}
+}
+
+void User::LoadAccountSettings()
+{
+	String path = _root + "/AccountSettings";
+
+	if (!FileExists(path)) {
+		_accountSettings.AllowMessagesOnlyFromContactList = false;
+		_accountSettings.AllowCallsOnlyFromContactList = true;
+		_accountSettings.ShowInContactList = true;
+		return;
+	}
+
+	uint32_t settings;
+
+	BinaryFile file(path, false);
+	file.Read<uint32_t>(&settings, 1, 0);
+
+	_accountSettings.AllowMessagesOnlyFromContactList =
+		settings & SettingForbidMessages;
+	_accountSettings.AllowCallsOnlyFromContactList =
+		settings & SettingForbidCalls;
+	_accountSettings.ShowInContactList =
+		settings & SettingShowInContactList;
+}
+
+void User::StoreAccountSettings()
+{
+	String path = _root + "/AccountSettings";
+
+	uint32_t settings = 0;
+
+	if (_accountSettings.AllowMessagesOnlyFromContactList) {
+		settings |= SettingForbidMessages;
+	}
+
+	if (_accountSettings.AllowCallsOnlyFromContactList) {
+		settings |= SettingForbidCalls;
+	}
+
+	if (_accountSettings.ShowInContactList) {
+		settings |= SettingShowInContactList;
+	}
+
+	BinaryFile file(path, true);
+	file.Write<uint32_t>(&settings, 1, 0);
 }

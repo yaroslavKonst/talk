@@ -1,6 +1,7 @@
 #include "ClientSession.hpp"
 
 #include "../Protocol/SessionParser.hpp"
+#include "../Protocol/CommonParserConstants.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/Endianness.hpp"
 #include "../Common/UnixTime.hpp"
@@ -23,7 +24,7 @@ ClientSession::ClientSession(
 	_contactListProcessor = nullptr;
 	_accountSettingsProcessor = nullptr;
 
-	_messageSizeLimit = 2048;
+	_messageSizeLimit = CommonParserConstants::SmallDatagramSize;
 
 	_protocol = new SessionProtocol(
 		fd,
@@ -175,11 +176,15 @@ void ClientSession::GetAccountSettings()
 	_protocol->Send(CommandGetAccountSettings::BuildCommand(), 0);
 }
 
-void ClientSession::SetAccountSettings(bool allowMessages, bool allowCalls)
+void ClientSession::SetAccountSettings(
+	bool allowMessages,
+	bool allowCalls,
+	bool showInList)
 {
 	CommandSetAccountSettings::Command command;
 	command.AllowMessagesOnlyFromContactList = allowMessages;
 	command.AllowCallsOnlyFromContactList = allowCalls;
+	command.ShowInContactList = showInList;
 
 	_protocol->Send(CommandSetAccountSettings::BuildCommand(command), 0);
 }
@@ -365,7 +370,8 @@ bool ClientSession::ProcessGetAccountSettings(const CowBuffer<uint8_t> buffer)
 	if (_accountSettingsProcessor) {
 		_accountSettingsProcessor->ReceiveAccountSettings(
 			response.AllowMessagesOnlyFromContactList,
-			response.AllowCallsOnlyFromContactList);
+			response.AllowCallsOnlyFromContactList,
+			response.ShowInContactList);
 	}
 
 	return true;

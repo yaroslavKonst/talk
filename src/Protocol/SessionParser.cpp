@@ -3,9 +3,8 @@
 #include <cstring>
 
 #include "ParserHelpers.hpp"
+#include "CommonParserConstants.hpp"
 #include "../Common/Endianness.hpp"
-
-static const uint64_t StreamCommandSizeLimit = 4 * 1024;
 
 bool CommandKeepAlive::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
@@ -60,7 +59,12 @@ bool CommandGetHostName::ParseResponse(
 
 	uint64_t offset = sizeof(int32_t);
 
-	if (!ParseString(buffer, offset, result.Name, 500)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		result.Name,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -213,7 +217,7 @@ bool CommandGetAccountSettings::ParseResponse(
 	const CowBuffer<uint8_t> buffer,
 	Response &result)
 {
-	if (buffer.Size() != sizeof(int32_t) + 2 * sizeof(uint8_t)) {
+	if (buffer.Size() != sizeof(int32_t) + 3 * sizeof(uint8_t)) {
 		return false;
 	}
 
@@ -229,6 +233,9 @@ bool CommandGetAccountSettings::ParseResponse(
 	offset += 1;
 
 	result.AllowCallsOnlyFromContactList = *buffer.Pointer(offset);
+	offset += 1;
+
+	result.ShowInContactList = *buffer.Pointer(offset);
 
 	return true;
 }
@@ -236,7 +243,7 @@ bool CommandGetAccountSettings::ParseResponse(
 CowBuffer<uint8_t> CommandGetAccountSettings::BuildResponse(
 	const Response &data)
 {
-	CowBuffer<uint8_t> buffer(sizeof(int32_t) + 2 * sizeof(uint8_t));
+	CowBuffer<uint8_t> buffer(sizeof(int32_t) + 3 * sizeof(uint8_t));
 
 	*buffer.SwitchType<int32_t>() =
 		SetProtoEndian<int32_t>(SESSION_COMMAND_GET_ACCOUNT_SETTINGS);
@@ -247,6 +254,9 @@ CowBuffer<uint8_t> CommandGetAccountSettings::BuildResponse(
 	offset += 1;
 
 	*buffer.Pointer(offset) = data.AllowCallsOnlyFromContactList;
+	offset += 1;
+
+	*buffer.Pointer(offset) = data.ShowInContactList;
 
 	return buffer;
 }
@@ -255,7 +265,7 @@ bool CommandSetAccountSettings::ParseCommand(
 	const CowBuffer<uint8_t> buffer,
 	Command &result)
 {
-	if (buffer.Size() != sizeof(int32_t) + 2 * sizeof(uint8_t)) {
+	if (buffer.Size() != sizeof(int32_t) + 3 * sizeof(uint8_t)) {
 		return false;
 	}
 
@@ -271,6 +281,9 @@ bool CommandSetAccountSettings::ParseCommand(
 	offset += 1;
 
 	result.AllowCallsOnlyFromContactList = *buffer.Pointer(offset);
+	offset += 1;
+
+	result.ShowInContactList = *buffer.Pointer(offset);
 
 	return true;
 }
@@ -278,7 +291,7 @@ bool CommandSetAccountSettings::ParseCommand(
 CowBuffer<uint8_t> CommandSetAccountSettings::BuildCommand(
 	const Command &command)
 {
-	CowBuffer<uint8_t> buffer(sizeof(int32_t) + 2 * sizeof(uint8_t));
+	CowBuffer<uint8_t> buffer(sizeof(int32_t) + 3 * sizeof(uint8_t));
 
 	*buffer.SwitchType<int32_t>() =
 		SetProtoEndian<int32_t>(SESSION_COMMAND_SET_ACCOUNT_SETTINGS);
@@ -289,6 +302,9 @@ CowBuffer<uint8_t> CommandSetAccountSettings::BuildCommand(
 	offset += 1;
 
 	*buffer.Pointer(offset) = command.AllowCallsOnlyFromContactList;
+	offset += 1;
+
+	*buffer.Pointer(offset) = command.ShowInContactList;
 
 	return buffer;
 }
@@ -309,7 +325,12 @@ bool CommandAddContact::ParseCommand(
 
 	uint64_t offset = sizeof(int32_t);
 
-	if (!ParseString(buffer, offset, result.ContactName, 500)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		result.ContactName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -351,7 +372,12 @@ bool CommandUpdateContactKey::ParseCommand(
 
 	uint64_t offset = sizeof(int32_t);
 
-	if (!ParseString(buffer, offset, result.ContactName, 500)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		result.ContactName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -428,7 +454,12 @@ bool CommandBlockContact::ParseCommand(
 
 	uint64_t offset = sizeof(int32_t);
 
-	if (!ParseString(buffer, offset, result.ContactName, 500)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		result.ContactName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -480,7 +511,12 @@ bool CommandRemoveContact::ParseCommand(
 
 	uint64_t offset = sizeof(int32_t);
 
-	if (!ParseString(buffer, offset, result.ContactName, 500)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		result.ContactName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -536,7 +572,12 @@ bool CommandListContacts::ParseResponse(
 	result.Data.Resize(count);
 
 	for (uint32_t i = 0; i < count; i++) {
-		if (!ParseString(buffer, offset, result.Data[i].Name, 500)) {
+		if (!ParseString(
+			buffer,
+			offset,
+			result.Data[i].Name,
+			CommonParserConstants::FullNameSize))
+		{
 			return false;
 		}
 
@@ -608,7 +649,12 @@ bool CommandOfferMessage::ParseCommand(
 
 	uint64_t offset = sizeof(int32_t);
 
-	if (!ParseString(buffer, offset, result.PeerName, 500)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		result.PeerName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -734,7 +780,8 @@ bool CommandUpdateMessage::ParseCommand(
 	bool status = ParseString(
 		buffer,
 		offset,
-		result.PeerName);
+		result.PeerName,
+		CommonParserConstants::FullNameSize);
 
 	if (!status) {
 		return false;
@@ -801,7 +848,7 @@ bool CommandStreamInit::ParseCommand(
 	Command &result)
 {
 	if (buffer.Size() <= sizeof(int32_t) ||
-		buffer.Size() > StreamCommandSizeLimit)
+		buffer.Size() > CommonParserConstants::SmallDatagramSize)
 	{
 		return false;
 	}
@@ -864,7 +911,7 @@ bool CommandStreamResponse::ParseCommand(
 	Command &result)
 {
 	if (buffer.Size() <= sizeof(int32_t) ||
-		buffer.Size() > StreamCommandSizeLimit)
+		buffer.Size() > CommonParserConstants::SmallDatagramSize)
 	{
 		return false;
 	}
@@ -895,7 +942,7 @@ bool CommandStreamRequest::ParseCommand(
 	Command &result)
 {
 	if (buffer.Size() <= sizeof(int32_t) ||
-		buffer.Size() > StreamCommandSizeLimit)
+		buffer.Size() > CommonParserConstants::SmallDatagramSize)
 	{
 		return false;
 	}
@@ -926,7 +973,7 @@ bool CommandStreamRequest::ParseResponse(
 	Response &result)
 {
 	if (buffer.Size() <= sizeof(int32_t) ||
-		buffer.Size() > StreamCommandSizeLimit)
+		buffer.Size() > CommonParserConstants::SmallDatagramSize)
 	{
 		return false;
 	}
@@ -965,7 +1012,7 @@ bool CommandStreamData::ParseCommand(
 	Command &result)
 {
 	if (buffer.Size() <= sizeof(int32_t) ||
-		buffer.Size() > StreamCommandSizeLimit)
+		buffer.Size() > CommonParserConstants::SmallDatagramSize)
 	{
 		return false;
 	}

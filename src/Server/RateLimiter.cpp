@@ -2,6 +2,9 @@
 
 #include "../Common/UnixTime.hpp"
 
+static const int PointsInRequest = 1000;
+static const int SecondsInMinute = 60;
+
 RateLimiter::RateLimiter(EventDispatcher *dispatcher, Config *config)
 {
 	_dispatcher = dispatcher;
@@ -35,7 +38,7 @@ bool RateLimiter::IsAllowed(IPAddress ip)
 
 	ProcessTimeFlowInEntry(entry->Key);
 
-	if (entry->Key.Requests < 1000) {
+	if (entry->Key.Requests < PointsInRequest) {
 		return true;
 	}
 
@@ -51,7 +54,7 @@ void RateLimiter::RecordRequest(IPAddress ip)
 		entry = _requests.FindEntry(ip);
 	}
 
-	entry->Key.Requests += 1000;
+	entry->Key.Requests += PointsInRequest;
 }
 
 void RateLimiter::RecordSessionTimeout(IPAddress ip)
@@ -64,7 +67,8 @@ void RateLimiter::RecordSessionTimeout(IPAddress ip)
 	}
 
 	entry->Key.Requests +=
-		1000 * _sessionTimeoutPenalty * _maxRequestsPerMinute / 60;
+		PointsInRequest * _sessionTimeoutPenalty *
+		_maxRequestsPerMinute / SecondsInMinute;
 }
 
 void RateLimiter::ReloadConfig()
@@ -143,7 +147,8 @@ void RateLimiter::ProcessTimeFlowInEntry(RequesterEntry &entry)
 		return;
 	}
 
-	uint64_t requestDrop = timeDiff * _maxRequestsPerMinute / 60;
+	uint64_t requestDrop =
+		timeDiff * _maxRequestsPerMinute / SecondsInMinute;
 
 	if (!requestDrop) {
 		return;

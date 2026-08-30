@@ -90,6 +90,7 @@ namespace CommandGetAccountSettings
 	{
 		bool AllowMessagesOnlyFromContactList;
 		bool AllowCallsOnlyFromContactList;
+		bool ShowInContactList;
 	};
 
 	CowBuffer<uint8_t> BuildCommand();
@@ -104,6 +105,7 @@ namespace CommandSetAccountSettings
 	{
 		bool AllowMessagesOnlyFromContactList;
 		bool AllowCallsOnlyFromContactList;
+		bool ShowInContactList;
 	};
 
 	bool ParseCommand(const CowBuffer<uint8_t> buffer, Command &result);

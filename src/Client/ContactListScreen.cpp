@@ -4,6 +4,7 @@
 
 #include "WorkScreen.hpp"
 #include "TextColor.hpp"
+#include "UiLayout.hpp"
 #include "../Common/Hex.hpp"
 
 ContactListScreen::ContactListScreen(Root *root)
@@ -32,14 +33,14 @@ ContactListScreen::~ContactListScreen()
 void ContactListScreen::Redraw()
 {
 	for (int i = 0; i < _columns; i++) {
-		move(4, i);
+		move(LayoutConstants::HeaderHeight, i);
 		addch(ACS_HLINE);
 	}
 
 	bool running;
 	UiHelpers::DrawFrame(
-		5,
-		_rows - 3,
+		LayoutConstants::HeaderHeight + 1,
+		_rows - 1 - LayoutConstants::FooterHeight,
 		1,
 		_columns - 2,
 		_root->Conf->GetHostName() + " server contact list",
@@ -120,10 +121,12 @@ void ContactListScreen::RedrawContactList()
 		return;
 	}
 
-	int size = _rows - 9;
+	int size = _rows -
+		LayoutConstants::HeaderHeight -
+		LayoutConstants::FooterHeight - 3;
 
 	if (!_contactList.Data.Size()) {
-		move(6, 3);
+		move(LayoutConstants::HeaderHeight + 2, 3);
 		return;
 	}
 
@@ -152,10 +155,12 @@ void ContactListScreen::RedrawContactList()
 		}
 	}
 
-	int currentContactPosition = 6;
+	int currentContactPosition = LayoutConstants::HeaderHeight + 2;
 
 	for (int i = lowIndex, index = 0; i <= highIndex; i++, index++) {
-		move(index + 6, 3);
+		int posY = index + LayoutConstants::HeaderHeight + 2;
+
+		move(posY, 3);
 
 		String nameString;
 		String statusString;
@@ -165,7 +170,7 @@ void ContactListScreen::RedrawContactList()
 
 		if (i == _currentContact) {
 			nameAttr = COLOR_PAIR(YELLOW_TEXT);
-			currentContactPosition = index + 6;
+			currentContactPosition = posY;
 		}
 
 		nameString = _contactList.Data[i].Name;
@@ -205,40 +210,12 @@ void ContactListScreen::RedrawContactList()
 
 		int widthLimit = _columns - 6;
 
-		int nameLimit = nameString.Length();
-		int statusLimit = statusString.Length();
-
-		if (nameLimit + statusLimit + 3 > widthLimit) {
-			if (statusLimit > widthLimit / 4) {
-				statusLimit = widthLimit / 4;
-			}
-
-			nameLimit = widthLimit - statusLimit - 3;
-		}
-
-		if (nameAttr) {
-			attrset(nameAttr);
-		}
-
-		bool running = UiHelpers::DrawRunningLine(
+		bool running = UiHelpers::DrawCommentedLine(
 			nameString,
-			nameLimit);
-		attrset(COLOR_PAIR(DEFAULT_TEXT));
-
-		if (running) {
-			_root->Ui->RequestRunningLine();
-		}
-
-		addstr(" | ");
-
-		if (statusAttr) {
-			attrset(statusAttr);
-		}
-
-		running = UiHelpers::DrawRunningLine(
 			statusString,
-			statusLimit);
-		attrset(COLOR_PAIR(DEFAULT_TEXT));
+			widthLimit,
+			nameAttr,
+			statusAttr);
 
 		if (running) {
 			_root->Ui->RequestRunningLine();
@@ -253,7 +230,7 @@ void ContactListScreen::DrawNotification(String caption, String message)
 	int baseY = _rows / 2;
 	int baseX = _columns / 2;
 
-	int offsetX = message.Length() / 2 + 1;
+	int offsetX = UTF8::StrLen(message.CStr()) / 2 + 1;
 
 	if (offsetX * 2 > _columns - 6) {
 		offsetX = _columns / 2 - 3;

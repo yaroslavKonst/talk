@@ -3,12 +3,10 @@
 #include <cstring>
 
 #include "ParserHelpers.hpp"
+#include "CommonParserConstants.hpp"
 #include "../Common/Endianness.hpp"
 
 using namespace Crypto::X25519;
-
-static const uint64_t MaxNameLength = 500;
-static const uint64_t SaltSize = 32;
 
 bool GateHandshakeStatus::ParseData(
 	const CowBuffer<uint8_t> buffer,
@@ -60,7 +58,12 @@ bool GateHandshakeSyn::ParseData(const CowBuffer<uint8_t> buffer, Data &result)
 		SetProtoEndian(*buffer.SwitchType<int32_t>(offset));
 	offset += sizeof(int32_t);
 
-	if (!ParseString(buffer, offset, result.ServerName, MaxNameLength)) {
+	if (!ParseString(
+		buffer,
+		offset,
+		result.ServerName,
+		CommonParserConstants::FullNameSize))
+	{
 		return false;
 	}
 
@@ -75,12 +78,12 @@ bool GateHandshakeSyn::ParseData(const CowBuffer<uint8_t> buffer, Data &result)
 	result.Key = buffer.Pointer(offset);
 	offset += KEY_SIZE;
 
-	if (buffer.Size() < offset + SaltSize) {
+	if (buffer.Size() < offset + GateHandshake::SaltSize) {
 		return false;
 	}
 
-	result.Salt = buffer.Slice(offset, SaltSize);
-	offset += SaltSize;
+	result.Salt = buffer.Slice(offset, GateHandshake::SaltSize);
+	offset += GateHandshake::SaltSize;
 
 	// The optional signature covers the rest of the message.
 	uint64_t remaining = buffer.Size() - offset;
@@ -244,7 +247,7 @@ bool GateCommandStream::ParseInitRequest(
 		return false;
 	}
 
-	if (buffer.Size() > 4096) {
+	if (buffer.Size() > CommonParserConstants::SmallDatagramSize) {
 		return false;
 	}
 
@@ -296,7 +299,7 @@ bool GateCommandStream::ParseFrame(const CowBuffer<uint8_t> buffer, Frame &data)
 		return false;
 	}
 
-	if (buffer.Size() > 4096) {
+	if (buffer.Size() > CommonParserConstants::SmallDatagramSize) {
 		return false;
 	}
 

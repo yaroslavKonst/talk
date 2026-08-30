@@ -8,10 +8,17 @@
 #include "TextColor.hpp"
 #include "WorkScreen.hpp"
 #include "UiHelpers.hpp"
+#include "UiLayout.hpp"
 #include "../Common/Exception.hpp"
 #include "../Common/UnixTime.hpp"
 #include "../Common/Hex.hpp"
 #include "../Crypto/CryptoDefinitions.hpp"
+
+enum
+{
+	MinimumScreenWidth = 26,
+	MinimumScreenHeight = 20
+};
 
 UI::UI(Root *root) :
 	_notifier(root)
@@ -24,7 +31,7 @@ UI::UI(Root *root) :
 		initscr();
 		raw();
 		noecho();
-		wtimeout(stdscr, 100);
+		timeout(0);
 		keypad(stdscr, 1);
 		start_color();
 
@@ -89,7 +96,7 @@ bool UI::ProcessEvent()
 		event = '\b';
 	}
 
-	if (_rows < 20 || _columns < 26) {
+	if (_rows < MinimumScreenHeight || _columns < MinimumScreenWidth) {
 		return true;
 	}
 
@@ -158,7 +165,7 @@ void UI::Redraw()
 	bool hadRunningString = _needRunningString;
 	_needRunningString = false;
 
-	if (_rows < 20 || _columns < 26) {
+	if (_rows < MinimumScreenHeight || _columns < MinimumScreenWidth) {
 		move(0, 0);
 		addstr("Terminal screen is too small.");
 		move(1, 0);
@@ -179,8 +186,9 @@ void UI::Redraw()
 	refresh();
 
 	if (_needRunningString && !hadRunningString) {
-		SetTimestamp(GetMonotonicMillisecondTime());
+		// Redraw moving interface parts every 0.5 seconds.
 		SetInterval(500);
+		SetTimestamp(GetMonotonicMillisecondTime());
 
 		_root->Dispatcher->RegisterTimeProcessor(this);
 	} else if (hadRunningString && !_needRunningString) {
@@ -240,8 +248,13 @@ void UI::Cleanup()
 
 void UI::DrawUserData()
 {
-	move(0, 0);
-	addstr("Login: ");
+	int userY = 0;
+	int keyY = 1;
+	String loginCaption = "Login: ";
+	String keyCaption = "Key: ";
+
+	move(userY, 0);
+	addstr(loginCaption.CStr());
 
 	String loginString;
 	bool loginValid = true;
@@ -268,7 +281,7 @@ void UI::DrawUserData()
 
 	bool running = UiHelpers::DrawRunningLine(
 		loginString,
-		_columns - 7);
+		_columns - loginCaption.Length());
 
 	if (running) {
 		RequestRunningLine();
@@ -276,13 +289,13 @@ void UI::DrawUserData()
 
 	attrset(COLOR_PAIR(DEFAULT_TEXT));
 
-	move(1, 0);
-	addstr("Key: ");
+	move(keyY, 0);
+	addstr(keyCaption.CStr());
 	running = UiHelpers::DrawRunningLine(
 		DataToHex(
 			_root->PublicKey->Key,
 			Crypto::X25519::KEY_SIZE),
-		_columns - 5);
+		_columns - keyCaption.Length());
 
 	if (running) {
 		RequestRunningLine();
@@ -291,8 +304,15 @@ void UI::DrawUserData()
 
 void UI::DrawConnectionState()
 {
-	move(2, 0);
-	addstr("Connection status: ");
+	int lineY = 2;
+	String caption = "Connection status: ";
+
+	if (_columns < caption.Length() * 2) {
+		caption = "Conn stat: ";
+	}
+
+	move(lineY, 0);
+	addstr(caption.CStr());
 
 	String line;
 
@@ -307,7 +327,9 @@ void UI::DrawConnectionState()
 		line = "not connected.";
 	}
 
-	bool running = UiHelpers::DrawRunningLine(line, _columns - 19);
+	bool running = UiHelpers::DrawRunningLine(
+		line,
+		_columns - caption.Length());
 
 	if (running) {
 		RequestRunningLine();
@@ -318,8 +340,15 @@ void UI::DrawConnectionState()
 
 void UI::DrawVoiceState()
 {
-	move(3, 0);
-	addstr("Voice status: ");
+	int lineY = 3;
+	String caption = "Voice status: ";
+
+	if (_columns < caption.Length() * 2) {
+		caption = "Voice stat: ";
+	}
+
+	move(lineY, 0);
+	addstr(caption.CStr());
 
 	VoiceEventProcessor::State state = _root->Voice->GetState();
 
@@ -360,7 +389,9 @@ void UI::DrawVoiceState()
 		}*/
 	}
 
-	bool running = UiHelpers::DrawRunningLine(stateString, _columns - 14);
+	bool running = UiHelpers::DrawRunningLine(
+		stateString,
+		_columns - caption.Length());
 
 	if (running) {
 		RequestRunningLine();
@@ -492,7 +523,7 @@ void UI::DrawControlHelp()
 			posX = 0;
 			--posY;
 
-			if (posY < _rows - 2) {
+			if (posY < _rows - LayoutConstants::FooterHeight) {
 				break;
 			}
 		}

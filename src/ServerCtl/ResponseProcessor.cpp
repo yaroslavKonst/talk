@@ -179,5 +179,5 @@ int ProcessResponse(
 	}
 
 	printf("Unknown command.\n");
-	return 100;
+	return 10;
 }

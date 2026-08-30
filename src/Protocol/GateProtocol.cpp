@@ -1,5 +1,6 @@
 #include "GateProtocol.hpp"
 
+#include "CommonParserConstants.hpp"
 #include "../Common/Endianness.hpp"
 #include "../Common/Exception.hpp"
 
@@ -15,7 +16,7 @@ GateProtocol::GateProtocol(
 
 	_outputBufferOffset = 0;
 
-	_inputSizeLimit = 4096;
+	_inputSizeLimit = CommonParserConstants::SmallDatagramSize;
 	_inputBufferOffset = 0;
 }
 

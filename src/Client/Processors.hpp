@@ -137,7 +137,8 @@ public:
 
 		virtual void ReceiveAccountSettings(
 			bool allowMessagesOnlyFromContactList,
-			bool allowCallsOnlyFromContactList) = 0;
+			bool allowCallsOnlyFromContactList,
+			bool showInContactList) = 0;
 	};
 
 	virtual ~NetworkEventProcessor()
@@ -179,7 +180,8 @@ public:
 	virtual bool RequestAccountSettings() = 0;
 	virtual bool SetAccountSettings(
 		bool allowMessages,
-		bool allowCalls) = 0;
+		bool allowCalls,
+		bool showInList) = 0;
 	virtual bool SetAccountSettingsProcessor(
 		AccountSettingsProcessor *processor) = 0;
 

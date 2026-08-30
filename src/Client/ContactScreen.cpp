@@ -6,6 +6,7 @@
 #include "TextColor.hpp"
 #include "ContactManageScreen.hpp"
 #include "ContactListScreen.hpp"
+#include "UiLayout.hpp"
 
 ContactScreen::ContactScreen(Root *root, WorkScreen *workScreen)
 {
@@ -26,14 +27,14 @@ ContactScreen::~ContactScreen()
 void ContactScreen::Redraw()
 {
 	for (int i = 0; i < _columns; i++) {
-		move(4, i);
+		move(LayoutConstants::HeaderHeight, i);
 		addch(ACS_HLINE);
 	}
 
 	bool running;
 	UiHelpers::DrawFrame(
-		5,
-		_rows - 3,
+		LayoutConstants::HeaderHeight + 1,
+		_rows - 1 - LayoutConstants::FooterHeight,
 		1,
 		_columns - 2,
 		"Contacts",
@@ -92,7 +93,9 @@ CowBuffer<String> ContactScreen::GetControlHelp()
 
 void ContactScreen::RedrawContactList()
 {
-	int size = _rows - 9;
+	int size = _rows -
+		LayoutConstants::HeaderHeight -
+		LayoutConstants::FooterHeight - 3;
 
 	if (!_contacts->HasContact(_currentContact)) {
 		_currentContact = String();
@@ -106,10 +109,10 @@ void ContactScreen::RedrawContactList()
 		_currentContact = names[0];
 	}
 
-	int currentContactPosition = 6;
+	int currentContactPosition = LayoutConstants::HeaderHeight + 2;
 
 	for (unsigned int i = 0; i < names.Size(); i++) {
-		move(i + 6, 3);
+		move(i + LayoutConstants::HeaderHeight + 2, 3);
 
 		String nameString = names[i];
 		String blockStatusString;
@@ -123,48 +126,25 @@ void ContactScreen::RedrawContactList()
 			blockStatusString = "Silently Blocked";
 		}
 
-		int widthLimit = _columns - 9;
-
-		int nameLimit = nameString.Length();
-		int blockLimit = blockStatusString.Length();
-
-		if (nameLimit + blockLimit > widthLimit) {
-			if (blockLimit > widthLimit / 4) {
-				blockLimit = widthLimit / 4;
-			}
-
-			nameLimit = widthLimit - blockLimit;
-		}
+		int textAttr = COLOR_PAIR(DEFAULT_TEXT);
 
 		if (names[i] == _currentContact) {
-			attrset(COLOR_PAIR(YELLOW_TEXT));
-			currentContactPosition = i + 6;
+			currentContactPosition = i +
+				LayoutConstants::HeaderHeight + 2;
+			textAttr = COLOR_PAIR(YELLOW_TEXT);
 		}
 
-		bool running = UiHelpers::DrawRunningLine(
+		int widthLimit = _columns - 6;
+
+		bool running = UiHelpers::DrawCommentedLine(
 			nameString,
-			nameLimit);
+			blockStatusString,
+			widthLimit,
+			textAttr,
+			COLOR_PAIR(RED_TEXT));
 
 		if (running) {
 			_root->Ui->RequestRunningLine();
-		}
-
-		if (names[i] == _currentContact) {
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
-		}
-
-		if (blockStatusString.Length()) {
-			addstr(" | ");
-
-			attrset(COLOR_PAIR(RED_TEXT));
-			running = UiHelpers::DrawRunningLine(
-				blockStatusString,
-				blockLimit);
-			attrset(COLOR_PAIR(DEFAULT_TEXT));
-
-			if (running) {
-				_root->Ui->RequestRunningLine();
-			}
 		}
 	}
 
@@ -290,8 +270,8 @@ void ContactScreen::DrawAddWindow()
 	int baseX = _columns / 2;
 
 	int xOffset =
-		(_newContactName.Caption.Length() +
-		_newContactName.Text.Length()) /
+		(UTF8::StrLen(_newContactName.Caption.CStr()) +
+		_newContactName.GetTextLength()) /
 		2;
 
 	if (xOffset > _columns / 2 - 3) {
@@ -326,7 +306,7 @@ void ContactScreen::DrawAddWindow()
 
 static bool ValidChar(int event)
 {
-	return (event > ' ' && event <= '~') || event == '\b';
+	return (event > ' ' && event < 0xff) || event == '\b';
 }
 
 Screen *ContactScreen::ProcessAddEvent(int event)
@@ -337,17 +317,19 @@ Screen *ContactScreen::ProcessAddEvent(int event)
 	}
 
 	if (event == _root->Conf->ContactEnterKey()) {
-		if (!_newContactName.Text.Length()) {
+		if (!_newContactName.HasText()) {
 			_root->Ui->Notify("Contact name must not be empty.");
 			return this;
 		}
 
-		if (_contacts->GetContact(_newContactName.Text)) {
+		String newContactName = _newContactName.GetText();
+
+		if (_contacts->GetContact(newContactName)) {
 			_root->Ui->Notify("Contact already exists.");
 			return this;
 		}
 
-		if (!Message::VerifyFullUserName(_newContactName.Text)) {
+		if (!Message::VerifyFullUserName(newContactName)) {
 			_root->Ui->Notify("Contact name has invalid format.");
 			return this;
 		}
@@ -355,13 +337,13 @@ Screen *ContactScreen::ProcessAddEvent(int event)
 		String myName = _root->Conf->GetName() + "@" +
 			_root->Conf->GetHostName();
 
-		if (_newContactName.Text == myName) {
+		if (newContactName == myName) {
 			_root->Ui->Notify("Contact name is your account name.");
 			return this;
 		}
 
 		bool requestSuccess = _root->Network->AddContact(
-			_newContactName.Text);
+			newContactName);
 
 		if (!requestSuccess) {
 			_root->Ui->Notify(
@@ -369,7 +351,7 @@ Screen *ContactScreen::ProcessAddEvent(int event)
 			return this;
 		}
 
-		_newContactName.Text = "";
+		_newContactName.SetText("");
 		_mode = Mode::List;
 		return this;
 	}

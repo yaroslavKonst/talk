@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <cstdio>
 
+#include "FileAccess.hpp"
 #include "Exception.hpp"
 
 IniFile::IniFile()
@@ -300,7 +301,10 @@ void IniFile::Save()
 		currentSection = currentSection->Next;
 	}
 
-	int fd = open(_path.CStr(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+	int fd = open(
+		_path.CStr(),
+		O_WRONLY | O_CREAT | O_TRUNC,
+		FileAccessConstants::FileAccessRights);
 
 	if (fd == -1) {
 		THROW("Ini: Failed to open " + _path + " for writing.");

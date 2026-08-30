@@ -118,8 +118,14 @@ public:
 
 	virtual String GetName() = 0;
 	virtual ObjectStorage *GetObjectStorage() = 0;
-	virtual void GetAccountSettings(bool &messages, bool &calls) = 0;
-	virtual void SetAccountSettings(bool messages, bool calls) = 0;
+	virtual void GetAccountSettings(
+		bool &messages,
+		bool &calls,
+		bool &list) = 0;
+	virtual void SetAccountSettings(
+		bool messages,
+		bool calls,
+		bool list) = 0;
 	virtual void AddContact(String name) = 0;
 	virtual void UpdateContactKey(
 		String name,

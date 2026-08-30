@@ -151,7 +151,7 @@ inline String TimeSpanInSecondsToString(int64_t timeSpan)
 	const int64_t minute = 60;
 	const int64_t hour = minute * 60;
 	const int64_t day = hour * 24;
-	const int64_t month = day * 31;
+	const int64_t month = day * 30;
 	const int64_t year = day * 365;
 
 	if (timeSpan == 0) {
